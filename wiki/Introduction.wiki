@@ -1,13 +1,8 @@
-#summary One-sentence summary of this page.
-
-= Introduction =
-
-Add your content here.
+#summary Introduction to Contrail.
 
 
-= Details =
 
-Add your content here.  Format your content with:
-  * Text in *bold* or _italic_
-  * Headings, paragraphs, and lists
-  * Automatic links to other wiki pages
+Unlike traditional databases, the datastore uses a distributed architecture to automatically manage scaling to very large data sets. It is very different from a traditional relational database in how it describes relationships between data objects. Two entities of the same kind can have different properties. Different entities can have properties with the same name, but different value types. While the datastore interface has many of the same features of traditional databases, the datastore's unique characteristics imply a different way of designing and managing data to take advantage of the ability to scale automatically. This documentation explains how to design your application to take the greatest advantage of the datastore's distributed architecture.
+
+The App Engine datastore saves data objects, known as entities. An entity has one or more properties, named values of one of several supported data types. For instance, a property can be a string, an integer, or even a reference to another entity.
+The datastore can execute multiple operations in a single transaction. By definition, a transaction cannot succeed unless every operation in the transaction succeeds. If any of the operations fail, the transaction is automatically rolled back. This is especially useful for distributed web applications, where multiple users may be accessing or manipulating the same data at the same time.
