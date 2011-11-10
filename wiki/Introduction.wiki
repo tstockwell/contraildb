@@ -20,14 +20,14 @@ An item has one or more properties, named values of one of several data types.
 Property values must be one of the following data types:
  * 	String,
  *  Date, 
- * 	Integer, Byte, Long, Float, Double, BigInteger, or BigDecimal
+ * 	Integer, Byte, Long, Float, Double, !BigInteger, or !BigDecimal
  * 	Boolean,
  * 	Identifier,
  * 	Item,
  *  List or Set, where values in collections are valid property values
  	Not all values in a collection must be of the same data type. 
- *  Map, where keys are valid scalar property values (that is, keys may NOT be Item, List, Set, or Map) 
-   	and values are valid property values
+ *  Map, where keys are valid scalar property values and values are valid property values
+ 	Keys may *not* be Item, List, Set, or Map
  
 All items have an identifier that uniquely identifies the item.
 An application can fetch an item from the datastore by using its key, or by performing a query that matches the item's properties. 
