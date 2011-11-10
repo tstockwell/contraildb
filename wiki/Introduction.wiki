@@ -1,5 +1,7 @@
 #summary Introduction to Contrail.
 
+== High Available and Horizontally scalable == 
+
 Contrail is a database designed to be highly available and horizontally scalable.
 Contrail can be used as an embedded database on a single machine and scale up 
 to a cloud-based database distributed across many machines.
