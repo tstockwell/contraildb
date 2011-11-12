@@ -1,8 +1,9 @@
 package com.googlecode.contraildb.core;
 
-import java.io.DataInput;
-import java.io.DataOutput;
+import java.io.Externalizable;
 import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Collections;
@@ -15,7 +16,6 @@ import java.util.TreeMap;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.utils.ConversionUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
-import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
 /**
@@ -39,7 +39,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
  */
 public class Item 
 extends Entity
-implements Cloneable
+implements Cloneable, Externalizable
 {
 	private static final long serialVersionUID = 1L;
 	
@@ -194,45 +194,31 @@ implements Cloneable
 		return new Item(this);
 	}
 	
-	
-	public static final Serializer<Item> SERIALIZER= new Serializer<Item>() {
-		private final int typeCode= Item.class.getName().hashCode();
-		public Item readExternal(DataInput in) throws IOException {
-			Item item= new Item();
-			readExternal(in, item);
-			return item;
+	public void readExternal(ObjectInput in) throws IOException {
+		int count= in.readInt();
+		for (int i= count; 0 < i--;) {
+			String name= ExternalizationManager.StringSerializer.readExternal(in);
+			Object value= ExternalizationManager.readExternal(in);
+			_indexedProperties.put(name, value);
 		}
-		public void readExternal(DataInput in, Item item) throws IOException {
-			Entity.SERIALIZER.readExternal(in, item);
-			int count= in.readInt();
-			for (int i= count; 0 < i--;) {
-				String name= ExternalizationManager.StringSerializer.readExternal(in);
-				Object value= ExternalizationManager.readExternal(in);
-				item._indexedProperties.put(name, value);
-			}
-			count= in.readInt();
-			for (int i= count; 0 < i--;) {
-				String name= ExternalizationManager.StringSerializer.readExternal(in);
-				Object value= ExternalizationManager.readExternal(in);
-				item._unindexedProperties.put(name, value);
-			}
+		count= in.readInt();
+		for (int i= count; 0 < i--;) {
+			String name= ExternalizationManager.StringSerializer.readExternal(in);
+			Object value= ExternalizationManager.readExternal(in);
+			_unindexedProperties.put(name, value);
 		}
-		public int typeCode() {
-			return typeCode;
+	}
+	public void writeExternal(ObjectOutput out)
+	throws IOException {
+		out.writeInt(_indexedProperties.size());
+		for (Map.Entry<String, Object> entry: _indexedProperties.entrySet()) {
+			ExternalizationManager.StringSerializer.writeExternal(out, entry.getKey());
+			ExternalizationManager.writeExternal(out, entry.getValue());
 		}
-		public void writeExternal(DataOutput out, Item item)
-		throws IOException {
-			Entity.SERIALIZER.writeExternal(out, item);
-			out.writeInt(item._indexedProperties.size());
-			for (Map.Entry<String, Object> entry: item._indexedProperties.entrySet()) {
-				ExternalizationManager.StringSerializer.writeExternal(out, entry.getKey());
-				ExternalizationManager.writeExternal(out, entry.getValue());
-			}
-			out.writeInt(item._unindexedProperties.size());
-			for (Map.Entry<String, Object> entry: item._unindexedProperties.entrySet()) {
-				ExternalizationManager.StringSerializer.writeExternal(out, entry.getKey());
-				ExternalizationManager.writeExternal(out, entry.getValue());
-			}
+		out.writeInt(_unindexedProperties.size());
+		for (Map.Entry<String, Object> entry: _unindexedProperties.entrySet()) {
+			ExternalizationManager.StringSerializer.writeExternal(out, entry.getKey());
+			ExternalizationManager.writeExternal(out, entry.getValue());
 		}
-	};
+	}
 }
