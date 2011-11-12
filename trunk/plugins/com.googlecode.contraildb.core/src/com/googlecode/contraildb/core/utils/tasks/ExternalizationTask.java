@@ -1,12 +1,11 @@
 package com.googlecode.contraildb.core.utils.tasks;
 
-import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.List;
 
 import com.googlecode.contraildb.core.utils.ClosableByteArrayOutputStream;
 import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
@@ -36,7 +35,9 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 	
 	protected void run() throws IOException {
 		try {
-			ExternalizationManager.writeExternal(new DataOutputStream(_byteStream), _item);
+			ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
+			outputStream.writeObject(_item);
+			outputStream.flush();
 			setResult(_byteStream.toByteArray());
 		}
 		catch (Throwable x) {
