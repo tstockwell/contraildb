@@ -2,18 +2,16 @@
 
 == High Available and Horizontally scalable == 
 
-Contrail is a database designed to be highly available and horizontally scalable.
-Contrail can be used as an embedded database on a single machine and scale up 
-to a cloud-based database distributed across many machines.
+Contrail is a relational database designed to be highly scalable.
+Contrail can be used as an embedded database on a single machine or  scale up to a cloud-based database distributed across many machines.
 
 == Pluggable Storage ==
 
 Contrail has a pluggable storage system.  
 An appropriate storage system is chosen for the environment in which Contrail will be used.
-Contrail has storage systems that save data in memory, to a file system, or to cloud-based storage systems like Amazon S3.
+Contrail has storage systems that save data in memory, to a file system, or to cloud-based storage systems like Amazon S3 and Google Storage API.
 Contrail uses multiversion concurrency control (MVCC) to allow an unlimited number of clients to simultaneously access the data in its storage system.
-Contrail's consistency model is inherited from the storage system that is used.
-Specifically, since Contrail never overwrites data, Contrail's consistency model is dependent on the storage system's consistency model for *new* objects.
+Contrail is _strongly consistent_, any storage technology used with it must provide string consistency for new objects.
 
 == Data Model ==
 
