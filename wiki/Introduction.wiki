@@ -12,7 +12,7 @@ Contrail has a pluggable storage system.
 An appropriate storage system is chosen for the environment in which Contrail will be used.
 Contrail has storage systems that save data in memory, to a file system, or to cloud-based storage systems like Amazon S3 and Google Storage API.
 Contrail uses multiversion concurrency control (MVCC) to allow an unlimited number of clients to simultaneously access the data in its storage system.
-Contrail is _strongly consistent_, any storage technology used with it must provide string consistency for new objects.
+Contrail is _strongly consistent_, any storage technology used with it must provide strong consistency for new objects.
 
 == Data Model ==
 
