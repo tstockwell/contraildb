@@ -2,8 +2,9 @@
 
 == High Available and Horizontally scalable == 
 
-Contrail is a relational database designed to be highly scalable.
+Contrail is a schemaless, concurrent, and distributed document database designed to be highly scalable.
 Contrail can be used as an embedded database on a single machine or  scale up to a cloud-based database distributed across many machines.
+Contrail provides most of the features that developers expect from a traditional relational database like ACID transactions and joins.
 
 == Pluggable Storage ==
 
