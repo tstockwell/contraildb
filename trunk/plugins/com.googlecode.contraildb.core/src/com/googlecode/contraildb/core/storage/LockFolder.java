@@ -82,7 +82,7 @@ public class LockFolder extends Entity {
 	{
 		Lock lock= new Lock(id, processId);
 		long waitMillis= waitForNext? Magic.SESSION_MAX_MILLIS+1000 : 0;
-		IResult<Boolean> result= storage.create(lock, waitMillis);
+		CFuture<Boolean> result= storage.create(lock, waitMillis);
 		if (result.get()) {
 			return true;
 		}
@@ -102,7 +102,7 @@ public class LockFolder extends Entity {
 	public void unlock(final String processId)  
 	{
 		final Identifier lockId= Identifier.create(id, "lock");
-		final IResult<Lock> lockResult= storage.fetch(lockId);
+		final CFuture<Lock> lockResult= storage.fetch(lockId);
 		new ContrailAction() {
 			protected void run() {
 				try {

@@ -69,8 +69,8 @@ public class RevisionFolder extends Entity {
 	@Override
 	public void onLoad(Identifier identifier) throws IOException {
 		super.onLoad(identifier);
-		IResult<Entity> sf= storage.fetch(Identifier.create(id, "sessions"));
-		IResult<LockFolder> lf= storage.fetch(LockFolder.createId(this));
+		CFuture<Entity> sf= storage.fetch(Identifier.create(id, "sessions"));
+		CFuture<LockFolder> lf= storage.fetch(LockFolder.createId(this));
 		
 		_sessionsFolder= sf.get();
 		_lockFolder= lf.get();

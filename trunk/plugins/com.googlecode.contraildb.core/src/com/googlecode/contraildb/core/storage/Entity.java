@@ -69,11 +69,11 @@ public class Entity implements IEntity, ILifecycle {
 	}
 	
 
-	public IResult<Collection<Identifier>> listChildren() throws IOException {
+	public Receipt<Collection<Identifier>> listChildren() throws IOException {
 		return storage.listChildren(id);
 	}
 	
-	public IResult<Collection<Entity>> getChildren() throws IOException {
+	public Receipt<Collection<Entity>> getChildren() throws IOException {
 		return storage.fetchChildren(id);
 	}
 	
