@@ -11,14 +11,14 @@ import java.util.Map;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
+import com.googlecode.contraildb.core.utils.Receipt;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
 
 
@@ -128,13 +128,13 @@ public class ObjectStorage {
 			});
 		}
 
-		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
+		public <T extends Serializable> Receipt<T> fetch(final Identifier path) 
 		{
 			ContrailTask<T> task= new ContrailTask<T>(path, Operation.READ) {
 				protected void run() throws IOException {
 					T storable= (T)_cache.fetch(path);
 					if (storable == null) {
-						IResult<byte[]> content= _storageSession.fetch(path);
+						Receipt<byte[]> content= _storageSession.fetch(path);
 						if (content != null) 
 							storable= readStorable(path, content.get());
 					}
@@ -161,17 +161,17 @@ public class ObjectStorage {
 			return s;
 		}
 
-		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path)
+		public <T extends Serializable> Receipt<Map<Identifier, T>> fetchChildren(final Identifier path)
 		{
 			ContrailTask<Map<Identifier, T>> task= new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
 				protected void run() throws IOException {
 					Collection<Identifier> children= _storageSession.listChildren(path).get();
-					HashMap<Identifier, IResult<byte[]>> fetched= new HashMap<Identifier, IResult<byte[]>>();
+					HashMap<Identifier, Receipt<byte[]>> fetched= new HashMap<Identifier, Receipt<byte[]>>();
 					for (Identifier childId:children) 
 						fetched.put(childId, _storageSession.fetch(childId));
 					HashMap<Identifier, T> results= new HashMap<Identifier, T>();
 					for (Identifier childId:children) {
-						IResult<byte[]> result= fetched.get(childId);
+						Receipt<byte[]> result= fetched.get(childId);
 						T t= readStorable(childId, result.get());
 						results.put(childId, t);
 					}
@@ -182,7 +182,7 @@ public class ObjectStorage {
 			return task;
 		}
 
-		public IResult<Collection<Identifier>> listChildren(final Identifier path)
+		public Receipt<Collection<Identifier>> listChildren(final Identifier path)
 		{
 			ContrailTask<Collection<Identifier>> task= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
 				protected void run() {
@@ -208,7 +208,7 @@ public class ObjectStorage {
 			_outerStorage= null;
 		}
 		
-		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
+		public <T extends Serializable> Receipt<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
 		{
 			ContrailTask<Boolean> action= new ContrailTask<Boolean>(identifier, Operation.CREATE) {
 				protected void run() throws IOException {
@@ -249,7 +249,7 @@ public class ObjectStorage {
 		}
 
 		public void deleteAllChildren(Identifier path) {
-			final IResult<Collection<Identifier>> children= listChildren(path);
+			final Receipt<Collection<Identifier>> children= listChildren(path);
 			ContrailAction action= new ContrailAction(path, Operation.LIST) {
 				protected void run() {
 					for (Identifier identifier: children.get()) {

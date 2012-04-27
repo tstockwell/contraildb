@@ -5,7 +5,7 @@ import java.util.Collection;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.IResult;
+import com.googlecode.contraildb.core.utils.Receipt;
 
 
 /**
@@ -49,21 +49,21 @@ public interface IEntityStorage {
 		/**
 		 * Flush any pending changes to physical storage.
 		 */
-		public void flush() throws IOException;
+		public Receipt<Void> flush();
 		
-		public void delete(Identifier path);
+		public Receipt<Void> delete(Identifier path);
 		
-		public void deleteAllChildren(Identifier path);
+		public Receipt<Void> deleteAllChildren(Identifier path);
 
-		public <E extends IEntity> IResult<E> fetch(Identifier path);
+		public <E extends IEntity> Receipt<E> fetch(Identifier path);
 
-		public <E extends IEntity> IResult<Collection<E>> fetchChildren(final Identifier path);
+		public <E extends IEntity> Receipt<Collection<E>> fetchChildren(final Identifier path);
 
-		public <E extends IEntity> void store(E entity);
+		public <E extends IEntity> Receipt<Void> store(E entity);
 
-		public IResult<Collection<Identifier>> listChildren(Identifier path);
+		public Receipt<Collection<Identifier>> listChildren(Identifier path);
 
-		public <E extends IEntity> IResult<Boolean> create(E entity, long waitMillis);
+		public <E extends IEntity> Receipt<Boolean> create(E entity, long waitMillis);
 
 	}
 

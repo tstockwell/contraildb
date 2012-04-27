@@ -11,12 +11,12 @@ import java.util.Map;
 
 import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
-import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.PathUtils;
+import com.googlecode.contraildb.core.utils.Receipt;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 
 
@@ -194,10 +194,10 @@ public class StorageSession implements IEntityStorage.Session {
 		if (_mode == Mode.READONLY)
 			throw new ContrailException("Revision is read only: "+_revisionNumber);
 		
-		ArrayList<IResult<Collection<Identifier>>> childrens= new ArrayList<IResult<Collection<Identifier>>>(); 
+		ArrayList<Receipt<Collection<Identifier>>> childrens= new ArrayList<Receipt<Collection<Identifier>>>(); 
 		for (Identifier path: paths) 
 			childrens.add(listChildren(path));
-		for (IResult<Collection<Identifier>> result: childrens) {
+		for (Receipt<Collection<Identifier>> result: childrens) {
 			Collection<Identifier> children= result.get();
 			for (Identifier child: children)
 				delete(child);
@@ -214,12 +214,12 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 
-	public <C extends IEntity> IResult<C> fetch(final Identifier path) {
+	public <C extends IEntity> Receipt<C> fetch(final Identifier path) {
 		return new ContrailTask<C>() {
 			@SuppressWarnings("unchecked")
 			protected void run() throws IOException {
 				Identifier contrailPath= Identifier.create(path, CONTRAIL_FOLDER);
-				IResult<Collection<Identifier>> childrenResult= _storage.listChildren(contrailPath);
+				Receipt<Collection<Identifier>> childrenResult= _storage.listChildren(contrailPath);
 				Collection<Identifier> children= childrenResult.get();
 				Identifier mostRecentRevision= null;
 				long maxRevision= -1;
@@ -247,7 +247,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 
-	public IResult<Collection<Identifier>> listChildren(final Identifier path)
+	public Receipt<Collection<Identifier>> listChildren(final Identifier path)
 	{
 		return new ContrailTask<Collection<Identifier>>() {
 			protected void run() throws IOException {
@@ -266,7 +266,7 @@ public class StorageSession implements IEntityStorage.Session {
 		ArrayList<Identifier> results= new ArrayList<Identifier>();
 		Collection<Identifier> children= _storage.listChildren(path).get();
 		
-		Map<Identifier, IResult<Collection<Identifier>>> contrailChildrens= new HashMap<Identifier, IResult<Collection<Identifier>>>();
+		Map<Identifier, Receipt<Collection<Identifier>>> contrailChildrens= new HashMap<Identifier, Receipt<Collection<Identifier>>>();
 		for (Identifier child:children) {
 			if (CONTRAIL_FOLDER.equals(child.getName())) 
 				continue;
@@ -297,7 +297,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 
-	public <C extends IEntity> IResult<Collection<C>> fetchChildren(final Identifier path)
+	public <C extends IEntity> Receipt<Collection<C>> fetchChildren(final Identifier path)
 	{
 		return new ContrailTask<Collection<C>>() {
 			@SuppressWarnings("unchecked")
@@ -319,7 +319,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 	@Override
-	public <E extends IEntity> IResult<Boolean> create(E entity, long waitMillis) {
+	public <E extends IEntity> Receipt<Boolean> create(E entity, long waitMillis) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -328,7 +328,7 @@ public class StorageSession implements IEntityStorage.Session {
 		if (_mode == Mode.READONLY)
 			throw new ContrailException("Revision is read only: "+_revisionNumber);
 		
-		IResult<Collection<Identifier>> children= listChildren(path);
+		Receipt<Collection<Identifier>> children= listChildren(path);
 		for (Identifier child: children.get())
 			delete(child);
 	}

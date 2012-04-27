@@ -5,15 +5,17 @@ import java.util.Collection;
 import java.util.HashSet;
 
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.utils.Completion;
+import com.googlecode.contraildb.core.utils.Completion;
+import com.googlecode.contraildb.core.utils.Receipt;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.SignalHandler;
 import com.googlecode.contraildb.core.utils.Signals;
 import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
 
 /**
@@ -29,6 +31,7 @@ implements IStorageProvider
 	
 	// list of items for which we want notification of changes
 	private HashSet<Identifier> _identifiersOfInterest= new HashSet<Identifier>(); 
+	
 	private ContrailTaskTracker _tracker= new ContrailTaskTracker();
 	
 	abstract public class Session
@@ -41,19 +44,19 @@ implements IStorageProvider
 		abstract protected byte[] doFetch(Identifier path) throws IOException;
 		abstract protected void doDelete(Identifier path) throws IOException;
 		abstract protected void doClose() throws IOException; 
-		abstract protected void doFlush() throws IOException;
+		abstract protected Receipt<Void> doFlush() throws IOException;
 		abstract protected Collection<Identifier> doList(Identifier path) throws IOException;
 		
 		
-
 		@Override
-		public void flush() throws IOException {
-			try {
-				_trackerSession.awaitCompletion(IOException.class);
-			}
-			finally {
-				doFlush();
-			}
+		public Receipt<Void> flush() throws IOException {
+			return TaskUtils.<Void>sequence(
+					_trackerSession.awaitCompletion(),
+					new Completion<Void,Void>() {
+						@Override public Receipt<Void> complete(Receipt<Void> future) {
+							doFlush();
+						}
+					});
 		}
 
 		@Override
@@ -68,7 +71,7 @@ implements IStorageProvider
 		}
 		
 		@Override
-		public IResult<Collection<Identifier>> listChildren(final Identifier path) {
+		public Receipt<Collection<Identifier>> listChildren(final Identifier path) {
 			ContrailTask<Collection<Identifier>> action= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
 				protected void run() throws IOException {
 					setResult(doList(path));
@@ -79,7 +82,7 @@ implements IStorageProvider
 		}
 		
 		@Override
-		public IResult<byte[]> fetch(final Identifier path) {
+		public Receipt<byte[]> fetch(final Identifier path) {
 			ContrailTask<byte[]> action= new ContrailTask<byte[]>(path, Operation.READ) {
 				protected void run() throws IOException {
 					setResult(doFetch(path));
@@ -90,7 +93,7 @@ implements IStorageProvider
 		}
 
 		@Override
-		public void store(final Identifier identifier, final IResult<byte[]> content) {
+		public Receipt<Void> store(final Identifier identifier, final Receipt<byte[]> content) {
 			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
 				protected void run() {
 					try {
@@ -104,7 +107,7 @@ implements IStorageProvider
 		}
 
 		@Override
-		public void delete(final Identifier path) {
+		public Receipt<Void> delete(final Identifier path) {
 			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
 				protected void run() throws IOException {
 					try {
@@ -138,11 +141,11 @@ implements IStorageProvider
 		 * 		and was not deleted within the wait period.
 		 */
 		@Override
-		public IResult<Boolean> create(final Identifier path_, final IResult<byte[]> source_, final long waitMillis_) 
+		public Receipt<Boolean> create(final Identifier path_, final Receipt<byte[]> source_, final long waitMillis_) 
 		{
 			ContrailTask<Boolean> task= new ContrailTask<Boolean>(path_, Operation.CREATE) {
 				final Identifier _path= path_;
-				final IResult<byte[]> _source= source_;
+				final Receipt<byte[]> _source= source_;
 				final long _waitMillis= waitMillis_;
 				
 				final long _start= System.currentTimeMillis();
