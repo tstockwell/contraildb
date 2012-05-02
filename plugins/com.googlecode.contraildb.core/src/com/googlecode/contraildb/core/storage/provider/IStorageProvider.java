@@ -4,7 +4,8 @@ import java.io.IOException;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.Receipt;
+import com.googlecode.contraildb.core.utils.IResult;
+
 
 /**
  * Contrail works with on any storage system that can implement the very basic 
@@ -18,7 +19,8 @@ import com.googlecode.contraildb.core.utils.Receipt;
  * None of the methods are considered atomic, that is, if they fail 
  * they may have partially completed their operation.
  * 
- * All operations are performed asynchronously.  
+ * Some implementation of this interface may cache operations for performance 
+ * reasons or, more likely, perform operations asynchronously in the background.  
  * The flush method must be called to make sure that all changes are flushed 
  * to physical storage at a particular point in time.
  * Note that IStorageProvider implementations are not required to implement caching 
@@ -30,7 +32,7 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	public IStorageProvider.Session connect() throws IOException;
+	com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException;
 	
 	
 	static public interface Session {
@@ -44,18 +46,18 @@ public interface IStorageProvider {
 		/**
 		 * Returns the complete paths to all the children of the given path.
 		 */
-		public Receipt<Collection<Identifier>> listChildren(Identifier path);
+		public IResult<Collection<Identifier>> listChildren(Identifier path);
 		
 		/**
 		 * @return the contents of of the given path, or null if the file does not exist.
 		 */
-		public Receipt<byte[]> fetch(Identifier path);
+		public IResult<byte[]> fetch(Identifier path);
 
 		/**
 		 * Stores the given contents at the given location.
 		 * The file is created if it does not already exist.
 		 */
-		public Receipt<Void> store(Identifier path, Receipt<byte[]> content);
+		public void store(Identifier path, IResult<byte[]> content);
 
 		/**
 		 * Stores the given contents at the given location if the file 
@@ -70,17 +72,17 @@ public interface IStorageProvider {
 		 * 		true if the file was created, false if the file already exists 
 		 * 		and was not deleted within the wait period.
 		 */
-		public Receipt<Boolean> create(Identifier i, Receipt<byte[]> content, long waitMillis);
+		public IResult<Boolean> create(Identifier i, IResult<byte[]> content, long waitMillis);
 
 		/**
 		 * Deletes the contents stored at the given locations.
 		 */
-		public Receipt<Void> delete(Identifier path);
+		public void delete(Identifier path);
 		
 		/**
 		 * Flush any pending changes made by this session to physical storage.
 		 */
-		public Receipt<Void> flush() throws IOException;
+		public void flush() throws IOException;
 
 
 	}

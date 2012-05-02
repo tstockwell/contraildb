@@ -174,14 +174,14 @@ implements IContrailSession
 		if (_storageSession == null)
 			throw new SessionAlreadyClosedException();
 
-		HashMap<Identifier, CFuture<Collection<T>>> fetched= new HashMap<Identifier, CFuture<Collection<T>>>();
+		HashMap<Identifier, IResult<Collection<T>>> fetched= new HashMap<Identifier, IResult<Collection<T>>>();
 		for (Identifier path:paths) {
-			CFuture<Collection<T>> result= _storageSession.fetchChildren(path);
+			IResult<Collection<T>> result= _storageSession.fetchChildren(path);
 			fetched.put(path, result);
 		}
 		HashMap<Identifier, Collection<T>> items= new HashMap<Identifier, Collection<T>>();
 		for (Identifier path:paths) {
-			CFuture<Collection<T>> result= fetched.get(path);
+			IResult<Collection<T>> result= fetched.get(path);
 			items.put(path, result.get());
 		}
 		
@@ -208,14 +208,14 @@ implements IContrailSession
 		if (_storageSession == null)
 			throw new SessionAlreadyClosedException();
 
-		HashMap<Identifier, CFuture<Collection<Identifier>>> fetched= new HashMap<Identifier, CFuture<Collection<Identifier>>>();
+		HashMap<Identifier, IResult<Collection<Identifier>>> fetched= new HashMap<Identifier, IResult<Collection<Identifier>>>();
 		for (Identifier path:paths) {
-			CFuture<Collection<Identifier>> result= _storageSession.listChildren(path);
+			IResult<Collection<Identifier>> result= _storageSession.listChildren(path);
 			fetched.put(path, result);
 		}
 		HashMap<Identifier, Collection<Identifier>> items= new HashMap<Identifier, Collection<Identifier>>();
 		for (Identifier path:paths) {
-			CFuture<Collection<Identifier>> result= fetched.get(path);
+			IResult<Collection<Identifier>> result= fetched.get(path);
 			items.put(path, result.get());
 		}
 		

@@ -123,9 +123,9 @@ public class RootFolder extends Entity  {
 	@Override
 	public void onLoad(Identifier identifier) throws IOException {
 		super.onLoad(identifier);
-		CFuture<Entity> rf= storage.fetch(Identifier.create(identifier, "revisions"));
-		CFuture<Entity> df= storage.fetch(Identifier.create(identifier, "deletions"));
-		CFuture<LockFolder> lf= storage.fetch(LockFolder.createId(this));
+		IResult<Entity> rf= storage.fetch(Identifier.create(identifier, "revisions"));
+		IResult<Entity> df= storage.fetch(Identifier.create(identifier, "deletions"));
+		IResult<LockFolder> lf= storage.fetch(LockFolder.createId(this));
 		
 		_revisionsFolder= rf.get();
 		_deletionsFolder= df.get();
