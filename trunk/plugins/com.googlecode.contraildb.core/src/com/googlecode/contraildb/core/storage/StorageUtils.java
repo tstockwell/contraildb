@@ -11,19 +11,19 @@ public class StorageUtils {
 	
 	public static final <T extends IEntity> List<T> syncFetch(IEntityStorage.Session storage, Iterable<Identifier> ids)
 	{
-		ArrayList<CFuture<T>> fetched= new ArrayList<CFuture<T>>();
+		ArrayList<IResult<T>> fetched= new ArrayList<IResult<T>>();
 		for (Identifier id:ids) {
-			CFuture<T> result= storage.fetch(id);
+			IResult<T> result= storage.fetch(id);
 			fetched.add(result);
 		}
 		ArrayList<T> results= new ArrayList<T>();
-		for (CFuture<T> result: fetched)
+		for (IResult<T> result: fetched)
 			results.add(result.get());
 		return results;
 	}
 
 	public static <T extends IEntity> T syncFetch(IEntityStorage.Session storageSession, Identifier indexId) {
-		CFuture<T> result= storageSession.fetch(indexId);
+		IResult<T> result= storageSession.fetch(indexId);
 		return result.get();
 	}
 }

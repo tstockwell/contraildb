@@ -72,11 +72,11 @@ public class EntityStorage implements IEntityStorage {
 			_objectSession.flush();
 		}
 
-		public <E extends IEntity> Receipt<E> fetch(Identifier path) {
+		public <E extends IEntity> IResult<E> fetch(Identifier path) {
 			return _objectSession.fetch(path);
 		}
 
-		public <E extends IEntity> Receipt<Collection<E>> fetchChildren(final Identifier path)
+		public <E extends IEntity> IResult<Collection<E>> fetchChildren(final Identifier path)
 		{
 			return new ContrailTask<Collection<E>>() {
 				@SuppressWarnings("unchecked")
@@ -94,12 +94,12 @@ public class EntityStorage implements IEntityStorage {
 			_objectSession.store(entity.getId(), entity);
 		}
 
-		public Receipt<Collection<Identifier>> listChildren(Identifier path) 
+		public IResult<Collection<Identifier>> listChildren(Identifier path) 
 		{
 			return _objectSession.listChildren(path);
 		}
 
-		public <E extends IEntity> Receipt<Boolean> create(E entity, long waitMillis) {
+		public <E extends IEntity> IResult<Boolean> create(E entity, long waitMillis) {
 			return _objectSession.create(entity.getId(), entity, waitMillis);
 		}
 

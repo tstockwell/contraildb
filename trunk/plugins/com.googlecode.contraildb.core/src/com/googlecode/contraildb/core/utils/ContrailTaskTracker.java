@@ -71,7 +71,7 @@ public class ContrailTaskTracker {
 		return tasks.contains(action);
 	}
 	
-	private List<ContrailTask> findPendingTasks(ContrailTask task) {
+	private List<ContrailTask<?>> findPendingTasks(ContrailTask task) {
 
 		Identifier taskId= task.getId();
 		final Operation op= task.getOperation();
@@ -146,11 +146,10 @@ public class ContrailTaskTracker {
 
 	public class Session {
 		
-		Completion _completionListener= new Completion() {
-			@Override
-			public Receipt complete(Receipt future) {
+		ContrailTask.CompletionListener _completionListener= new ContrailTask.CompletionListener() {
+			public void done(ContrailTask task) {
 				removeTask(task);
-			};
+			}
 		};
 		
 		List<ContrailTask> _sessionTasks= Collections.synchronizedList(new ArrayList<ContrailTask>());
@@ -168,22 +167,37 @@ public class ContrailTaskTracker {
 			super.finalize();
 		}
 		
-		synchronized public <T> Receipt<T> submit(final ContrailTask<T> task) {
-			final ReceiptImpl<T> receipt= new ReceiptImpl<T>();
-			
-			// find all dependencies and submit the incoming task when the 
-			// dependencies have completed.
-			List<ContrailTask> pendingTasks= findPendingTasks(task);
+		synchronized public Session submit(ContrailTask<?> task) {
+			List<ContrailTask<?>> pendingTasks= null;
+
+			pendingTasks= findPendingTasks(task);
 			addTask(task);
-			TaskUtils.joinAll((List<Receipt>)(Object)pendingTasks).onComplete(
-					new Completion() {
-						@Override public Receipt<Object> complete(Receipt r) {
-							receipt.complete(task.run());
-							return null;
-						}
-					}
-			);
-			return receipt;
+			task.submit(pendingTasks);
+			
+			
+			return this;
+		}
+		
+		public <X extends Throwable, T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks, Class<X> errorType) 
+		throws X 
+		{
+			for (ContrailTask task : tasks) 
+				submit(task);
+			awaitCompletion(tasks, errorType);
+			return this;
+		}
+		public <T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks) 
+		{
+			for (ContrailTask task : tasks) 
+				submit(task);
+			awaitCompletion(tasks);
+			return this;
+		}
+		
+		public <T extends ContrailTask<?>> Session invoke(T task) 
+		{
+			invokeAll(ConversionUtils.asList(task));
+			return this;
 		}
 		
 		private void addTask(ContrailTask<?> task) {
@@ -214,7 +228,7 @@ public class ContrailTaskTracker {
 			_sessionTasks.remove(task);
 		}
 
-		public Receipt<Void> awaitCompletion() {
+		public Session awaitCompletion() {
 			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
 			while (!_sessionTasks.isEmpty()) {
 				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
@@ -232,9 +246,10 @@ public class ContrailTaskTracker {
 				if (t != null) 
 					TaskUtils.throwSomething(t);
 			}
+			return this;
 		}
 
-		public <X extends Throwable> CFuture<Void> awaitCompletion(Class<X> errorType) throws X {
+		public <X extends Throwable> Session awaitCompletion(Class<X> errorType) throws X {
 			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
 			while (!_sessionTasks.isEmpty()) {
 				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);

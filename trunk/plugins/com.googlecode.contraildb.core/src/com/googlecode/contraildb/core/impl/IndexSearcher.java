@@ -184,13 +184,13 @@ public class IndexSearcher {
 	public <T extends IEntity> Iterable<T> fetchEntities(ContrailQuery query) throws IOException {
 		Iterable<Identifier> ids= fetchIdentifiers(query);
 		
-		ArrayList<CFuture<T>> fetched= new ArrayList<CFuture<T>>();
+		ArrayList<IResult<T>> fetched= new ArrayList<IResult<T>>();
 		for (Identifier id:ids) {
-			CFuture<T> result= _storageSession.fetch(id);
+			IResult<T> result= _storageSession.fetch(id);
 			fetched.add(result);
 		}
 		ArrayList<T> results= new ArrayList<T>();
-		for (CFuture<T> result: fetched)
+		for (IResult<T> result: fetched)
 			results.add(result.get());
 		
 		List<SortPredicate> sorts= query.getSortPredicates();
