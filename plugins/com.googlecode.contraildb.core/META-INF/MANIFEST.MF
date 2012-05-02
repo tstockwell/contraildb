@@ -10,3 +10,4 @@ Export-Package: com.googlecode.contraildb.core,
  com.googlecode.contraildb.core.storage.provider,
  com.googlecode.contraildb.core.storage.remote,
  com.googlecode.contraildb.core.utils
+Require-Bundle: com.googlecode.lingwah;bundle-version="1.0.0"
