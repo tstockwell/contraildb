@@ -22,9 +22,12 @@ import com.googlecode.contraildb.core.Identifier;
  * 
  * Subclasses need to implement the run method.
  * 
- * @author Ted Stockwell
+ * This class uses a fixed pool of threads to run tasks.
  *
  * @param <T> The result type returned by the <tt>getResult</tt> method
+ * 
+ * @author Ted Stockwell
+ * @see ContrailTaskTracker
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 abstract public class ContrailTask<T> implements IResult<T> {
@@ -73,7 +76,6 @@ abstract public class ContrailTask<T> implements IResult<T> {
 	}
 	
 	static {
-System.out.println("");
 		for (int count= Runtime.getRuntime().availableProcessors() * 10; 0 < count--;) { 
 			new ContrailThread().start();
 		}
@@ -322,7 +324,7 @@ if (__logger.isLoggable(Level.FINER))
 	}
 	
 	public boolean quietlyJoin() {
-		return quietlyJoin(1000L*60*60/*one hour*/);
+		return quietlyJoin(1000L*60/*one minute*/);
 	}
 	
 	/**

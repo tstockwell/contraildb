@@ -40,15 +40,14 @@ import junit.framework.TestCase;
 import com.google.appengine.tools.development.ApiProxyLocalFactory;
 import com.google.apphosting.api.ApiProxy;
 import com.googlecode.contraildb.core.ContrailQuery;
+import com.googlecode.contraildb.core.ContrailQuery.SortDirection;
 import com.googlecode.contraildb.core.ContrailServiceFactory;
 import com.googlecode.contraildb.core.IContrailService;
+import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
-import com.googlecode.contraildb.core.ContrailQuery.SortDirection;
-import com.googlecode.contraildb.core.IContrailService.Mode;
-import com.googlecode.contraildb.core.storage.provider.FileStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 
@@ -58,7 +57,7 @@ import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
  * 
  * @author Ted Stockwell
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked","rawtypes"})
 public class BasicContrailTests extends TestCase {
 	
 	// properties
@@ -67,10 +66,12 @@ public class BasicContrailTests extends TestCase {
 	private static final String SALARY = "salary";
 	private static final String MARRIED = "married";
 	private static final String MEMBERS = "members";
+	private static final String CHILDREN = "children";
 	
 	// types
 	private static final String PERSON = "Person";
 	private static final String POSSE = "Posse";
+	private static final String DEITY = "Deity";
 
 	IStorageProvider _storageProvider;
 	IContrailService _datastore;
@@ -153,6 +154,13 @@ public class BasicContrailTests extends TestCase {
 		fixture.setProperty(PROFESSION, "carpenter");
 		fixture.setProperty(SALARY, 0.00);
 		fixture.setProperty(MARRIED, Boolean.FALSE);
+		goodGuys.add(fixture.getId());
+		addFixture(fixture);
+		Item jesus= fixture;
+		
+		fixture= new Item("God");
+		fixture.setProperty(TYPE, DEITY);
+		fixture.setProperty(CHILDREN, jesus.getId());
 		goodGuys.add(fixture.getId());
 		addFixture(fixture);
 		
@@ -388,6 +396,17 @@ public class BasicContrailTests extends TestCase {
 //			query = new ContrailQuery().where(id(Identifier.create("Jesus")));
 //			results= transaction.prepare(query);
 //			assertEquals(2, results.countEntities());
+			
+			//
+			// joins
+			//
+			
+			// find items that have a child whose profession is carpenter
+			query = new ContrailQuery();
+			query.addJoin(CHILDREN).where(eq(PROFESSION, "carpenter"));
+			results= transaction.prepare(query);
+			assertEquals(1, results.count());
+			
 			
 	// support subqueries....		
 //			// find orders for all customers named smith

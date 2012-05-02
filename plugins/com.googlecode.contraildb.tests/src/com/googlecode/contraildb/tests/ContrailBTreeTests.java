@@ -239,7 +239,6 @@ public class ContrailBTreeTests extends TestCase {
 		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
 		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 		
-		String lastDump= "";
 		for (int i= 0; i < 100; i++) {
 			Integer I= new Integer(i);
 			tree.insert(I, I);
