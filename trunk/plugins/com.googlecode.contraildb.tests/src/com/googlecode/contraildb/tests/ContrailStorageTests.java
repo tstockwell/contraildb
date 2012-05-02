@@ -31,8 +31,8 @@ import junit.framework.TestCase;
 
 import com.google.appengine.tools.development.ApiProxyLocalFactory;
 import com.google.apphosting.api.ApiProxy;
-import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
@@ -40,7 +40,6 @@ import com.googlecode.contraildb.core.storage.LockFolder;
 import com.googlecode.contraildb.core.storage.ObjectStorage;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageSystem;
-import com.googlecode.contraildb.core.storage.provider.FileStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
@@ -53,6 +52,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  * 
  * @author Ted Stockwell
  */
+@SuppressWarnings({ "unchecked", "rawtypes" })
 public class ContrailStorageTests extends TestCase {
 	
 	StorageSystem _storage;
@@ -93,7 +93,6 @@ public class ContrailStorageTests extends TestCase {
 	 * Verify that creates/deletes work across threads. 
 	 * @throws IOException
 	 */
-	@SuppressWarnings("unchecked")
 	public void testCreate() throws Throwable {
 		final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
 		
@@ -141,7 +140,6 @@ public class ContrailStorageTests extends TestCase {
 	 * Verify that storage-based locks work across threads. 
 	 * @throws IOException
 	 */
-	@SuppressWarnings("unchecked")
 	public void testLocks() throws Throwable {
 		
 		// test that only one lock is ever granted at a time

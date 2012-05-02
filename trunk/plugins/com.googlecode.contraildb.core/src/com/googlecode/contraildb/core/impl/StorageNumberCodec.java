@@ -13,6 +13,9 @@ import com.googlecode.contraildb.core.ContrailException;
  * The length of an encoded number is only slightly larger than the length 
  * of its original number.
  * Unlike other schemes, there is no limit to the size of numbers which may be encoded.
+ * 
+ * This code was based on ideas in this paper but there are some minor differences... 
+ * 	www.zanopha.com/docs/elen.ps 
  *    
  * @author ted stockwell
  *
