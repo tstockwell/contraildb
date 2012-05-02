@@ -403,7 +403,7 @@ public class BasicContrailTests extends TestCase {
 			
 			// find items that have a child whose profession is carpenter
 			query = new ContrailQuery();
-			query.addJoin(CHILDREN).where(eq(PROFESSION, "carpenter"));
+			query.join(CHILDREN).where(eq(PROFESSION, "carpenter"));
 			results= transaction.prepare(query);
 			assertEquals(1, results.count());
 			
