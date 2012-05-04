@@ -2,6 +2,7 @@ package com.googlecode.contraildb.core.utils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
@@ -39,6 +40,7 @@ abstract public class ContrailTask<T> implements IResult<T> {
 	private static Object __done= new Object(); // used to wait/notify when tasks are completed
 	private static Object __arrive= new Object(); // used to wait/notify when new tasks arrive
 	private static ArrayList<ContrailTask> __deferred= new ArrayList<ContrailTask>();
+	private static ArrayList<Thread> __yielded= new ArrayList<Thread>();
 	private static int __THREAD_COUNT= 0;
 	
 	private static Logger __logger= Logging.getLogger();
@@ -104,6 +106,17 @@ abstract public class ContrailTask<T> implements IResult<T> {
 			ContrailTask t= ((ContrailThread)thread)._currentTask;
 			if (t != null)
 				return t.isCancelled();
+		}
+		return false;
+	}
+	/**
+	 * Returns true if the current thread is running a ContrailTask that has yielded.  
+	 */
+	public static final boolean isTaskYielded() {
+		Thread thread= Thread.currentThread();
+		synchronized (__yielded) {
+			if (__yielded.contains(thread))
+				return true;
 		}
 		return false;
 	}
@@ -333,68 +346,12 @@ if (__logger.isLoggable(Level.FINER))
 	public boolean quietlyJoin(long timeoutMillis) {
 		final long start= System.currentTimeMillis();
 		while (true) {
-			ContrailTask nextTask= null;
 			synchronized (__done) {
-
 				if (_done)
 					return true;
-				
-				/*
-				 * If this task is not done then, in order to avoid deadlock, 
-				 * we have to perform some other task while we wait.  
-				 * If the task we're waiting for is not done them we'll see if 
-				 * we can get it off the list of waiting tasks and run it in 
-				 * this thread.
-				 * If the task we're waiting for is deferred then try to get 
-				 * one of the tasks it is waiting for off the list and run it. 
-				 */
-				if (_submitted) 
-					if (__tasks.remove(this)) { 
-						nextTask= this;
-					}
-				if (!_submitted && nextTask == null && _pendingTasks != null) {
-					HashSet<Identifier> done= new HashSet<Identifier>();
-					LinkedList<ContrailTask> todo= new LinkedList<ContrailTask>();
-					todo.add(this);
-					while (!_done && !todo.isEmpty() && nextTask == null) {
-						ContrailTask t= todo.removeFirst();
-						Identifier taskID= t.getId();
-						if (done.contains(taskID))
-							continue;
-						done.add(taskID);
-						if (!t._done) {
-							if (t._submitted) {
-								if (__tasks.remove(t)) { 
-									nextTask= t;
-								}
-							}
-							else if (t._pendingTasks != null) {
-								List<ContrailTask> l= t._pendingTasks;
-								for (int i= l.size(); 0 < i--;) {
-									ContrailTask p= l.get(i);
-									if (p._done) {
-										t._pendingTasks.remove(i);
-									}
-									else
-										todo.add(p);
-								}
-							}
-						}
-					}
-				}
-			}	
-			
-			if (nextTask == null) {
-				synchronized (__done) {
-					if (_done)
-						return true;
-					try {__done.wait(); } catch (InterruptedException x) { }
-				}
-			}
-			else { 
-				nextTask.runTask();
 			}
 			
+			yield(); // do something else while we're waiting
 			
 			long millisRemaining= timeoutMillis - (System.currentTimeMillis() - start);
 			if (millisRemaining <= 0) 
@@ -402,5 +359,135 @@ if (__logger.isLoggable(Level.FINER))
 		}
 	}
 	
+	/**
+	 * Run other tasks in this thread while waiting for other things to happen
+	 * @return true if another task was run 
+	 */
+	protected boolean yield() {
+		if (isTaskYielded())
+			return false; // no nested yields for now
+		
+		if (yieldToDependent())
+			return true;
+
+		/*
+		 * If this task has no dependencies then choose a random task to run.  
+		 * DONT mess with a task that has any dependencies, choose something nice and simple.
+		 */
+
+		ContrailTask nextTask= null;
+		for (Iterator<ContrailTask> i= __tasks.iterator(); i.hasNext();) {
+			ContrailTask t= i.next();
+			if (t._pendingTasks == null || t._pendingTasks.isEmpty()) {
+				if (__tasks.remove(t)) {
+					nextTask= t;
+					break;
+				}
+			}
+		}
+
+		if (nextTask != null) {
+			nextTask.runTask();
+			return true;
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Run other dependency tasks in this thread while waiting for other things to happen
+	 * @return true if a task was run
+	 */
+	protected boolean yieldToDependent() {
+		if (isTaskYielded())
+			return false; // no nested yields for now
+		
+		ContrailTask nextTask= null;
+		synchronized (__done) {
+
+			if (_done)
+				return false;
+
+			/*
+			 * If this task is not done then perform some other task while we wait.
+			 * This task may be waiting on some other task to complete, if so 
+			 * we will run one of those dependent tasks first.  
+			 * 
+			 * If the task we're waiting for is not done them we'll see if 
+			 * we can get it off the list of waiting tasks and run it in 
+			 * this thread.
+			 * If the task we're waiting for is deferred then try to get 
+			 * one of the tasks it is waiting for off the list and run it. 
+			 * 
+			 * If this task has no dependencies then choose a random task
+			 * to run.  DONT choose a task that's dependent on this one.
+			 */
+			if (_submitted) 
+				if (__tasks.remove(this)) { 
+					nextTask= this; // this task has not been assigned to a thread, run it now.
+				}
+
+			// find a dependent task to run
+			if (!_submitted && nextTask == null && _pendingTasks != null) {
+				HashSet<Identifier> done= new HashSet<Identifier>();
+				LinkedList<ContrailTask> todo= new LinkedList<ContrailTask>();
+				todo.add(this);
+				while (!_done && !todo.isEmpty() && nextTask == null) {
+					ContrailTask t= todo.removeFirst();
+					Identifier taskID= t.getId();
+					if (done.contains(taskID))
+						continue;
+					done.add(taskID);
+					if (!t._done) {
+						if (t._submitted) {
+							if (__tasks.remove(t)) { 
+								nextTask= t;
+							}
+						}
+						else if (t._pendingTasks != null) {
+							List<ContrailTask> l= t._pendingTasks;
+							for (int i= l.size(); 0 < i--;) {
+								ContrailTask p= l.get(i);
+								if (p._done) {
+									t._pendingTasks.remove(i);
+								}
+								else
+									todo.add(p);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if (nextTask != null) {
+			return yieldToTask(nextTask);
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Yield to the given task
+	 * @return true if the task was run
+	 */
+	protected boolean yieldToTask(ContrailTask task) {
+		Thread thread= Thread.currentThread();
+		synchronized (__yielded) {
+			if (isTaskYielded())
+				return false; // no nested yields for now
+			
+			__yielded.add(thread);
+		}
+		try {
+			task.runTask();
+			return true;
+		}
+		finally {
+			synchronized (__yielded) {
+				__yielded.remove(thread);
+			}
+		}
+	}
 }
 

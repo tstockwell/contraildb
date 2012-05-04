@@ -10,6 +10,7 @@ import java.util.Iterator;
  * A simple linked list that also tracks items by hash code for fast lookups 
  * and removes.
  * Not thread-safe. 
+ * @see ConcurrentHashedLinkedList
  *
  * @param T  the types of Objects stored in this container
  */

@@ -10,32 +10,29 @@ import static com.googlecode.contraildb.core.ContrailQuery.FilterOperator.NOT_EQ
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.ContrailQuery;
-import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.ContrailQuery.FilterOperator;
 import com.googlecode.contraildb.core.ContrailQuery.FilterPredicate;
 import com.googlecode.contraildb.core.ContrailQuery.QuantifiedValues;
 import com.googlecode.contraildb.core.ContrailQuery.Quantifier;
-import com.googlecode.contraildb.core.ContrailQuery.SortPredicate;
+import com.googlecode.contraildb.core.IProcessor;
+import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.BTree;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor;
+import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
-import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
-import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -45,7 +42,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  * 
  * @author ted stockwell
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class IndexSearcher {
 	
 	StorageSession  _storageSession;
@@ -181,35 +178,25 @@ public class IndexSearcher {
 	}
 	
 
-	public <T extends IEntity> Iterable<T> fetchEntities(ContrailQuery query) throws IOException {
-		Iterable<Identifier> ids= fetchIdentifiers(query);
-		
-		ArrayList<IResult<T>> fetched= new ArrayList<IResult<T>>();
-		for (Identifier id:ids) {
-			IResult<T> result= _storageSession.fetch(id);
-			fetched.add(result);
-		}
-		ArrayList<T> results= new ArrayList<T>();
-		for (IResult<T> result: fetched)
-			results.add(result.get());
-		
-		List<SortPredicate> sorts= query.getSortPredicates();
-		if (!sorts.isEmpty()) 
-			Collections.sort(results, new SortComparator(sorts));
-		
-		return results;
-	}
-
-	public List<Identifier> fetchIdentifiers(ContrailQuery query) throws IOException {
-		List<IForwardCursor<Identifier>> filterCursors= createFilterCursors(query.getFilterPredicates());
-		IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?
-			filterCursors.get(0) :
-			new ConjunctiveCursor<Identifier>(filterCursors);
-		
-		ArrayList<Identifier> ids= new ArrayList<Identifier>();
-		while (queryCursor.next())
-			ids.add(queryCursor.keyValue());
-		return ids;
+	public void fetchIdentifiers(final ContrailQuery query, final IProcessor processor) {
+		new ContrailTask() {
+			protected void run() throws Exception {
+				try {
+					List<IForwardCursor<Identifier>> filterCursors= createFilterCursors(query.getFilterPredicates());
+					final IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?
+						filterCursors.get(0) :
+						new ConjunctiveCursor<Identifier>(filterCursors);
+					while (queryCursor.next()) {
+						if (!processor.result(queryCursor.keyValue()))
+							break;
+					}
+					processor.complete(null);
+				}
+				catch (IOException x) {
+					processor.complete(x);
+				}
+			}
+		}.submit();
 	}
 	
 	private List<IForwardCursor<Identifier>> createFilterCursors(Iterable<FilterPredicate> clauses) 
