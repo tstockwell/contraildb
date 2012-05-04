@@ -30,6 +30,7 @@ import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.ContrailQuery;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
+import com.googlecode.contraildb.core.IProcessor;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.SessionAlreadyClosedException;
@@ -44,7 +45,6 @@ import com.googlecode.contraildb.core.utils.IResult;
 
 /**
  * Wraps a StorageSession and adds indexing and search functionality. 
- * IContrailSession interface.
  * 
  * @author Ted Stockwell
  */
@@ -127,19 +127,12 @@ implements IContrailSession
 		return new PreparedQueryImpl<T>(_service, this, query);
 	}
 
-	public <T extends Item> Iterable<T> search(ContrailQuery query) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		
-		return _searcher.fetchEntities(query);
-	}
-
-	public Iterable<Identifier> fetchIdentifiers(ContrailQuery query) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		
-		return _searcher.fetchIdentifiers(query);
-	}
+//	public <T extends Item> Iterable<T> search(ContrailQuery query) throws IOException {
+//		if (_storageSession == null)
+//			throw new SessionAlreadyClosedException();
+//		
+//		return _searcher.fetchEntities(query);
+//	}
 
 	@Override
 	public void delete(Collection<Identifier> paths) throws IOException {
@@ -394,6 +387,13 @@ implements IContrailSession
 	@Override
 	public <E extends Item> void update(Iterable<E> entities) throws IOException {
 		store(entities);
+	}
+
+	public void process(ContrailQuery query, IProcessor processor) {
+		if (_storageSession == null)
+			throw new SessionAlreadyClosedException();
+		_searcher.fetchIdentifiers(query, processor);
+		
 	}
 
 }

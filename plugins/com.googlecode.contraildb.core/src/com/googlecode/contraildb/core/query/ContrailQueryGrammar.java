@@ -3,6 +3,10 @@ package com.googlecode.contraildb.core.query;
 import com.googlecode.lingwah.Grammar;
 import com.googlecode.lingwah.Parser;
 import com.googlecode.lingwah.parser.ChoiceParser;
+import com.googlecode.lingwah.parser.ParserReference;
+import com.googlecode.lingwah.parser.SpacedSequenceParser;
+import com.googlecode.lingwah.parser.common.DecimalParser;
+import com.googlecode.lingwah.parser.common.IntegerParser;
 
 /**
  * This grammar describes the Contrail Query Language
@@ -10,21 +14,49 @@ import com.googlecode.lingwah.parser.ChoiceParser;
  *
  */
 public class ContrailQueryGrammar extends Grammar {
+	public final ParserReference SubSelect= ref();
 	
 
 	//
 	// reserved words
 	//
 	public final ChoiceParser ReservedWord=choice();
-	public final Parser AND= istr("and").optionFor(ReservedWord);
-	public final Parser AS= istr("as").optionFor(ReservedWord);
-	public final Parser FROM= istr("from").optionFor(ReservedWord);
-	public final Parser NULL= istr("null").optionFor(ReservedWord);
-	public final Parser OR= istr("or").optionFor(ReservedWord);
-	public final Parser SELECT= istr("select").optionFor(ReservedWord);
+	public final Parser AND= istr("AND").optionFor(ReservedWord);
+	public final Parser AS= istr("AS").optionFor(ReservedWord);
+	public final Parser FROM= istr("FROM").optionFor(ReservedWord);
+	public final Parser NULL= istr("NULL").optionFor(ReservedWord);
+	public final Parser OR= istr("OR").optionFor(ReservedWord);
+	public final Parser SELECT= istr("SELECT").optionFor(ReservedWord);
 	public final Parser DISTINCT= istr("DISTINCT").optionFor(ReservedWord);
 	public final Parser UPDATE= istr("UPDATE").optionFor(ReservedWord);
 	public final Parser SET= istr("SET").optionFor(ReservedWord);
+	public final Parser DELETE= istr("DELETE").optionFor(ReservedWord);
+	public final Parser WHERE= istr("WHERE").optionFor(ReservedWord);
+	public final Parser GROUP= istr("GROUP").optionFor(ReservedWord);
+	public final Parser BY= istr("BY").optionFor(ReservedWord);
+	public final Parser HAVING= istr("HAVING").optionFor(ReservedWord);
+	public final Parser ORDER= istr("ORDER").optionFor(ReservedWord);
+	public final Parser ASC= istr("ASC").optionFor(ReservedWord);
+	public final Parser DESC= istr("DESC").optionFor(ReservedWord);
+	public final Parser LEFT= istr("LEFT").optionFor(ReservedWord);
+	public final Parser OUTER= istr("OUTER").optionFor(ReservedWord);
+	public final Parser INNER= istr("INNER").optionFor(ReservedWord);
+	public final Parser WITH= istr("WITH").optionFor(ReservedWord);
+	public final Parser JOIN= istr("JOIN").optionFor(ReservedWord);
+	public final Parser INDEX= istr("INDEX").optionFor(ReservedWord);
+	public final Parser PARTIAL= istr("PARTIAL").optionFor(ReservedWord);
+	public final Parser IS= istr("IS").optionFor(ReservedWord);
+	public final Parser EMPTY= istr("EMPTY").optionFor(ReservedWord);
+	public final Parser MEMBER= istr("MEMBER").optionFor(ReservedWord);
+	public final Parser OF= istr("OF").optionFor(ReservedWord);
+	public final Parser EXISTS= istr("EXISTS").optionFor(ReservedWord);
+	public final Parser ALL= istr("ALL").optionFor(ReservedWord);
+	public final Parser ANY= istr("ANY").optionFor(ReservedWord);
+	public final Parser SOME= istr("SOME").optionFor(ReservedWord);
+	public final Parser IN= istr("IN").optionFor(ReservedWord);
+	public final Parser BETWEEN= istr("BETWEEN").optionFor(ReservedWord);
+	public final Parser LIKE= istr("LIKE").optionFor(ReservedWord);
+	public final Parser ESCAPE= istr("ESCAPE").optionFor(ReservedWord);
 
 	//
 	// Operators
@@ -37,6 +69,7 @@ public class ContrailQueryGrammar extends Grammar {
 	public final Parser LE= str("<=").optionFor(Operators);
 	public final Parser GE= str(">=").optionFor(Operators);
 	public final Parser NE= str("!=").optionFor(Operators);
+	public final Parser LTGT= str("<>").optionFor(Operators);
 	public final Parser SC_OR= str("||").optionFor(Operators);
 	public final Parser SC_AND= str("&&").optionFor(Operators);
 	public final Parser PLUS= str("+").optionFor(Operators);
@@ -45,6 +78,8 @@ public class ContrailQueryGrammar extends Grammar {
 	public final Parser SLASH= str("/").optionFor(Operators);
 	public final Parser XOR= str("^").optionFor(Operators);
 	public final Parser NOT= str("!").optionFor(Operators);
+	public final Parser QUESTION_MARK= str("?").optionFor(Operators);
+	public final Parser SEMICOLON= str(":").optionFor(Operators);
 
 	//
 	// Punctuation
@@ -75,15 +110,47 @@ public class ContrailQueryGrammar extends Grammar {
 	public final Parser IdentifierLetterOrDigit= choice(IdentifierLetter, Digit);
 	public final Parser IdentifierChars= seq(IdentifierLetter, zeroOrMore(IdentifierLetterOrDigit));
 	
+	// comments
+   	public final Parser EndOfLineComment= seq(str("//"), zeroOrMore(anyChar()), LineTerminator);
+   	public final Parser InLineComment= seq(str("/*"), zeroOrMore(anyChar()), str("*/"));
+	public final Parser DocumentationComment= seq(str("/**"), zeroOrMore(anyChar()), str("*/"));
+	
+	
+	// whitespace
+	public final Parser ws= oneOrMore(choice(str(" "), str("\t"), str("\f"), LineTerminator, InLineComment));
+	public final Parser optws= opt(ws); 
+	/**
+	 * Creates a sequence matcher that expects white space between all the 
+	 * elements 
+	 */
+	public final Parser sseq(Parser...matchers) {
+		return new SpacedSequenceParser(optws, matchers);
+	}
+	public final Parser CommaSeparator= seq(optws, COMMA, optws);
+	public final Parser DotSeparator=  seq(optws, DOT, optws);
+	public final Parser OrSeparator=  seq(optws, OR, optws);
+	public final Parser AndSeparator=  seq(optws, AND, optws);
 	
 	//
 	// literals
 	//
 	
 	public final Parser Boolean= choice(istr("true"), istr("false"));
-	public final Parser StringCharacter= choice(EscapeSequence, InputCharacter.excluding(DOUBLE_QUOTE, str("\\")));
-	public final Parser String= seq(DOUBLE_QUOTE, zeroOrMore(StringCharacter), DOUBLE_QUOTE);
+	public final Parser StringCharacter= choice(EscapeSequence, InputCharacter.excluding(SINGLE_QUOTE, str("\\")));
+	public final Parser String= seq(SINGLE_QUOTE, zeroOrMore(StringCharacter), SINGLE_QUOTE);
+	public final Parser Char= seq(SINGLE_QUOTE, StringCharacter, SINGLE_QUOTE);
+	public final Parser Int= new IntegerParser();
+	public final Parser Decimal= new DecimalParser();
 	public final Parser Identifier=  IdentifierChars.excluding(Boolean, ReservedWord);
+	public final Parser Literal= choice(String, Int, Decimal, Boolean, Char);
+	
+	//
+	// Input Parameter
+	//
+
+	public final Parser PositionalParameter= sseq(QUESTION_MARK, Int);
+	public final Parser NamedParameter= sseq(SEMICOLON, String);
+	public final Parser InputParameter= choice(PositionalParameter, NamedParameter);
 
 //	string (‘foo’, ‘bar’’s house’, ‘%ninja%’, ...)
 //	char (‘/’, ‘\’, ‘ ‘, ...)
@@ -164,159 +231,163 @@ public class ContrailQueryGrammar extends Grammar {
 	public final Parser SimpleStateFieldPathExpression= 
 			seq(IdentificationVariable, DOT, StateField);
 	
-	//
-	// Clauses
-	//
-
-	public final Parser SelectClause= seq(SELECT, opt(DISTINCT), SelectExpression, zeroOrMore(seq(COMMA,SelectExpression)));
-	public final Parser SimpleSelectClause= seq(SELECT, opt(DISTINCT), SimpleSelectExpression);
-	public final Parser UpdateClause= seq(UPDATE, AbstractSchemaName, opt(AS), AliasIdentificationVariable, SET, UpdateItem, zeroOrMore(seq(COMMA, UpdateItem)));
-	public final Parser DeleteClause= "DELETE" ["FROM"] AbstractSchemaName ["AS"] AliasIdentificationVariable
-	public final Parser FromClause= "FROM" IdentificationVariableDeclaration {"," IdentificationVariableDeclaration}*
-	public final Parser SubselectFromClause= "FROM" SubselectIdentificationVariableDeclaration {"," SubselectIdentificationVariableDeclaration}*
-	public final Parser WhereClause= "WHERE" ConditionalExpression
-	public final Parser HavingClause= "HAVING" ConditionalExpression
-	public final Parser GroupByClause= "GROUP" "BY" GroupByItem {"," GroupByItem}*
-	public final Parser OrderByClause= "ORDER" "BY" OrderByItem {"," OrderByItem}*
-	public final Parser Subselect= SimpleSelectClause SubselectFromClause [WhereClause] [GroupByClause] [HavingClause] [OrderByClause]
-	
-		
-	//
-	// Items
-	//
-
-	public final Parser UpdateItem= IdentificationVariable "." (StateField | SingleValuedAssociationField) "=" NewValue
-	public final Parser OrderByItem= (ResultVariable | SingleValuedPathExpression) ["ASC" | "DESC"]
-	public final Parser GroupByItem= IdentificationVariable | SingleValuedPathExpression
-	public final Parser NewValue= ScalarExpression | SimpleEntityExpression | "NULL"
-	
-	//
-	// From, Join and Index by
-	//
-
-	public final Parser IdentificationVariableDeclaration= RangeVariableDeclaration [IndexBy] {JoinVariableDeclaration}*
-	public final Parser SubselectIdentificationVariableDeclaration= IdentificationVariableDeclaration | (AssociationPathExpression ["AS"] AliasIdentificationVariable)
-	public final Parser JoinVariableDeclaration= Join [IndexBy]
-	public final Parser RangeVariableDeclaration= AbstractSchemaName ["AS"] AliasIdentificationVariable
-	public final Parser Join= ["LEFT" ["OUTER"] | "INNER"] "JOIN" JoinAssociationPathExpression
-	                                               ["AS"] AliasIdentificationVariable ["WITH" ConditionalExpression]
-	public final Parser IndexBy= "INDEX" "BY" SimpleStateFieldPathExpression
-	
-	//
-	// Select Expressions
-	//
-
-	public final Parser SelectExpression= IdentificationVariable | PartialObjectExpression | (AggregateExpression | "(" Subselect ")"  | FunctionDeclaration | ScalarExpression) [["AS"] AliasResultVariable]
-	public final Parser SimpleSelectExpression= ScalarExpression | IdentificationVariable |
-	                            (AggregateExpression [["AS"] AliasResultVariable])
-	public final Parser PartialObjectExpression= "PARTIAL" IdentificationVariable "." PartialFieldSet
-	public final Parser PartialFieldSet= "{" SimpleStateField {"," SimpleStateField}* "}"
-	
-	//
-	// Conditional Expressions
-	//
-
-	public final Parser ConditionalExpression= ConditionalTerm {"OR" ConditionalTerm}*
-	public final Parser ConditionalTerm= ConditionalFactor {"AND" ConditionalFactor}*
-	public final Parser ConditionalFactor= ["NOT"] ConditionalPrimary
-	public final Parser ConditionalPrimary= SimpleConditionalExpression | "(" ConditionalExpression ")"
-	public final Parser SimpleConditionalExpression= ComparisonExpression | BetweenExpression | LikeExpression |
-	                                InExpression | NullComparisonExpression | ExistsExpression |
-	                                EmptyCollectionComparisonExpression | CollectionMemberExpression |
-	                                InstanceOfExpression
-	   
-	//
-	// Collection Expressions
-    //	                                
-
-	public final Parser EmptyCollectionComparisonExpression= CollectionValuedPathExpression "IS" ["NOT"] "EMPTY"
-	public final Parser CollectionMemberExpression= EntityExpression ["NOT"] "MEMBER" ["OF"] CollectionValuedPathExpression
-	
-	// 
-	// Literal Values
-	//
-
-	public final Parser Literal= string | char | integer | float | boolean
-	public final Parser InParameter= Literal | InputParameter
-	
-	//
-	// Input Parameter
-	//
-
-	public final Parser InputParameter= PositionalParameter | NamedParameter
-	public final Parser PositionalParameter= "?" integer
-	public final Parser NamedParameter= ":" string
 	
 	//
 	// Arithmetic Expressions
 	//
 
-	public final Parser ArithmeticExpression= SimpleArithmeticExpression | "(" Subselect ")"
-	public final Parser SimpleArithmeticExpression= ArithmeticTerm {("+" | "-") ArithmeticTerm}*
-	public final Parser ArithmeticTerm= ArithmeticFactor {("*" | "/") ArithmeticFactor}*
-	public final Parser ArithmeticFactor= [("+" | "-")] ArithmeticPrimary
-	public final Parser ArithmeticPrimary= SingleValuedPathExpression | Literal | "(" SimpleArithmeticExpression ")"
-	                               | FunctionsReturningNumerics | AggregateExpression | FunctionsReturningStrings
-	                               | FunctionsReturningDatetime | IdentificationVariable | InputParameter | CaseExpression
+	public final ParserReference ArithmeticPrimary= ref(); 
+	public final Parser ArithmeticFactor= 
+			sseq(opt(choice(PLUS, MINUS)), ArithmeticPrimary);
+	public final Parser ArithmeticTerm= 
+			sseq(ArithmeticFactor, zeroOrMore(sseq(choice(STAR, SLASH), ArithmeticFactor)));
+	public final Parser SimpleArithmeticExpression= 
+			sseq(ArithmeticTerm, zeroOrMore(sseq(choice(PLUS, MINUS), ArithmeticTerm)));
+	public final Parser ArithmeticExpression= 
+			choice(SimpleArithmeticExpression, sseq(LPAREN, SubSelect, RPAREN));
+	{
+		ArithmeticPrimary.define(choice(
+				SingleValuedPathExpression,
+				Literal,
+				sseq(LPAREN, SimpleArithmeticExpression, RPAREN),
+				IdentificationVariable, InputParameter));
+	}
+	
+	// 
+	// Literal Values
+	//
+	public final Parser InParameter= choice(Literal, InputParameter);
 
     //
 	// Scalar and Type Expressions
 	//
 
-	public final Parser ScalarExpression= SimpleArithmeticExpression | StringPrimary | DateTimePrimary | StateFieldPathExpression
-	                           BooleanPrimary | EntityTypeExpression | CaseExpression
-	public final Parser StringExpression= StringPrimary | "(" Subselect ")"
-	public final Parser StringPrimary= StateFieldPathExpression | string | InputParameter | FunctionsReturningStrings | AggregateExpression | CaseExpression
-	public final Parser BooleanExpression= BooleanPrimary | "(" Subselect ")"
-	public final Parser BooleanPrimary= StateFieldPathExpression | boolean | InputParameter
-	public final Parser EntityExpression= SingleValuedAssociationPathExpression | SimpleEntityExpression
-	public final Parser SimpleEntityExpression= IdentificationVariable | InputParameter
-	public final Parser DatetimeExpression= DatetimePrimary | "(" Subselect ")"
-	public final Parser DatetimePrimary= StateFieldPathExpression | InputParameter | FunctionsReturningDatetime | AggregateExpression
-
-	//
-	// Aggregate Expressions
-	//
-
-	public final Parser AggregateExpression= ("AVG" | "MAX" | "MIN" | "SUM") "(" ["DISTINCT"] StateFieldPathExpression ")" |
-	                        "COUNT" "(" ["DISTINCT"] (IdentificationVariable | SingleValuedPathExpression) ")"
+	public final Parser BooleanPrimary= choice(StateFieldPathExpression, Boolean, InputParameter);
+	public final Parser StringPrimary= 
+			choice(StateFieldPathExpression, String, InputParameter);
+	public final Parser DateTimePrimary= choice(StateFieldPathExpression, InputParameter);
+	public final Parser SimpleEntityExpression= choice(IdentificationVariable, InputParameter);
+	public final Parser EntityExpression= choice(SingleValuedAssociationPathExpression, SimpleEntityExpression);
+	public final Parser ScalarExpression= 
+		choice(SimpleArithmeticExpression, StringPrimary, DateTimePrimary, StateFieldPathExpression,
+	                           BooleanPrimary, EntityExpression);
+	public final Parser StringExpression= 
+			choice(StringPrimary, sseq(RPAREN, SubSelect, LPAREN));
+	public final Parser BooleanExpression= choice(BooleanPrimary, sseq(RPAREN, SubSelect, LPAREN));
+	public final Parser DatetimeExpression= choice(DateTimePrimary, sseq(LPAREN, SubSelect, RPAREN));
 	   
+	//
+	// Collection Expressions
+	//	                                
+
+	public final Parser EmptyCollectionComparisonExpression= sseq(CollectionValuedPathExpression, IS, opt(NOT), EMPTY);
+	public final Parser CollectionMemberExpression= sseq(EntityExpression, opt(NOT), MEMBER, opt(OF), CollectionValuedPathExpression);
+
 	//
 	// Other Expressions
 	// 
 
-	public final Parser QuantifiedExpression= ("ALL" | "ANY" | "SOME") "(" Subselect ")"
-	public final Parser BetweenExpression= ArithmeticExpression ["NOT"] "BETWEEN" ArithmeticExpression "AND" ArithmeticExpression;
-	public final Parser ComparisonExpression= ArithmeticExpression ComparisonOperator ( QuantifiedExpression | ArithmeticExpression );
-	public final Parser InExpression= StateFieldPathExpression ["NOT"] "IN" "(" (InParameter {"," InParameter}* | Subselect) ")";
-	public final Parser InstanceOfExpression= IdentificationVariable ["NOT"] "INSTANCE" ["OF"] (InstanceOfParameter | "(" InstanceOfParameter {"," InstanceOfParameter}* ")");
-	public final Parser InstanceOfParameter= AbstractSchemaName | InputParameter;
-	public final Parser LikeExpression= StringExpression ["NOT"] "LIKE" string ["ESCAPE" char];
-	public final Parser NullComparisonExpression= (SingleValuedPathExpression | InputParameter) "IS" ["NOT"] "NULL";
-	public final Parser ExistsExpression= ["NOT"] "EXISTS" "(" Subselect ")";
-	public final Parser ComparisonOperator= "=" | "<" | "<=" | "<>" | ">" | ">=" | "!=";
+	public final Parser QuantifiedExpression= 
+			sseq(choice(ALL, ANY, SOME), sseq(LPAREN, SubSelect, RPAREN));
+	public final Parser BetweenExpression= 
+			sseq(ArithmeticExpression, opt(NOT), BETWEEN, ArithmeticExpression, AND, ArithmeticExpression);
+	public final Parser ComparisonOperator= 
+			choice(ASSIGN, LT, LE, GT, GE, NE, LTGT);
+	public final Parser ComparisonExpression= 
+			sseq(ArithmeticExpression, ComparisonOperator, choice(QuantifiedExpression, ArithmeticExpression ));
+	public final Parser InExpression= 
+			sseq(StateFieldPathExpression, opt(NOT), IN, LPAREN, choice(oneOrMore(InParameter).separatedBy(CommaSeparator), SubSelect), RPAREN);
+	public final Parser LikeExpression= 
+			sseq(StringExpression, opt(NOT), LIKE, String, opt(sseq(ESCAPE, Char)));
+	public final Parser NullComparisonExpression= 
+			sseq(choice(SingleValuedPathExpression, InputParameter), IS, opt(NOT), NULL);
+	public final Parser ExistsExpression= 
+			sseq(opt(NOT), EXISTS, sseq(LPAREN, SubSelect, RPAREN));
 	
 	//
-	// Functions
+	// Conditional Expressions
 	//
 
-	public final Parser FunctionDeclaration= FunctionsReturningStrings | FunctionsReturningNumerics | FunctionsReturningDateTime;
+	public final ParserReference ConditionalExpression= ref();
+	public final ParserReference SimpleConditionalExpression= ref(); 
+	public final Parser ConditionalPrimary= choice(SimpleConditionalExpression, sseq(RPAREN, ConditionalExpression, LPAREN));
+	public final Parser ConditionalFactor= sseq(opt(NOT), ConditionalPrimary);
+	public final Parser ConditionalTerm= oneOrMore(ConditionalFactor).separatedBy(AndSeparator);
+	{
+		ConditionalExpression.define(oneOrMore(ConditionalTerm).separatedBy(OrSeparator));
+		SimpleConditionalExpression.define( 
+			choice(ComparisonExpression, BetweenExpression , LikeExpression, 
+					InExpression, NullComparisonExpression, ExistsExpression, 
+					EmptyCollectionComparisonExpression, CollectionMemberExpression));
+	}
+	
+	//
+	// Items
+	//
+	public final Parser NewValue= choice(ScalarExpression, SimpleEntityExpression, NULL);
+	public final Parser UpdateItem= sseq(seq(IdentificationVariable, DOT, choice(StateField, SingleValuedAssociationField)), ASSIGN, NewValue);
+	public final Parser OrderByItem= sseq(choice(ResultVariable, SingleValuedPathExpression), opt(choice(ASC, DESC)));
+	public final Parser GroupByItem= choice(IdentificationVariable, SingleValuedPathExpression);
+	
+	//
+	// Select Expressions
+	//
 
-	public final Parser FunctionsReturningNumerics=
-	        "LENGTH" "(" StringPrimary ")" |
-	        "LOCATE" "(" StringPrimary "," StringPrimary ["," SimpleArithmeticExpression]")" |
-	        "ABS" "(" SimpleArithmeticExpression ")" | "SQRT" "(" SimpleArithmeticExpression ")" |
-	        "MOD" "(" SimpleArithmeticExpression "," SimpleArithmeticExpression ")" |
-	        "SIZE" "(" CollectionValuedPathExpression ")";
+	public final Parser PartialFieldSet= 
+			sseq(RBRACE, oneOrMore(SimpleStateField).separatedBy(CommaSeparator), LBRACE);
+	public final Parser PartialObjectExpression= 
+			sseq(PARTIAL, IdentificationVariable, DOT, PartialFieldSet);
+	public final Parser SelectExpression= 
+			choice(IdentificationVariable, PartialObjectExpression, seq(choice(sseq(LPAREN, SubSelect, RPAREN), ScalarExpression), opt(sseq(opt(AS), AliasResultVariable))));
+	public final Parser SimpleSelectExpression= 
+			choice(ScalarExpression, IdentificationVariable);
+	
+	//
+	// From, Join and Index by
+	//
 
-	public final Parser FunctionsReturningDateTime= "CURRENT_DATE" | "CURRENT_TIME" | "CURRENT_TIMESTAMP";
+	public final Parser IndexBy= 
+			sseq(INDEX, BY, SimpleStateFieldPathExpression);
+	public final Parser Join= 
+			sseq(opt(choice(sseq(LEFT, opt(OUTER)), INNER)), JOIN, JoinAssociationPathExpression, opt(AS), AliasIdentificationVariable, opt(sseq(WITH, ConditionalExpression)));
+	public final Parser JoinVariableDeclaration= 
+			sseq(Join, opt(IndexBy));
+	public final Parser RangeVariableDeclaration= 
+			sseq(AbstractSchemaName, opt(AS), AliasIdentificationVariable);
+	public final Parser IdentificationVariableDeclaration= 
+			sseq(RangeVariableDeclaration, opt(IndexBy), zeroOrMore(JoinVariableDeclaration));
+	public final Parser SubselectIdentificationVariableDeclaration= 
+			sseq(choice(IdentificationVariableDeclaration , sseq(AssociationPathExpression, opt(AS), AliasIdentificationVariable)));
+	
+	//
+	// Clauses
+	//
 
-	public final Parser FunctionsReturningStrings=
-	        "CONCAT" "(" StringPrimary "," StringPrimary ")" |
-	        "SUBSTRING" "(" StringPrimary "," SimpleArithmeticExpression "," SimpleArithmeticExpression ")" |
-	        "TRIM" "(" [["LEADING" | "TRAILING" | "BOTH"] [char] "FROM"] StringPrimary ")" |
-	        "LOWER" "(" StringPrimary ")" |
-	        "UPPER" "(" StringPrimary ")";
+	public final Parser SelectClause= 
+			sseq(SELECT, opt(DISTINCT), SelectExpression, zeroOrMore(sseq(COMMA,SelectExpression)));
+	public final Parser SimpleSelectClause= 
+			sseq(SELECT, opt(DISTINCT), SimpleSelectExpression);
+	public final Parser UpdateClause= 
+			sseq(UPDATE, AbstractSchemaName, opt(AS), AliasIdentificationVariable, SET, UpdateItem, zeroOrMore(sseq(COMMA, UpdateItem)));
+	public final Parser DeleteClause= 
+			sseq(DELETE, opt(FROM), AbstractSchemaName, opt(AS), AliasIdentificationVariable);
+	public final Parser FromClause= 
+			sseq(FROM, IdentificationVariableDeclaration, zeroOrMore(sseq(COMMA, IdentificationVariableDeclaration)));
+	public final Parser SubselectFromClause= 
+			sseq(FROM, SubselectIdentificationVariableDeclaration, zeroOrMore(sseq(COMMA, SubselectIdentificationVariableDeclaration)));
+	public final Parser WhereClause= 
+			sseq(WHERE, ConditionalExpression);
+	public final Parser HavingClause= 
+			sseq(HAVING, ConditionalExpression);
+	public final Parser GroupByClause= 
+			sseq(GROUP, BY, GroupByItem, zeroOrMore(sseq(COMMA, GroupByItem)));
+	public final Parser OrderByClause= 
+			sseq(ORDER, BY, OrderByItem, zeroOrMore(sseq(COMMA, OrderByItem)));
+	
+	{
+		SubSelect.define(
+				sseq(SimpleSelectClause, SubselectFromClause, opt(WhereClause), opt(GroupByClause), opt(HavingClause), opt(OrderByClause)));
+	}
 	    	
 	public final Parser SelectStatement= seq(SelectClause, opt(FromClause), opt(WhereClause), opt(GroupByClause), opt(HavingClause), opt(OrderByClause));
 	public final Parser UpdateStatement= seq(UpdateClause, opt(WhereClause));
