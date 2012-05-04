@@ -245,6 +245,10 @@ public class IndexSearcher {
 				if (!propertyCursor.next())
 					return new IBTreeCursor.EmptyForwardCursor<Identifier>();
 			cursors.add(propertyCursor.elementValue());
+			/**
+			 * Note - this loop is actually reading all results into memory.
+			 * This logic needs to be changed so that results are not fetched until the cursor is accessed. 
+			 */
 			while (propertyCursor.next())
 				cursors.add(0, propertyCursor.elementValue());
 			return new DisjunctiveCursor(cursors);
