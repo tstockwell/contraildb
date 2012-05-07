@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
@@ -165,7 +166,7 @@ public class StorageSystem {
 	 * @throws IOException
 	 */
 	public void cleanup() throws IOException {
-		_trackerSession.invoke(new StorageCleanupAction(this));
+		_trackerSession.submit(new StorageCleanupAction(this)).get();
 	}
 
 	
@@ -250,11 +251,11 @@ public class StorageSystem {
 			}
 			
 			// validate transaction
-			ArrayList<ContrailAction> validateActions= new ArrayList<ContrailAction>(revisions.size());
+			ArrayList<IResult<Void>> validateActions= new ArrayList<IResult<Void>>(revisions.size());
 			final List<RevisionFolder> conflictingRevisions= Collections.synchronizedList(new ArrayList<RevisionFolder>(1));  
 			for (final RevisionFolder r: revisions) {
 				validateActions.add(new ContrailAction() {
-					protected void run() throws IOException {
+					protected void action() throws IOException {
 						if (r.getFinalCommitNumber() <= startingCommit)
 							return; // we're done
 						if (!conflictingRevisions.isEmpty())
@@ -265,7 +266,7 @@ public class StorageSystem {
 					}
 				}.submit());
 			}
-			TaskUtils.joinAll(validateActions);
+			TaskUtils.combineResults(validateActions).get();
 			if (!conflictingRevisions.isEmpty())
 				throw new ConflictingCommitException();
 			
@@ -336,14 +337,14 @@ public class StorageSystem {
 		while (!_activeSessions.isEmpty()) {
 			final StorageSession session= _activeSessions.remove(0);
 			_trackerSession.submit(new ContrailAction(Identifier.create(session.getSessionId()), Operation.DELETE) {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					session.close();
 				}
 			});
 		}
 		
 		// wait for all sessions to close and for any cleanup tasks in progress
-		_trackerSession.awaitCompletion();
+		_trackerSession.join();
 	}
 
 }

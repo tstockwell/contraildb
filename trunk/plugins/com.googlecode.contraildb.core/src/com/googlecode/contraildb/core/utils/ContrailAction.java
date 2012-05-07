@@ -11,9 +11,12 @@ abstract public class ContrailAction extends ContrailTask<Void> {
 		super(Identifier.create(), null);
 	}
 	
-	@Override
-	public ContrailAction submit() {
-		return (ContrailAction) super.submit();
+	protected abstract void action() throws Exception;
+	
+	protected Void run() throws Exception {
+		action();
+		return null;
 	}
+
 	
 }

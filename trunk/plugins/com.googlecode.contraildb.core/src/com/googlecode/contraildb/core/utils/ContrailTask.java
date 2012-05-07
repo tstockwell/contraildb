@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 
 
@@ -31,8 +33,10 @@ import com.googlecode.contraildb.core.Identifier;
  * @see ContrailTaskTracker
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
-abstract public class ContrailTask<T> implements IResult<T> {
-	
+abstract public class ContrailTask<T> {
+
+
+
 	/**
 	 * Tasks waiting to be executed
 	 */
@@ -45,9 +49,6 @@ abstract public class ContrailTask<T> implements IResult<T> {
 	
 	private static Logger __logger= Logging.getLogger();
 	
-	public static interface CompletionListener {
-		void done(ContrailTask task);
-	}
 	
 	static class ContrailThread extends Thread {
 		ContrailTask _currentTask= null;
@@ -104,8 +105,11 @@ abstract public class ContrailTask<T> implements IResult<T> {
 		Thread thread= Thread.currentThread();
 		if (thread instanceof ContrailThread) {
 			ContrailTask t= ((ContrailThread)thread)._currentTask;
-			if (t != null)
-				return t.isCancelled();
+			if (t != null) {
+				IResult result= t.getResult();
+				if (result.isDone())
+					return result.isCancelled();
+			}
 		}
 		return false;
 	}
@@ -125,13 +129,11 @@ abstract public class ContrailTask<T> implements IResult<T> {
 	
 	Identifier _id;
 	Operation _operation;
-	private Throwable _throwable;
-	private T _result;
 	private volatile boolean _done= false;
-	private volatile boolean _cancelled= false;
 	private volatile boolean _submitted= false;
 	private volatile List<ContrailTask<?>> _pendingTasks;
-	private volatile List<CompletionListener> _completionListeners;
+	private final Result<T> _result= new Result<T>(); 
+	
 	
 	public ContrailTask(Identifier id, Operation operation) {
 		if ((_id= id) == null)
@@ -146,11 +148,8 @@ abstract public class ContrailTask<T> implements IResult<T> {
 	}
 	
 	public void cancel() {
-			done(true);
-	}
-	
-	public boolean isCancelled() {
-		return _cancelled;
+		_result.cancel();
+		done(true);
 	}
 	
 	/**
@@ -177,19 +176,24 @@ abstract public class ContrailTask<T> implements IResult<T> {
 		return _operation;
 	}
 	
-	protected abstract void run() throws Exception;
+	protected abstract T run() throws Exception;
 	
-	protected void setError(Throwable throwable) {
-		_throwable= throwable;
+	protected void error(Throwable throwable) {
+		_result.error(throwable);
 		done(false);
 	}
 	
-	protected void setResult(T result) {
-		_result= result;
+	protected void success(T result) {
+		_result.success(result);
+		done(true);
 	}
-	
-	protected void done() {
-		done(false);
+	protected void setResult(IResult<T> result) {
+		result.onComplete(new IResultHandler<T>() {
+			@Override
+			public void complete(IResult<T> result) {
+				success(result.getResult());
+			}
+		});
 	}
 	
 	private void done(boolean cancelled) {
@@ -198,7 +202,6 @@ abstract public class ContrailTask<T> implements IResult<T> {
 			synchronized (__done) {
 				if (!_done) {
 					if (cancelled) {
-						_cancelled= true;
 						try { stop(); } catch (Throwable t) { Logging.warning("Error while trying to stop a task", t); } 
 					}
 					_done= true;
@@ -216,52 +219,32 @@ abstract public class ContrailTask<T> implements IResult<T> {
 								deferredTask.submit();
 					}
 					
-					// notify completion listeners 
-					if (_completionListeners != null) {
-						for (CompletionListener listener: _completionListeners) {
-							try {
-								listener.done(this);
-							}
-							catch (Throwable t) {
-								Logging.warning(t);
-							}
-						}
-					}
-					
 					__done.notifyAll();
 				}
 			}
 		}
 	}
 	
-	protected T getResult() {
+	public IResult<T> getResult() {
 		return _result;
 	}
-	
-	Throwable getThrowable() {
-		quietlyJoin();
-		return _throwable;
-	}
-	
 	
 	private synchronized void runTask() {
 if (__logger.isLoggable(Level.FINER))
 	__logger.finer("run task "+hashCode()+", id "+_id+", op "+_operation+", thread "+Thread.currentThread().getName() );		
 		if (!_done) { 
 			try {
-				run();
+				T result= run();
+				if (!_result.isCancelled())
+					success(result); 
 			}
 			catch (Throwable x) {
-				setError(x);
-			}
-			finally {
-
-				done(false);
+				error(x);
 			}
 		}
 	}
 	
-	synchronized public ContrailTask<T> submit() {
+	synchronized public IResult<T> submit() {
 		if (!_submitted) {
 			__tasks.append(this);
 			_submitted= true;
@@ -269,34 +252,21 @@ if (__logger.isLoggable(Level.FINER))
 				__arrive.notify();
 			}
 		}
-		return this;
+		return _result;
+	}
+	synchronized public boolean isSubmitted() {
+		return _submitted;
 	}
 	
 	
-	public <X extends Throwable> T get(Class<X> type) throws X {
-		join(type);
-		return _result;
-	}
-	public T get() {
-		join();
-		return _result;
-	}
 	public boolean isDone() {
 		return _done;
 	}
 	
-	public synchronized void addCompletionListener(CompletionListener listener) {
-		if (_completionListeners == null) {
-			_completionListeners= new ArrayList<CompletionListener>(1);
-		}
-		_completionListeners.add(listener);
-	}
-	
-	
 	/**
 	 * Submit this task for execution but don't run the task until the given tasks have completed
 	 */
-	public ContrailTask<T> submit(List<ContrailTask<?>> dependentTasks) {
+	public IResult<T> submit(List<ContrailTask<?>> dependentTasks) {
 		if (dependentTasks != null)  {
 			dependentTasks= new ArrayList<ContrailTask<?>>(dependentTasks); 
 			synchronized (__done) {
@@ -315,48 +285,11 @@ if (__logger.isLoggable(Level.FINER))
 		}
 		if (dependentTasks == null) 
 			submit();
-		return this;
-	}
-	
-	public ContrailTask<T> join() {
-		quietlyJoin();
-		TaskUtils.throwSomething(_throwable);
-		return this;
-	}
-	
-	public final <X extends Throwable> T invoke(Class<X> errorType) throws X {
-		submit();
-		join(errorType);
 		return _result;
 	}
 	
-	public final <X extends Throwable> ContrailTask<T> join(Class<X> errorType) throws X {
-		quietlyJoin();
-		TaskUtils.throwSomething(_throwable, errorType);
-		return this;
-	}
-	
-	public boolean quietlyJoin() {
-		return quietlyJoin(1000L*60/*one minute*/);
-	}
-	
-	/**
-	 * Return false if the join timed out, true if the task is complete
-	 */
-	public boolean quietlyJoin(long timeoutMillis) {
-		final long start= System.currentTimeMillis();
-		while (true) {
-			synchronized (__done) {
-				if (_done)
-					return true;
-			}
-			
-			yield(); // do something else while we're waiting
-			
-			long millisRemaining= timeoutMillis - (System.currentTimeMillis() - start);
-			if (millisRemaining <= 0) 
-				return false;
-		}
+	public T get() {
+		return _result.get();
 	}
 	
 	/**

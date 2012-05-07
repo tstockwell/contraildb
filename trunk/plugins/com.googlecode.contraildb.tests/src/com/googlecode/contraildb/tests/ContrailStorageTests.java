@@ -32,6 +32,7 @@ import junit.framework.TestCase;
 import com.google.appengine.tools.development.ApiProxyLocalFactory;
 import com.google.apphosting.api.ApiProxy;
 import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
@@ -43,7 +44,6 @@ import com.googlecode.contraildb.core.storage.StorageSystem;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -79,14 +79,58 @@ public class ContrailStorageTests extends TestCase {
 		super.tearDown();
 	}
 	
-	public void testObjectStorage() throws Exception {
-			IEntityStorage.Session storage= 
-				new EntityStorage(_storage.getStorageProvider()).connect();
+	public void testSimpleCreate() throws Throwable {
+		final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
 		
-			Entity object_0_1= new Entity("person-0.1");
-			storage.store(object_0_1);
-			assertNotNull(storage.fetch(object_0_1.getId()));
-			storage.flush();
+		for (int f= 0; f < 10; f++) {			
+			Identifier identifier= Identifier.create("file-"+f);
+			IStorageProvider.Session session= _rawStorage.connect();
+			assertNotNull(session);
+			IResult<Boolean> result= session.create(identifier, content, Integer.MAX_VALUE);
+			assertNotNull(result);
+			assertTrue(result.get());
+			session.delete(identifier);
+			session.close();
+		}
+		
+	}
+	
+	public void testObjectStorage() throws Exception {
+		for (int i= 0; i < 100; i++) {
+			IEntityStorage.Session storage= 
+					new EntityStorage(_storage.getStorageProvider()).connect();
+
+			Entity object= new Entity("person-"+i);
+			storage.store(object);
+			assertNotNull(storage.fetch(object.getId()));
+			storage.close();
+		}
+	}
+	
+	public void testFetchObjectStore() throws Exception {
+		
+		for (int i= 1; i <= 100; i++) {
+			ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect();
+			Identifier entity= Identifier.create("person-"+i);
+			objectStorage.store(entity, entity);
+			if (objectStorage.fetch(entity) == null) 
+				fail("Entity not found : "+entity);
+			objectStorage.flush();
+			objectStorage.close();
+		}
+	}
+	
+	public void testEntityStore() throws Exception {
+		
+		for (int i= 1; i <= 100; i++) {
+			IEntityStorage.Session objectStorage= new EntityStorage(_rawStorage).connect();
+			Entity object= new Entity("person-"+i);
+			objectStorage.store(object);
+			if (objectStorage.fetch(object.getId()) == null) 
+				fail("Entity not found : "+object);
+			objectStorage.flush();
+			objectStorage.close();
+		}
 	}
 	
 	/**
@@ -100,6 +144,7 @@ public class ContrailStorageTests extends TestCase {
 		for (int f= 0; f < 10; f++) {			
 			final Identifier identifier= Identifier.create("file-"+f);
 			final IStorageProvider.Session session= _rawStorage.connect();
+			assertNotNull(session);
 			final List count= Collections.synchronizedList(new ArrayList());
 			ExecutorService executorService= Executors.newFixedThreadPool(20);
 			final Throwable[] error= new Throwable[] { null }; 
@@ -108,6 +153,7 @@ public class ContrailStorageTests extends TestCase {
 					public void run() {
 						try {
 							IResult<Boolean> result= session.create(identifier, content, Integer.MAX_VALUE);
+							assertNotNull(result);
 							assertTrue(result.get());
 							count.add(true);
 							assertEquals("More than one lock was granted", 1, count.size());
@@ -310,19 +356,6 @@ public class ContrailStorageTests extends TestCase {
 		T4.close();
 	}
 	
-	public void testFetchObjectStore() throws Exception {
-		
-		for (int i= 1; i <= 100; i++) {
-			ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect();
-			Identifier entity= Identifier.create("person-"+i);
-			objectStorage.store(entity, entity);
-			if (objectStorage.fetch(entity) == null) 
-				fail("Entity not found : "+entity);
-			objectStorage.flush();
-			objectStorage.close();
-		}
-	}
-	
 	
 	public void testFetchMultipleSessions() throws Exception {
 		
@@ -357,7 +390,7 @@ public class ContrailStorageTests extends TestCase {
 	public void testConcurrentObjectStoreListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
 		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect();
-		ArrayList<ContrailAction> tasks= new ArrayList<ContrailAction>();
+		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			for (int t= 0; t < 10; t++) {
@@ -377,11 +410,10 @@ public class ContrailStorageTests extends TestCase {
 						}
 						
 					}
-				});
+				}.submit());
 			}
 		}
-		TaskUtils.invokeAll(tasks);
-		
+		TaskUtils.combineResults(tasks).get();
 	}
 	/**
 	 * Reproduces a bug where a stored object was not returned from the listChildren method.
@@ -389,7 +421,7 @@ public class ContrailStorageTests extends TestCase {
 	public void testConcurrentStoreAPIListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
 		final IStorageProvider.Session storage= _rawStorage.connect();
-		ArrayList<ContrailAction> tasks= new ArrayList<ContrailAction>();
+		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			for (int t= 0; t < 10; t++) {
@@ -412,10 +444,10 @@ public class ContrailStorageTests extends TestCase {
 							}
 						}
 					}
-				});
+				}.submit());
 			}
 		}
-		TaskUtils.invokeAll(tasks);
+		TaskUtils.combineResults(tasks).get();
 		
 	}
 	

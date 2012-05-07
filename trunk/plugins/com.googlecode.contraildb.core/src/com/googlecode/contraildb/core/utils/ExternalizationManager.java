@@ -4,6 +4,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
@@ -46,6 +47,7 @@ public class ExternalizationManager {
 			new HashMap<Integer, Serializer<?>>();
 	
 	public static void registerSerializer(Serializer<?> serializer) {
+		System.out.println("register type code:"+serializer.typeCode());
 		__serializers.put(serializer.typeCode(), serializer);
 	}
 	

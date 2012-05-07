@@ -9,15 +9,16 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
 
@@ -99,14 +100,14 @@ public class ObjectStorage {
 		}
 		public <T extends Serializable> void store(final Identifier identifier, final T item) 
 		{
-			final ExternalizationTask  serializeTask= new ExternalizationTask(item).submit();
+			final IResult<byte[]>  serializeTask= new ExternalizationTask(item).submit();
 
 			final ILifecycle lifecycle= (item instanceof ILifecycle) ? (ILifecycle)item : null;
 			if (lifecycle != null)
 				lifecycle.setStorage(_outerStorage);
 
 			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					_cache.store(identifier, item);
 					if (lifecycle != null)
 						lifecycle.onInsert(identifier);
@@ -119,7 +120,7 @@ public class ObjectStorage {
 		public void delete(final Identifier path) {
 			final Object item= fetch(path).get();
 			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					_cache.delete(path);
 					_storageSession.delete(path);
 					if (item instanceof ILifecycle) 
@@ -138,11 +139,10 @@ public class ObjectStorage {
 						if (content != null) 
 							storable= readStorable(path, content.get());
 					}
-					setResult(storable);
+					success(storable);
 				}
 			};
-			_trackerSession.submit(task);
-			return task;
+			return _trackerSession.submit(task);
 		}
 		
 		private <T extends Serializable> T readStorable(Identifier id, byte[] contents)
@@ -175,11 +175,10 @@ public class ObjectStorage {
 						T t= readStorable(childId, result.get());
 						results.put(childId, t);
 					}
-					setResult(results);
+					success(results);
 				}
 			};
-			_trackerSession.submit(task);
-			return task;
+			return _trackerSession.submit(task);
 		}
 
 		public IResult<Collection<Identifier>> listChildren(final Identifier path)
@@ -187,16 +186,20 @@ public class ObjectStorage {
 			ContrailTask<Collection<Identifier>> task= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
 				protected void run() {
 					Collection<Identifier> list= _storageSession.listChildren(path).get();
-					setResult(list);
+					success(list);
 				}
 			};
-			_trackerSession.submit(task);
-			return task;
+			return _trackerSession.submit(task);
 		}
 		
 		public void flush() throws IOException {
-			_trackerSession.awaitCompletion(IOException.class);
-			_storageSession.flush();
+			try {
+				_trackerSession.join();
+				_storageSession.flush();
+			}
+			catch (Throwable t) {
+				TaskUtils.throwSomething(t, IOException.class);
+			}
 		}
 		
 		public void close() throws IOException {
@@ -211,13 +214,13 @@ public class ObjectStorage {
 		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
 		{
 			ContrailTask<Boolean> action= new ContrailTask<Boolean>(identifier, Operation.CREATE) {
-				protected void run() throws IOException {
+				protected Boolean run() throws IOException {
 
-					ExternalizationTask  serializeTask= new ExternalizationTask(item);
-					serializeTask.submit();
+					IResult<byte[]> serializeTask= new ExternalizationTask(item).submit();
 
 					boolean created= false;
-					if (_storageSession.create(identifier, serializeTask, waitMillis).get()) {
+					IResult<Boolean> result= _storageSession.create(identifier, serializeTask, waitMillis);
+					if (result.get()) {
 						boolean isStorable= item instanceof ILifecycle;
 						if (isStorable)
 							((ILifecycle)item).setStorage(_outerStorage);
@@ -226,11 +229,10 @@ public class ObjectStorage {
 							((ILifecycle)item).onInsert(identifier);
 						created= true;
 					}
-					setResult(created);
+					return created;
 				}
 			};
-			_trackerSession.submit(action);
-			return action;
+			return _trackerSession.submit(action);
 		}
 		
 		
@@ -251,7 +253,7 @@ public class ObjectStorage {
 		public void deleteAllChildren(Identifier path) {
 			final IResult<Collection<Identifier>> children= listChildren(path);
 			ContrailAction action= new ContrailAction(path, Operation.LIST) {
-				protected void run() {
+				protected void action() {
 					for (Identifier identifier: children.get()) {
 						delete(identifier);
 					}

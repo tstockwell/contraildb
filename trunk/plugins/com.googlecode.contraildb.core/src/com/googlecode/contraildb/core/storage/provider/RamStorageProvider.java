@@ -3,8 +3,10 @@ package com.googlecode.contraildb.core.storage.provider;
 import java.io.IOException;
 import java.util.Collection;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -26,18 +28,20 @@ public class RamStorageProvider extends AbstractStorageProvider {
 	{
 
 		@Override
-		protected void doClose() throws IOException {
+		protected IResult<Void> doClose() {
 			// do nothing
+			return TaskUtils.asResult(null);
 		}
 
 		@Override
-		protected byte[] doFetch(Identifier path) {
-			return _storage.fetch(path);
+		protected IResult<byte[]> doFetch(Identifier path) {
+			return TaskUtils.asResult(_storage.fetch(path));
 		}
 
 		@Override
-		protected void doFlush() throws IOException {
+		protected IResult<Void> doFlush() {
 			// do nothing
+			return TaskUtils.asResult(null);
 		}
 
 		@Override
@@ -46,18 +50,20 @@ public class RamStorageProvider extends AbstractStorageProvider {
 		}
 
 		@Override
-		protected void doStore(Identifier path, byte[] byteArray) {
+		protected IResult<Void> doStore(Identifier path, byte[] byteArray) {
 			_storage.store(path, byteArray);
+			return TaskUtils.asResult(null);
 		}
 		
 		@Override
-		protected void doDelete(Identifier path) throws IOException {
+		protected IResult<Void> doDelete(Identifier path) {
 			_storage.delete(path);
+			return TaskUtils.asResult(null);
 		}
 		
 		@Override
-		protected boolean exists(Identifier path) throws IOException {
-			return _storage.exists(path);
+		protected IResult<Boolean> exists(Identifier path) {
+			return TaskUtils.asResult(_storage.exists(path));
 		}
 	}
 	
