@@ -11,7 +11,7 @@ import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.IProcessor;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
-import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ConversionUtils;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -47,8 +47,8 @@ implements IPreparedQuery<T>
 			IProcessor processor= new IProcessor() {
 				synchronized public boolean result(final Identifier identifier) {
 					// loads objects concurrently
-					tracker.submit(new ContrailTask<T>() {
-						protected void run() throws Exception {
+					tracker.submit(new ContrailAction() {
+						protected void action() throws Exception {
 							try {
 								T item= _session.<T>fetch(identifier);
 								synchronized (results) {

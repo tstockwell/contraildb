@@ -5,6 +5,7 @@ import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
@@ -64,6 +65,34 @@ public class RamStorageProvider extends AbstractStorageProvider {
 		@Override
 		protected IResult<Boolean> exists(Identifier path) {
 			return TaskUtils.asResult(_storage.exists(path));
+		}
+
+		@Override
+		protected IResult<Boolean> doCreate(final Identifier path, final byte[] byteArray, final long waitMillis) {
+			return new ContrailTask<Boolean>() {
+				@Override protected Boolean run() throws Exception {
+					boolean success= false;
+					long start= System.currentTimeMillis();
+					while(!success) {
+						synchronized (_storage) {
+							if (!_storage.exists(path)) {
+								_storage.store(path, byteArray);
+								success= true; 
+							}
+						}
+						
+						if (!success) {
+							// check to see if we've timed out
+							if (waitMillis < System.currentTimeMillis() - start)
+								break;
+							
+							// do something else for a while
+							yield(100);
+						}
+					}
+					return success;
+				}
+			}.submit();
 		}
 	}
 	

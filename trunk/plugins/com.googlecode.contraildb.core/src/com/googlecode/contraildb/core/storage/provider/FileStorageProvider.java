@@ -40,6 +40,7 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	
 	static final String LOCK_FILE = ".lock";
 	static final String CONTENT_FILE= ".content"; 
+	static final long RETRY_MILLIS= 100; 
 
 	
 	private File _root;
@@ -112,9 +113,8 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		@Override
 		protected IResult<byte[]> doFetch(final Identifier path) {
 			return new ContrailTask<byte[]>() {
-				@Override
-				protected void run() throws Exception {
-					this.success(fetchFile(new File(new File(_root, path.toString()), CONTENT_FILE)));
+				@Override protected byte[] run() throws Exception {
+					return fetchFile(new File(new File(_root, path.toString()), CONTENT_FILE));
 				}
 			}.submit();
 		}
@@ -143,8 +143,7 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		protected IResult<Void> doStore(final Identifier path, final byte[] byteArray) 
 		{
 			return new ContrailAction() {
-				@Override
-				protected void run() throws Exception {
+				@Override protected void action() throws Exception {
 					File folder= new File(_root, path.toString());
 					folder.mkdirs();
 					File file= new File(folder, CONTENT_FILE);
@@ -168,6 +167,41 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		@Override
 		protected IResult<Boolean> exists(Identifier path) {
 			return TaskUtils.asResult(new File(_root, path.toString()).exists());
+		}
+
+		@Override
+		protected IResult<Boolean> doCreate(final Identifier path, final byte[] byteArray, final long waitMillis) {
+			return new ContrailTask<Boolean>() {
+				@Override protected Boolean run() throws Exception {
+					boolean success= false;
+					long start= System.currentTimeMillis();
+					File folder= new File(_root, path.toString());
+					while(!success) {
+						if (folder.mkdirs()) {
+							// ok, we created this folder, now just write the contents and we're done...
+							File file= new File(folder, CONTENT_FILE);
+							OutputStream out= new FileOutputStream(file);
+							try {
+								out.write(byteArray);
+								out.flush();
+							}
+							finally {
+								out.close(); 
+							}
+							success= true; 
+						}
+						else {
+							// check to see if we've timed out
+							if (waitMillis < System.currentTimeMillis() - start)
+								break;
+							
+							// do something else for a while
+							yield(100);
+						}
+					}
+					return success;
+				}
+			}.submit();
 		}
 	}
 	

@@ -79,6 +79,24 @@ public class ContrailStorageTests extends TestCase {
 		super.tearDown();
 	}
 	
+	/**
+	 * Make sure that the Java mkdirs methods works the way we expect...
+	 * it should only return true if and only if the folder is created.
+	 */
+	public void testMkdirsSemantics() {
+		while (true) {
+			File folder= new File("/"+Identifier.create().getName());
+			if (!folder.exists()) {
+				assertTrue(folder.mkdirs());
+				
+				// the folder exists now so mkdirs should return false since the folder is not created
+				assertFalse(folder.mkdirs()); 
+				break;
+			}
+		}
+	}
+	
+	
 	public void testSimpleCreate() throws Throwable {
 		final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
 		
@@ -396,7 +414,7 @@ public class ContrailStorageTests extends TestCase {
 			for (int t= 0; t < 10; t++) {
 				final int task= t; 
 				tasks.add(new ContrailAction() {
-					protected void run() throws Exception {
+					protected void action() throws Exception {
 						for (int i= 0; i < 10; i++) {
 							
 							// store an object in a folder
@@ -427,7 +445,7 @@ public class ContrailStorageTests extends TestCase {
 			for (int t= 0; t < 10; t++) {
 				final int task= t; 
 				tasks.add(new ContrailAction() {
-					protected void run() throws Exception {
+					protected void action() throws Exception {
 						for (int i= 0; i < 10; i++) {
 							
 							// store an object in a folder
