@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -79,7 +80,7 @@ abstract public class ContrailTask<T> {
 	}
 	
 	static {
-		for (int count= Runtime.getRuntime().availableProcessors() * 10; 0 < count--;) { 
+		for (int count= Runtime.getRuntime().availableProcessors() * 2; 0 < count--;) { 
 			new ContrailThread().start();
 		}
 	}
@@ -96,6 +97,23 @@ abstract public class ContrailTask<T> {
 		CREATE
 	}
 	
+	
+	/**
+	 * Returns true if the current thread is running a ContrailTask.  
+	 */
+	public static final boolean isContrailTask() {
+		return Thread.currentThread() instanceof ContrailThread;
+	}
+	/**
+	 * Returns the current ContrailTask, if any.  
+	 */
+	public static final <T> ContrailTask<T> getContrailTask() {
+		Thread thread= Thread.currentThread();
+		if (thread instanceof ContrailThread) {
+			return ((ContrailThread)thread)._currentTask;
+		}
+		return null;
+	}
 	
 	/**
 	 * Returns true if the current thread is running a ContrailTask and that 
@@ -117,11 +135,11 @@ abstract public class ContrailTask<T> {
 	 * Returns true if the current thread is running a ContrailTask that has yielded.  
 	 */
 	public static final boolean isTaskYielded() {
-		Thread thread= Thread.currentThread();
-		synchronized (__yielded) {
-			if (__yielded.contains(thread))
-				return true;
-		}
+//		Thread thread= Thread.currentThread();
+//		synchronized (__yielded) {
+//			if (__yielded.contains(thread))
+//				return true;
+//		}
 		return false;
 	}
 	
@@ -132,7 +150,20 @@ abstract public class ContrailTask<T> {
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
 	private volatile List<ContrailTask<?>> _pendingTasks;
-	private final Result<T> _result= new Result<T>(); 
+	private final Result<T> _result= new Result<T>() {
+		public T get() {
+			while (!_done) {
+				ContrailTask currentTask= getContrailTask();
+				if (currentTask != null) {
+					currentTask.yield(100);
+				}
+				else
+					return super.get();
+			}
+			
+			return super.get();
+		}
+	}; 
 	
 	
 	public ContrailTask(Identifier id, Operation operation) {
@@ -324,10 +355,8 @@ if (__logger.isLoggable(Level.FINER))
 					}
 				}
 
-				if (nextTask != null) {
-					nextTask.runTask();
-					taskWasRun= true;
-				}
+				if (nextTask != null) 
+					taskWasRun= yieldToTask(nextTask);
 			}
 		}
 		

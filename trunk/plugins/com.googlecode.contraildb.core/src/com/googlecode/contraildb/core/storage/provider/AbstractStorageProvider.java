@@ -4,12 +4,14 @@ import java.io.IOException;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.Result;
 
 
 /**
@@ -43,31 +45,32 @@ implements IStorageProvider
 
 		@Override
 		public IResult<Void> flush() throws IOException {
-			return new ContrailAction() {
-				protected void action() throws Exception {
-					try {
-						_trackerSession.join();
-					}
-					finally {
-						doFlush();
-					}
+			final Result<Void> result= new Result<Void>();
+			_trackerSession.onComplete(new IResultHandler<Void>() {
+				@Override public void complete(IResult<Void> r) {
+					result.complete(doFlush());
 				}
-			}.submit();
+			});
+			return result;
 		}
 
 		@Override
 		public IResult<Void> close() {
-			return new ContrailAction() {
-				protected void action() throws Exception {
-					try {
-						_trackerSession.join();
-					}
-					finally {
-						try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
-						doClose();
-					}
+			final Result<Void> result= new Result<Void>();
+			_trackerSession.onComplete(new IResultHandler<Void>() {
+				@Override public void complete(IResult<Void> r) {
+					
+					_trackerSession.close().onComplete(new IResultHandler<Void>() {
+						public void complete(IResult<Void> closeResult) {
+							
+							if (!closeResult.isSuccess())
+								Logging.warning(closeResult.getError());
+							result.complete(doClose());
+						}
+					}); 
 				}
-			}.submit();
+			});
+			return result;
 		}
 		
 		@Override

@@ -219,22 +219,32 @@ public class ContrailTaskTracker {
 			}
 			_sessionTasks.remove(task);
 		}
-
+		
 		/**
-		 * @throws An unchecked exception if an error occurred while producing the result
+		 * Invokes the given handler when all the current tasks are complete.
 		 */
-		public void join() {
-			IResult<Void> result;
-			List<IResult> results;
+		public void onComplete(IResultHandler<Void> completionHandler) {
+			List<ContrailTask> tasks;
 			synchronized (this) {
-				List<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
-				results= new ArrayList<IResult>(tasks.size());
-				for (ContrailTask task:tasks)
-					results.add(task.getResult());
-				result= TaskUtils.combineResults(results);
+				tasks= new ArrayList<ContrailTask>(_sessionTasks);
 			}
-			result.get();
+			ArrayList<IResult> results= new ArrayList<IResult>(tasks.size());
+			for (ContrailTask task:tasks)
+				results.add(task.getResult());
+			TaskUtils.combineResults(results).onComplete(completionHandler);
 		}
+
+//		/**
+//		 * @throws An unchecked exception if an error occurred while producing the result
+//		 */
+//		public void join() {
+//			List<ContrailTask> tasks;
+//			synchronized (this) {
+//				tasks= new ArrayList<ContrailTask>(_sessionTasks);
+//			}
+//			for (ContrailTask task:tasks)
+//				task.getResult().get();
+//		}
 	}
 	
 }
