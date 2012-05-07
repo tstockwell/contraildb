@@ -10,8 +10,8 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.util.Collection;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 

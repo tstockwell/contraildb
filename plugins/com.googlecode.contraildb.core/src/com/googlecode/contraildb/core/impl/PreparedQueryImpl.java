@@ -66,11 +66,18 @@ implements IPreparedQuery<T>
 					return error[0] == null; // if an error occurred then cancel query
 				}
 				synchronized public void complete(Throwable t) {
-					if (t != null)
-						error[0]= t;
-					tracker.awaitCompletion();
-					complete[0]= true;
-					this.notify();
+					try {
+						if (t != null)
+							error[0]= t;
+						tracker.join();
+					}
+					catch (Throwable t2) {
+						error[0]= t2;
+					}
+					finally {
+						complete[0]= true;
+						this.notify();
+					}
 				}
 			};
 			_session.process(_query, processor);

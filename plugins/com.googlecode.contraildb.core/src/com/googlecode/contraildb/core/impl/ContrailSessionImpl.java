@@ -31,6 +31,7 @@ import com.googlecode.contraildb.core.ContrailQuery;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.IProcessor;
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.SessionAlreadyClosedException;
@@ -39,7 +40,6 @@ import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.IResult;
 
 
 

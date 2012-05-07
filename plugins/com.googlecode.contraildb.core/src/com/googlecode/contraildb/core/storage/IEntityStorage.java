@@ -3,9 +3,9 @@ package com.googlecode.contraildb.core.storage;
 import java.io.IOException;
 import java.util.Collection;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.IResult;
 
 
 /**

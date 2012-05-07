@@ -7,8 +7,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 

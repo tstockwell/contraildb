@@ -401,11 +401,11 @@ public class BasicContrailTests extends TestCase {
 			// joins
 			//
 			
-			// find items that have a child whose profession is carpenter
-			query = new ContrailQuery();
-			query.join(CHILDREN).where(eq(PROFESSION, "carpenter"));
-			results= transaction.prepare(query);
-			assertEquals(1, results.count());
+//			// find items that have a child whose profession is carpenter
+//			query = new ContrailQuery();
+//			query.join(CHILDREN).where(eq(PROFESSION, "carpenter"));
+//			results= transaction.prepare(query);
+//			assertEquals(1, results.count());
 			
 			
 	// support subqueries....		

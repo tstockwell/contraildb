@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
@@ -50,13 +51,13 @@ public class FileStorageProvider extends AbstractStorageProvider {
 			_file= file;
 		}
 		@Override
-		protected void run() {
+		protected void action() {
 			File[] files= _file.listFiles();
 			if (files != null) {
-				ArrayList<ContrailTask<?>> tasks= new ArrayList<ContrailTask<?>>();
+				ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 				for (final File file2: files)
 					tasks.add(new DeleteAction(Identifier.create(getId(), file2.getName()), file2).submit());
-				TaskUtils.joinAll(tasks);
+				TaskUtils.combineResults(tasks).get();
 			}
 			for (int i= 0; i < 10; i++) {
 				if (_file.delete()) {
@@ -77,8 +78,14 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	}
 	public FileStorageProvider(File root, boolean clean) throws IOException {
 		if (clean) {
-			if (root.exists())
-				new DeleteAction(Identifier.create(""), root).submit().join(IOException.class);
+			if (root.exists()) {
+				try {
+					new DeleteAction(Identifier.create(""), root).submit().get();
+				}
+				catch (Throwable t) {
+					TaskUtils.throwSomething(t, IOException.class);
+				}
+			}
 		}
 		root.mkdirs();
 		_root= root;
@@ -97,18 +104,25 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	class FileStorageSession extends AbstractStorageProvider.Session {
 		
 		@Override
-		protected void doClose() throws IOException {
+		protected IResult<Void> doClose() {
 			// do nothing
+			return TaskUtils.asResult(null);
 		}
 
 		@Override
-		protected byte[] doFetch(Identifier path) throws IOException {
-			return fetchFile(new File(new File(_root, path.toString()), CONTENT_FILE));
+		protected IResult<byte[]> doFetch(final Identifier path) {
+			return new ContrailTask<byte[]>() {
+				@Override
+				protected void run() throws Exception {
+					this.success(fetchFile(new File(new File(_root, path.toString()), CONTENT_FILE)));
+				}
+			}.submit();
 		}
 
 		@Override
-		protected void doFlush() throws IOException {
+		protected IResult<Void> doFlush() {
 			// do nothing
+			return TaskUtils.asResult(null);
 		}
 
 		@Override
@@ -126,30 +140,34 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		}
 
 		@Override
-		protected void doStore(Identifier path, byte[] byteArray) 
-		throws IOException 
+		protected IResult<Void> doStore(final Identifier path, final byte[] byteArray) 
 		{
-			File folder= new File(_root, path.toString());
-			folder.mkdirs();
-			File file= new File(folder, CONTENT_FILE);
-			OutputStream out= new FileOutputStream(file);
-			try {
-				out.write(byteArray);
-				out.flush();
-			}
-			finally {
-				out.close(); 
-			}
+			return new ContrailAction() {
+				@Override
+				protected void run() throws Exception {
+					File folder= new File(_root, path.toString());
+					folder.mkdirs();
+					File file= new File(folder, CONTENT_FILE);
+					OutputStream out= new FileOutputStream(file);
+					try {
+						out.write(byteArray);
+						out.flush();
+					}
+					finally {
+						out.close(); 
+					}
+				}
+			}.submit();
 		}
 		
 		@Override
-		protected void doDelete(Identifier path) throws IOException {
-			new DeleteAction(path, new File(_root, path.toString())).invoke(IOException.class);
+		protected IResult<Void> doDelete(Identifier path) {
+			return new DeleteAction(path, new File(_root, path.toString())).submit();
 		}
 		
 		@Override
-		protected boolean exists(Identifier path) throws IOException {
-			return new File(_root, path.toString()).exists();
+		protected IResult<Boolean> exists(Identifier path) {
+			return TaskUtils.asResult(new File(_root, path.toString()).exists());
 		}
 	}
 	

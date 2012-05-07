@@ -1,4 +1,4 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core;
 
 
 
@@ -19,7 +19,27 @@ public interface IResult<V> {
      *
      * @return <tt>true</tt> if this task completed
      */
-    boolean isDone();
+    public boolean isDone();
+	
+    /**
+     * Returns <tt>true</tt> if this task completed successfully.
+     */
+    public boolean isSuccess();
+	
+    /**
+     * Returns <tt>true</tt> if this task was cancelled.
+     */
+    public boolean isCancelled();
+	
+    /**
+     * If this task failed then get the error.
+     */
+    public Throwable getError();
+	
+    /**
+     * If this task completed successfully then get the result.
+     */
+    public V getResult();
 
     /**
      * Waits if necessary for the computation to complete, and then
@@ -28,6 +48,11 @@ public interface IResult<V> {
      * @return the computed result
      * @throws An unchecked exception if an error occurred while producing the result
      */
-    V get();
+    public V get();
+
+    /**
+     * Add a callback to be invoked when the result is available.
+     */
+	public void onComplete(IResultHandler<V> iResultHandler);
 
 }

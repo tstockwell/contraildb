@@ -7,6 +7,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
+import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
@@ -146,59 +148,49 @@ public class ContrailTaskTracker {
 
 	public class Session {
 		
-		ContrailTask.CompletionListener _completionListener= new ContrailTask.CompletionListener() {
-			public void done(ContrailTask task) {
-				removeTask(task);
+		IResultHandler _completionListener= new IResultHandler() {
+			@Override public void complete(IResult result) {
+				for (ContrailTask task:_sessionTasks) {
+					if (task.getResult() == result) {
+						removeTask(task);
+						break;
+					}
+				}
 			}
 		};
 		
 		List<ContrailTask> _sessionTasks= Collections.synchronizedList(new ArrayList<ContrailTask>());
+		private boolean _closed=false;
 		
-		public void close() {
-			awaitCompletion();
-			_sessionTasks= null;
+		synchronized public IResult<Void> close() {
+			if (_closed)
+				return TaskUtils.asResult(null);
+			_closed= true;
+			if (_sessionTasks == null)
+				return TaskUtils.asResult(null);
+			List<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
+			List<IResult> results= new ArrayList<IResult>(_sessionTasks.size());
+			for (ContrailTask task:tasks)
+				results.add(task.getResult());
+			return TaskUtils.combineResults(results);
 		}
 		
 		@Override
 		protected void finalize() throws Throwable {
-			if (_sessionTasks != null) {
-				try { awaitCompletion(); } catch (Throwable t) { }
-			}
+			close();
 			super.finalize();
 		}
 		
-		synchronized public Session submit(ContrailTask<?> task) {
+		synchronized public <T> IResult<T> submit(ContrailTask<T> task) {
+			if (_closed)
+				throw new IllegalStateException("The session has already been closed");
 			List<ContrailTask<?>> pendingTasks= null;
 
 			pendingTasks= findPendingTasks(task);
 			addTask(task);
-			task.submit(pendingTasks);
-			
-			
-			return this;
+			return task.submit(pendingTasks);
 		}
 		
-		public <X extends Throwable, T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks, Class<X> errorType) 
-		throws X 
-		{
-			for (ContrailTask task : tasks) 
-				submit(task);
-			awaitCompletion(tasks, errorType);
-			return this;
-		}
-		public <T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks) 
-		{
-			for (ContrailTask task : tasks) 
-				submit(task);
-			awaitCompletion(tasks);
-			return this;
-		}
-		
-		public <T extends ContrailTask<?>> Session invoke(T task) 
-		{
-			invokeAll(ConversionUtils.asList(task));
-			return this;
-		}
 		
 		private void addTask(ContrailTask<?> task) {
 			Identifier taskId= task.getId();
@@ -211,7 +203,7 @@ public class ContrailTaskTracker {
 				tasks.add(task);
 			}
 			_sessionTasks.add(task);
-			task.addCompletionListener(_completionListener);
+			task.getResult().onComplete(_completionListener);
 		}
 		
 		private void removeTask(ContrailTask<?> task) {
@@ -228,82 +220,20 @@ public class ContrailTaskTracker {
 			_sessionTasks.remove(task);
 		}
 
-		public Session awaitCompletion() {
-			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
-			while (!_sessionTasks.isEmpty()) {
-				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
-				ArrayList<ContrailTask> todo= new ArrayList<ContrailTask>();
-				for (ContrailTask t: tasks) {
-					if (!done.contains(t)) {
-						todo.add(t);
-						done.add(t);
-					}
-				}
-				if (todo.isEmpty())
-					break;
-				
-				Throwable t= getThrowable(new ArrayList(todo));
-				if (t != null) 
-					TaskUtils.throwSomething(t);
+		/**
+		 * @throws An unchecked exception if an error occurred while producing the result
+		 */
+		public void join() {
+			IResult<Void> result;
+			List<IResult> results;
+			synchronized (this) {
+				List<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
+				results= new ArrayList<IResult>(tasks.size());
+				for (ContrailTask task:tasks)
+					results.add(task.getResult());
+				result= TaskUtils.combineResults(results);
 			}
-			return this;
-		}
-
-		public <X extends Throwable> Session awaitCompletion(Class<X> errorType) throws X {
-			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
-			while (!_sessionTasks.isEmpty()) {
-				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
-				ArrayList<ContrailTask> todo= new ArrayList<ContrailTask>();
-				for (ContrailTask t: tasks) {
-					if (!done.contains(t)) {
-						todo.add(t);
-						done.add(t);
-					}
-				}
-				if (todo.isEmpty())
-					break;
-				Throwable t= getThrowable(new ArrayList(todo));
-				if (t != null) 
-					TaskUtils.throwSomething(t, errorType);
-			}
-			return this;
-		}
-		
-		public <T extends ContrailTask<?>> Session awaitCompletion(Iterable<T> tasks) {
-			try {
-				Throwable t= getThrowable(tasks);
-				if (t != null) 
-					TaskUtils.throwSomething(t);
-			}
-			finally {
-				for (T t:tasks)
-					_sessionTasks.remove(t);
-			}
-			return this;
-		}
-		public <X extends Throwable, T extends ContrailTask<?>> Session awaitCompletion(Iterable<T> tasks, Class<X> errorType) throws X {
-			Throwable t= getThrowable(tasks);
-			if (t != null) 
-				TaskUtils.throwSomething(t, errorType);
-			return this;
-		}
-
-		public boolean contains(ContrailAction action) {
-			return _sessionTasks.contains(action);
-		}
-
-		private <T extends ContrailTask<?>> Throwable getThrowable(Iterable<T> tasks) {
-			Throwable t= null;
-			for (ContrailTask task : tasks) {
-				
-				if (task.getOperation() == Operation.CREATE && !task.isDone())
-					continue;
-				
-				Throwable t2= task.getThrowable();
-				if (t == null) 
-					t= t2;
-			}
-			return t;
+			result.get();
 		}
 	}
 	

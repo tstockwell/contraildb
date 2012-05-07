@@ -6,10 +6,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.IResult;
 
 
 /**
@@ -80,12 +80,12 @@ public class EntityStorage implements IEntityStorage {
 		{
 			return new ContrailTask<Collection<E>>() {
 				@SuppressWarnings("unchecked")
-				protected void run() throws IOException {
+				protected Collection<E> run() throws IOException {
 					Map<Identifier, Serializable> children= _objectSession.fetchChildren(path).get();
 					ArrayList<E> list= new ArrayList<E>(children.size());
 					for (Serializable e:children.values())
 						list.add((E)e);
-					setResult(list);
+					return list;
 				}
 			}.submit();
 		}

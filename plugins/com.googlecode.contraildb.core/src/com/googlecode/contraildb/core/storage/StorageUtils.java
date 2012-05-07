@@ -3,8 +3,8 @@ package com.googlecode.contraildb.core.storage;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.IResult;
 
 
 public class StorageUtils {

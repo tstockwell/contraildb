@@ -4,16 +4,16 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.SignalHandler;
 import com.googlecode.contraildb.core.utils.Signals;
 import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
 
 /**
@@ -36,46 +36,53 @@ implements IStorageProvider
 	{
 		private ContrailTaskTracker.Session _trackerSession= _tracker.beginSession();
 		
-		abstract protected boolean exists(Identifier path) throws IOException;
-		abstract protected void doStore(Identifier path, byte[] byteArray) throws IOException;
-		abstract protected byte[] doFetch(Identifier path) throws IOException;
-		abstract protected void doDelete(Identifier path) throws IOException;
-		abstract protected void doClose() throws IOException; 
-		abstract protected void doFlush() throws IOException;
-		abstract protected Collection<Identifier> doList(Identifier path) throws IOException;
+		abstract protected IResult<Boolean> exists(Identifier path);
+		abstract protected IResult<Void> doStore(Identifier path, byte[] byteArray);
+		abstract protected IResult<byte[]> doFetch(Identifier path);
+		abstract protected IResult<Void> doDelete(Identifier path);
+		abstract protected IResult<Void> doClose(); 
+		abstract protected IResult<Void> doFlush();
+		abstract protected Collection<Identifier> doList(Identifier path);
 		
 		
 
 		@Override
-		public void flush() throws IOException {
-			try {
-				_trackerSession.awaitCompletion(IOException.class);
-			}
-			finally {
-				doFlush();
-			}
+		public IResult<Void> flush() throws IOException {
+			return new ContrailAction() {
+				protected void action() throws Exception {
+					try {
+						_trackerSession.join();
+					}
+					finally {
+						doFlush();
+					}
+				}
+			}.submit();
 		}
 
 		@Override
-		public void close() throws IOException {
-			try {
-				_trackerSession.awaitCompletion(IOException.class);
-			}
-			finally {
-				try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
-				doClose();
-			}
+		public IResult<Void> close() {
+			return new ContrailAction() {
+				protected void action() throws Exception {
+					try {
+						_trackerSession.join();
+					}
+					finally {
+						try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
+						doClose();
+					}
+				}
+			}.submit();
 		}
 		
 		@Override
 		public IResult<Collection<Identifier>> listChildren(final Identifier path) {
 			ContrailTask<Collection<Identifier>> action= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
 				protected void run() throws IOException {
-					setResult(doList(path));
+					success(doList(path));
 				}
 			};
-			_trackerSession.submit(action);
-			return action;
+			return _trackerSession.submit(action);
 		}
 		
 		@Override
@@ -85,30 +92,29 @@ implements IStorageProvider
 					setResult(doFetch(path));
 				}
 			};
-			_trackerSession.submit(action);
-			return action;
+			return _trackerSession.submit(action);
 		}
 
 		@Override
-		public void store(final Identifier identifier, final IResult<byte[]> content) {
-			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void run() {
+		public IResult<Void> store(final Identifier identifier, final IResult<byte[]> content) {
+			return _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
+				protected void action() {
 					try {
 						doStore(identifier, content.get());
 					}
 					catch (Throwable t) {
-						setError(t);
+						error(t);
 					}
 				}
 			});
 		}
 
 		@Override
-		public void delete(final Identifier path) {
-			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void run() throws IOException {
+		public IResult<Void> delete(final Identifier path) {
+			return _trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
+				protected void action() throws IOException {
 					try {
-						doDelete(path);
+						doDelete(path).get();
 					}
 					finally {
 						boolean signal= false;
@@ -140,7 +146,7 @@ implements IStorageProvider
 		@Override
 		public IResult<Boolean> create(final Identifier path_, final IResult<byte[]> source_, final long waitMillis_) 
 		{
-			ContrailTask<Boolean> task= new ContrailTask<Boolean>(path_, Operation.CREATE) {
+			return new ContrailTask<Boolean>(path_, Operation.CREATE) {
 				final Identifier _path= path_;
 				final IResult<byte[]> _source= source_;
 				final long _waitMillis= waitMillis_;
@@ -182,7 +188,7 @@ implements IStorageProvider
 						terminate();
 					}
 					catch (Throwable t) {
-						setError(t);
+						error(t);
 						terminate();
 					}
 					finally {
@@ -203,16 +209,16 @@ implements IStorageProvider
 				}
 				
 				private void terminate() {
-					if (getResult() == null)
-						setResult(false);
 					Signals.unregister(path_, signalHandler);
 					releaseLock();
-					done();
+					if (!isDone())
+						error(null);
 				}
 				
 				private void checkTimeOut() {
 					long millisRemaining= _waitMillis - (System.currentTimeMillis() - _start);
 					if (millisRemaining <= 0) {
+						cancel();
 						terminate();
 					}
 				}
@@ -220,14 +226,14 @@ implements IStorageProvider
 				private boolean doCreate() throws IOException 
 				{
 					try {
-						if (!exists(_path)) {
-							doStore(_path, _source.get());
-							setResult(true);
+						if (!exists(_path).get()) {
+							doStore(_path, _source.get()).get();
+							success(true);
 							return true;
 						}
 					}
 					catch (Throwable t) {
-						if (!isCancelled())
+						if (!getResult().isCancelled())
 							TaskUtils.throwSomething(t, IOException.class);
 					}
 					return false;
@@ -241,8 +247,7 @@ implements IStorageProvider
 						Signals.signal(_path);
 					}
 				}
-			};
-			return task;
+			}.submit();
 		}
 	}
 }

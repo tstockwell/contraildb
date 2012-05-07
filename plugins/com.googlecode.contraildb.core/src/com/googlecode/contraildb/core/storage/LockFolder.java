@@ -4,10 +4,10 @@ import java.io.DataInput;
 import java.io.IOException;
 
 import com.googlecode.contraildb.core.ContrailException;
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Magic;
 import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
@@ -104,7 +104,7 @@ public class LockFolder extends Entity {
 		final Identifier lockId= Identifier.create(id, "lock");
 		final IResult<Lock> lockResult= storage.fetch(lockId);
 		new ContrailAction() {
-			protected void run() {
+			protected void action() {
 				try {
 					Lock lock= lockResult.get();
 					if (lock == null || !lock.processId.equals(processId))

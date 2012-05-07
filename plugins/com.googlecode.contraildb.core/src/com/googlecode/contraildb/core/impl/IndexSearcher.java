@@ -21,6 +21,7 @@ import com.googlecode.contraildb.core.ContrailQuery.FilterPredicate;
 import com.googlecode.contraildb.core.ContrailQuery.QuantifiedValues;
 import com.googlecode.contraildb.core.ContrailQuery.Quantifier;
 import com.googlecode.contraildb.core.IProcessor;
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
@@ -69,20 +70,20 @@ public class IndexSearcher {
 			idIndex.insert(t.getId());
 		}
 		
-		ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 		for (final Map.Entry<String, Collection<T>> e: entitiesByProperty.entrySet()) {
 			tasks.add(new ContrailAction() {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					final String propertyName= e.getKey();
 					PropertyIndex var= getPropertyIndex(propertyName);
 					if (var == null)
 						var= createPropertyIndex(propertyName);
 					final PropertyIndex propertyIndex= var;
 					
-					ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+					ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 					for (final T t: e.getValue()) {
 						tasks.add(new ContrailAction() {
-							protected void run() throws IOException {
+							protected void action() throws IOException {
 								Object propertyValue= t.getProperty(propertyName);
 								if (propertyValue instanceof Comparable || propertyValue == null) {
 									propertyIndex.insert((Comparable<?>) propertyValue, t.getId());
@@ -95,13 +96,23 @@ public class IndexSearcher {
 								else
 									throw new ContrailException("Cannot store property value. A value must be one of the basic types supported by Contrail or a collection supported types:"+propertyValue);
 							}
-						});
+						}.submit());
 					}
-					TaskUtils.invokeAll(tasks, IOException.class);
+					try {
+						TaskUtils.combineResults(tasks).get();
+					}
+					catch (Throwable t) {
+						TaskUtils.throwSomething(t, IOException.class);
+					}
 				}
-			});
+			}.submit());
 		}
-		TaskUtils.invokeAll(tasks, IOException.class);
+		try {
+			TaskUtils.combineResults(tasks).get();
+		}
+		catch (Throwable t) {
+			TaskUtils.throwSomething(t, IOException.class);
+		}
 	}
 	
 	private BTree<Identifier> getIdIndex() throws IOException {
@@ -143,19 +154,19 @@ public class IndexSearcher {
 			}
 		}
 		
-		ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 		for (final Map.Entry<String, Collection<T>> e: entitiesByProperty.entrySet()) {
 			tasks.add(new ContrailAction() {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					final String propertyName= e.getKey();
 					final PropertyIndex propertyIndex= getPropertyIndex(propertyName);
 					if (propertyIndex == null) 
 						throw new ContrailException("Missing index for property "+propertyName);
 					
-					ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+					ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 					for (final T t: e.getValue()) {
 						tasks.add(new ContrailAction() {
-							protected void run() throws IOException {
+							protected void action() throws IOException {
 								Object propertyValue= t.getProperty(propertyName);
 								if (propertyValue instanceof Comparable || propertyValue == null) {
 									propertyIndex.remove((Comparable<?>) propertyValue, t.getId());
@@ -168,19 +179,29 @@ public class IndexSearcher {
 								else
 									throw new ContrailException("Cannot store property value. A value must be one of the basic types supported by Contrail or a collection supported types:"+propertyValue);
 							}
-						});
+						}.submit());
 					}
-					TaskUtils.invokeAll(tasks, IOException.class);
+					try {
+						TaskUtils.combineResults(tasks).get();
+					}
+					catch (Throwable t) {
+						TaskUtils.throwSomething(t, IOException.class);
+					}
 				}
-			});
+			}.submit());
 		}
-		TaskUtils.invokeAll(tasks, IOException.class);
+		try {
+			TaskUtils.combineResults(tasks).get();
+		}
+		catch (Throwable t) {
+			TaskUtils.throwSomething(t, IOException.class);
+		}
 	}
 	
 
 	public void fetchIdentifiers(final ContrailQuery query, final IProcessor processor) {
-		new ContrailTask() {
-			protected void run() throws Exception {
+		new ContrailAction() {
+			protected void action() throws Exception {
 				try {
 					List<IForwardCursor<Identifier>> filterCursors= createFilterCursors(query.getFilterPredicates());
 					final IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?

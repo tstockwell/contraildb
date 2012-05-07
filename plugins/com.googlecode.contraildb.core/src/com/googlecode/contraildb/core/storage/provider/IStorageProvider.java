@@ -3,8 +3,8 @@ package com.googlecode.contraildb.core.storage.provider;
 import java.io.IOException;
 import java.util.Collection;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.IResult;
 
 
 /**
@@ -39,9 +39,9 @@ public interface IStorageProvider {
 		
 		/**
 		 * MUST be called when the session is no longer needed.
-		 * Any pending changed are flushed before closing.
+		 * Any pending changes are flushed before closing.
 		 */
-		public void close() throws IOException; 
+		public IResult<Void> close() throws IOException; 
 		
 		/**
 		 * Returns the complete paths to all the children of the given path.
@@ -57,7 +57,7 @@ public interface IStorageProvider {
 		 * Stores the given contents at the given location.
 		 * The file is created if it does not already exist.
 		 */
-		public void store(Identifier path, IResult<byte[]> content);
+		public IResult<Void> store(Identifier path, IResult<byte[]> content);
 
 		/**
 		 * Stores the given contents at the given location if the file 
@@ -77,12 +77,12 @@ public interface IStorageProvider {
 		/**
 		 * Deletes the contents stored at the given locations.
 		 */
-		public void delete(Identifier path);
+		public IResult<Void> delete(Identifier path);
 		
 		/**
 		 * Flush any pending changes made by this session to physical storage.
 		 */
-		public void flush() throws IOException;
+		public IResult<Void> flush() throws IOException;
 
 
 	}
