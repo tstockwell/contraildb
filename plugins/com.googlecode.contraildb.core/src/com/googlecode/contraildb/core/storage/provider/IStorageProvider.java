@@ -61,7 +61,8 @@ public interface IStorageProvider {
 
 		/**
 		 * Stores the given contents at the given location if the file 
-		 * does not already exist.  Otherwise does nothing.
+		 * does not already exist.  
+		 * If the file already exists then this method does nothing.
 		 * 
 		 * @param waitMillis
 		 * 		if the file already exists and parameter is greater than zero   

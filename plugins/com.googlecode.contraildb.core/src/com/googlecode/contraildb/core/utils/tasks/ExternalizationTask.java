@@ -8,7 +8,6 @@ import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.utils.ClosableByteArrayOutputStream;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -32,19 +31,11 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 		return super.submit(dependentTasks);
 	}
 	
-	protected void run() throws IOException {
-		try {
-			ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
-			outputStream.writeObject(_item);
-			outputStream.flush();
-			success(_byteStream.toByteArray());
-		}
-		catch (Throwable x) {
-			if (!getResult().isCancelled()) { // if task was canceled then we can ignore the error.
-				x.printStackTrace();
-				TaskUtils.throwSomething(x, IOException.class);
-			}
-		}
+	protected byte[] run() throws IOException {
+		ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
+		outputStream.writeObject(_item);
+		outputStream.flush();
+		return _byteStream.toByteArray();
 	}
 	
 	public byte[] get() {

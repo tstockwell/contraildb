@@ -297,34 +297,51 @@ if (__logger.isLoggable(Level.FINER))
 	 * @return true if another task was run 
 	 */
 	protected boolean yield() {
-		if (isTaskYielded())
-			return false; // no nested yields for now
+		return yield(0);
+	}
+	/**
+	 * Yields to some other task.
+	 * If there are no other tasks to run then wait the given number of milliseconds.
+	 */
+	protected boolean yield(long waitMillis) {
+		boolean taskWasRun= false;
 		
-		if (yieldToDependent())
-			return true;
+		if (!isTaskYielded()) { // no nested yields for now
+			if (!yieldToDependent()) {
+				/*
+				 * If this task has no dependencies then choose a random task to run.  
+				 * DONT mess with a task that has any dependencies, choose something nice and simple.
+				 */
 
-		/*
-		 * If this task has no dependencies then choose a random task to run.  
-		 * DONT mess with a task that has any dependencies, choose something nice and simple.
-		 */
+				ContrailTask nextTask= null;
+				for (Iterator<ContrailTask> i= __tasks.iterator(); i.hasNext();) {
+					ContrailTask t= i.next();
+					if (t._pendingTasks == null || t._pendingTasks.isEmpty()) {
+						if (__tasks.remove(t)) {
+							nextTask= t;
+							break;
+						}
+					}
+				}
 
-		ContrailTask nextTask= null;
-		for (Iterator<ContrailTask> i= __tasks.iterator(); i.hasNext();) {
-			ContrailTask t= i.next();
-			if (t._pendingTasks == null || t._pendingTasks.isEmpty()) {
-				if (__tasks.remove(t)) {
-					nextTask= t;
-					break;
+				if (nextTask != null) {
+					nextTask.runTask();
+					taskWasRun= true;
 				}
 			}
 		}
-
-		if (nextTask != null) {
-			nextTask.runTask();
-			return true;
+		
+		if (!taskWasRun && 0 < waitMillis) {
+			synchronized (this) {
+				try {
+					wait(waitMillis);
+				}
+				catch (InterruptedException x) {
+				}
+			}
 		}
 		
-		return false;
+		return taskWasRun;
 	}
 	
 	/**

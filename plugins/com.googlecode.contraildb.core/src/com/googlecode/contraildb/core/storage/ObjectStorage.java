@@ -132,14 +132,14 @@ public class ObjectStorage {
 		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
 		{
 			ContrailTask<T> task= new ContrailTask<T>(path, Operation.READ) {
-				protected void run() throws IOException {
+				protected T run() throws IOException {
 					T storable= (T)_cache.fetch(path);
 					if (storable == null) {
 						IResult<byte[]> content= _storageSession.fetch(path);
 						if (content != null) 
 							storable= readStorable(path, content.get());
 					}
-					success(storable);
+					return storable;
 				}
 			};
 			return _trackerSession.submit(task);
@@ -164,7 +164,7 @@ public class ObjectStorage {
 		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path)
 		{
 			ContrailTask<Map<Identifier, T>> task= new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
-				protected void run() throws IOException {
+				protected Map<Identifier, T> run() throws IOException {
 					Collection<Identifier> children= _storageSession.listChildren(path).get();
 					HashMap<Identifier, IResult<byte[]>> fetched= new HashMap<Identifier, IResult<byte[]>>();
 					for (Identifier childId:children) 
@@ -175,7 +175,7 @@ public class ObjectStorage {
 						T t= readStorable(childId, result.get());
 						results.put(childId, t);
 					}
-					success(results);
+					return results;
 				}
 			};
 			return _trackerSession.submit(task);
@@ -183,13 +183,11 @@ public class ObjectStorage {
 
 		public IResult<Collection<Identifier>> listChildren(final Identifier path)
 		{
-			ContrailTask<Collection<Identifier>> task= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected void run() {
-					Collection<Identifier> list= _storageSession.listChildren(path).get();
-					success(list);
+			return _trackerSession.submit(new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
+				protected Collection<Identifier> run() {
+					return _storageSession.listChildren(path).get();
 				}
-			};
-			return _trackerSession.submit(task);
+			});
 		}
 		
 		public void flush() throws IOException {
