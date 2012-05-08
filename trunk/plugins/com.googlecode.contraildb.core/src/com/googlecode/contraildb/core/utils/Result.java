@@ -1,6 +1,9 @@
 package com.googlecode.contraildb.core.utils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CancellationException;
 
 import com.googlecode.contraildb.core.IResult;
@@ -14,7 +17,9 @@ public class Result<V> implements IResult<V>{
 	private boolean _success= false;
 	private boolean _cancelled= false;
 	private Throwable _error= null;
-	private ArrayList<IResultHandler> _handlers= null;
+	private Map<IResultHandler, Result> _completedHandlers= null;
+	private Map<IResultHandler, Result> _successHandlers= null;
+	private List<IResultHandler> _errorHandlers= null;
 
 	@Override public synchronized boolean isDone() {
 		return _done;
@@ -69,17 +74,60 @@ public class Result<V> implements IResult<V>{
 		_success= success;
 		_error= error;
 		_result= result;
-		if (_handlers != null) {
-			for (final IResultHandler handler:_handlers) {
+		
+		if (_completedHandlers != null) {
+			for (final IResultHandler handler:_completedHandlers.keySet()) {
 				new ContrailAction() {
 					@Override protected void action() throws Exception {
-						handler.complete(Result.this);
+						Result<Void> handlerResult= _completedHandlers.get(handler);
+						try {
+							handler.complete(Result.this);
+							handlerResult.success(null);
+						}
+						catch (Throwable t) {
+							handlerResult.error(t);
+						}
 					}
 				}.submit();
 			}
-			_handlers= null;
+			_completedHandlers= null;
 		}
-		notify();
+		
+		if (_successHandlers != null && _success) {
+			for (final IResultHandler handler:_successHandlers.keySet()) {
+				new ContrailAction() {
+					@Override protected void action() throws Exception {
+						Result<Void> handlerResult= _successHandlers.get(handler);
+						try {
+							handler.complete(Result.this);
+							handlerResult.success(null);
+						}
+						catch (Throwable t) {
+							handlerResult.error(t);
+						}
+					}
+				}.submit();
+			}
+			_successHandlers= null;
+		}
+		
+		if (_errorHandlers != null && !_success && !_cancelled) {
+			for (final IResultHandler handler:_errorHandlers) {
+				new ContrailAction() {
+					@Override protected void action() throws Exception {
+						try {
+							handler.complete(Result.this);
+						}
+						catch (Throwable t) {
+							Logging.warning("Error in error handler", t);
+						}
+					}
+				}.submit();
+			}
+			_completedHandlers= null;
+		}
+		
+		notify(); // notify the get() method that results are available
 	}
 
 	@Override
@@ -108,18 +156,66 @@ public class Result<V> implements IResult<V>{
 	}
 
 	@Override
-	synchronized public void onComplete(IResultHandler<V> handler) {
+	synchronized public IResult<Void> onComplete(IResultHandler<V> handler) {
+		Result<Void> result= new Result<Void>();
 		if (_done) {
-			handler.complete(this);
-			return;
+			try {
+				handler.complete(this);
+				result.success(null);
+			}
+			catch (Throwable t) {
+				result.error(t);
+			}
+			return result;
 		}
-		if (_handlers == null)
-			_handlers= new ArrayList<IResultHandler>();
-		_handlers.add(handler);
+		if (_completedHandlers == null)
+			_completedHandlers= new HashMap<IResultHandler, Result>();
+		_completedHandlers.put(handler, result);
+		return result;
 	}
 
 	@Override
 	public boolean isCancelled() {
 		return _cancelled;
+	}
+
+
+	@Override
+	public IResult<Void> onSuccess(IResultHandler<V> handler) {
+		Result<Void> result= new Result<Void>();
+		if (_done) {
+			try {
+				if (_success)
+					handler.complete(this);
+				result.success(null);
+			}
+			catch (Throwable t) {
+				result.error(t);
+			}
+			return result;
+		}
+		if (_successHandlers == null)
+			_successHandlers= new HashMap<IResultHandler, Result>();
+		_successHandlers.put(handler, result);
+		return result;
+	}
+
+
+	@Override
+	public void onError(IResultHandler<V> handler) {
+		if (_done) {
+			if (!_success && !_cancelled) {
+				try {
+					handler.complete(this);
+				}
+				catch (Throwable t) {
+					Logging.warning("Error in error handler", t);
+				}
+			}
+			return;
+		}
+		if (_errorHandlers == null)
+			_errorHandlers= new ArrayList<IResultHandler>();
+		_errorHandlers.add(handler);
 	}
 }
