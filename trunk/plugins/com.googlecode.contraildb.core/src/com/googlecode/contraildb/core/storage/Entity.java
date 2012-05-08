@@ -12,6 +12,7 @@ import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -96,21 +97,22 @@ public class Entity implements IEntity, ILifecycle {
 	}
 	
 	@Override
-	public void onDelete()
-	throws IOException 
+	public IResult<Void> onDelete()
 	{
 		// do nothing
+		return TaskUtils.SUCCESS;
 	}
 	@Override
-	public void onInsert(Identifier identifier)
-	throws IOException {
-		// do nothing
-	}
-	@Override
-	public void onLoad(Identifier identifier)
-	throws IOException 
+	public IResult<Void> onInsert(Identifier identifier)
 	{
 		// do nothing
+		return TaskUtils.SUCCESS;
+	}
+	@Override
+	public IResult<Void> onLoad(Identifier identifier)
+	{
+		// do nothing
+		return TaskUtils.SUCCESS;
 	}
 
 

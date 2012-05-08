@@ -1,5 +1,6 @@
 package com.googlecode.contraildb.core.utils;
 
+import java.util.Arrays;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
@@ -8,20 +9,23 @@ import com.googlecode.contraildb.core.IResultHandler;
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class TaskUtils {
 	
+	public static final IResult<Void> SUCCESS= asResult(null); 
 	
 	
-/**
+	
+	/**
 	 * Returns a Result that is completed when all the given tasks are complete.
 	 * If any task completes with an error then the returned Result also completes with an error.
 	 */
 	public static final <T extends IResult<?>> IResult<Void> combineResults(Collection<T> tasks) {
 		if (tasks == null || tasks.isEmpty())
-			return asResult(null);
+			return SUCCESS;
 		final Result<Void> result= new Result<Void>();
 		final int[] count= new int[] { tasks.size() };
 		final IResult[] error= new IResult[] { null };
-		IResultHandler handler= new IResultHandler() {
-			synchronized public void complete(IResult r) {
+		IResultHandler handler= new ResultHandler() {
+			synchronized public void onComplete() {
+				IResult r= incoming();
 				if (!r.isSuccess()) {
 					error[0]= r;
 				}
@@ -38,6 +42,13 @@ public class TaskUtils {
 			task.onComplete(handler);
 		}
 		return result;
+	} 
+	public static final <T extends IResult<?>> IResult<Void> combineResults(T... tasks) {
+		if (tasks == null || tasks.length <= 0)
+			return SUCCESS;
+		if (tasks.length <= 1)
+			return (IResult<Void>) tasks[0];
+		return combineResults(Arrays.asList(tasks));
 	} 
 
 	public static final <T extends Throwable> void throwSomething(Throwable t, Class<T> type) throws T {
@@ -122,12 +133,25 @@ public class TaskUtils {
 				return bs;
 			}
 			@Override
-			public void onComplete(IResultHandler<X> iResultHandler) {
-				iResultHandler.complete(this);
-			}
-			@Override
 			public boolean isCancelled() {
 				return false;
+			}
+			@Override
+			public void onComplete(IResultHandler<X> handler) {
+				try {
+					handler.onComplete(this);
+				}
+				catch (Throwable t) {
+					Logging.warning("Error while handling completion", t);
+				}
+			}
+			@Override
+			public void onSuccess(IResultHandler<X> handler) {
+				onComplete(handler);
+			}
+			@Override
+			public void onError(IResultHandler<X> handler) {
+				// do nothing
 			}
 		};
 	}

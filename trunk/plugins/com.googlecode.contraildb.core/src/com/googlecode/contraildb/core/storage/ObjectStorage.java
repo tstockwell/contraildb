@@ -20,6 +20,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.Result;
+import com.googlecode.contraildb.core.utils.ResultHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
@@ -115,70 +116,79 @@ public class ObjectStorage {
 		}
 
 		public IResult<Void> delete(final Identifier path) {
-			final IResult<Serializable> itemRef= fetch(path);
-			return new ResultHandler(itemRef) {
-				void success() { 
-					_cache.delete(path);
-					handle(_storageSession.delete(path));
+			return new ResultHandler(fetch(path)) {
+				protected IResult onSuccess() throws IOException {
+
+					spawnChild(new ResultHandler(_storageSession.delete(path)) {
+						protected IResult onSuccess() throws IOException {
+							_cache.delete(path);
+							return null;
+						}
+					});
+
+					Object item= incoming().getResult();
+					if (item instanceof ILifecycle) 
+						spawnChild(((ILifecycle)item).onDelete());
 					
-					Object item= itemRef.getResult();
-					if (item instanceof ILifecycle) {
-						((ILifecycle)item).onDelete();
-					}
+					return null;
 				}
 			}.toResult();
 		}
 
 		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
 		{
-			ContrailTask<T> task= new ContrailTask<T>(path, Operation.READ) {
-				protected T run() throws IOException {
-					T storable= (T)_cache.fetch(path);
-					if (storable == null) {
-						IResult<byte[]> content= _storageSession.fetch(path);
-						if (content != null) 
-							storable= readStorable(path, content.get());
-					}
-					return storable;
+			return new ResultHandler(_cache.fetch(path)) {
+				protected IResult onSuccess() throws IOException {
+					Object storable= incoming().getResult();
+					if (storable != null)
+						return TaskUtils.asResult(storable);
+
+					IResult content= _storageSession.fetch(path);
+					return readStorable(path, content);
 				}
-			};
-			return _trackerSession.submit(task);
+			}.toResult();
 		}
 		
-		private <T extends Serializable> T readStorable(Identifier id, byte[] contents)
+		private <T extends Serializable> IResult<T> readStorable(final Identifier id, IResult<byte[]> contents)
 		throws IOException
 		{
-			if (contents == null)
-				return null;
-
-			T s= ExternalizationManager.readExternal(new DataInputStream(new ByteArrayInputStream(contents)));
-			boolean isStorable= s instanceof ILifecycle;
-			if (isStorable)
-				((ILifecycle)s).setStorage(_outerStorage);
-			_cache.store(id, s);
-			if (isStorable)
-				((ILifecycle)s).onLoad(id);
-			return s;
+			return new ResultHandler(contents) {
+				protected IResult onSuccess() throws Exception {
+					byte[] bytes= (byte[]) incoming().getResult();
+					T s= ExternalizationManager.readExternal(new DataInputStream(new ByteArrayInputStream(bytes)));
+					boolean isStorable= s instanceof ILifecycle;
+					if (isStorable)
+						((ILifecycle)s).setStorage(_outerStorage);
+					_cache.store(id, s);
+					if (isStorable)
+						spawnChild(((ILifecycle)s).onLoad(id));
+					return TaskUtils.asResult(s);
+				};
+			}.toResult();
 		}
 
 		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path)
 		{
-			ContrailTask<Map<Identifier, T>> task= new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
-				protected Map<Identifier, T> run() throws IOException {
-					Collection<Identifier> children= _storageSession.listChildren(path).get();
+			return new ResultHandler<Collection<Identifier>,Map<Identifier, T>>(_storageSession.listChildren(path)) {
+				protected IResult<Map<Identifier, T>> onSuccess() throws Exception {
+					Collection<Identifier> children= incoming().getResult();
+					
 					HashMap<Identifier, IResult<byte[]>> fetched= new HashMap<Identifier, IResult<byte[]>>();
 					for (Identifier childId:children) 
 						fetched.put(childId, _storageSession.fetch(childId));
-					HashMap<Identifier, T> results= new HashMap<Identifier, T>();
-					for (Identifier childId:children) {
-						IResult<byte[]> result= fetched.get(childId);
-						T t= readStorable(childId, result.get());
-						results.put(childId, t);
+					
+					final HashMap results= new HashMap<Identifier, T>();
+					for (final Identifier childId:children) {
+						spawnChild(new ResultHandler(readStorable(childId, fetched.get(childId))) {
+							protected IResult onSuccess() throws Exception {
+								results.put(childId, incoming().getResult());
+								return TaskUtils.SUCCESS;
+							}
+						});
 					}
-					return results;
-				}
-			};
-			return _trackerSession.submit(task);
+					return TaskUtils.asResult(results);
+				};
+			}.toResult();
 		}
 
 		public IResult<Collection<Identifier>> listChildren(final Identifier path)
@@ -190,20 +200,12 @@ public class ObjectStorage {
 			});
 		}
 		
-		public void flush() throws IOException {
-			_trackerSession.onComplete(new IResultHandler<Void>() {
+		public IResult<Void> flush() {
+			return new ResultHandler(_trackerSession.complete()) {
 				public void complete(IResult<Void> result) {
-					// TODO Auto-generated method stub
-					
+					spawnChild(_storageSession.flush());
 				}
-			});
-			try {
-				_trackerSession.join();
-				_storageSession.flush();
-			}
-			catch (Throwable t) {
-				TaskUtils.throwSomething(t, IOException.class);
-			}
+			}.toResult();
 		}
 		
 		public void close() throws IOException {

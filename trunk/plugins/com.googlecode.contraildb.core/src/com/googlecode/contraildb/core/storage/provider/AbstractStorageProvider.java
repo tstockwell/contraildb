@@ -4,14 +4,12 @@ import java.io.IOException;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
-import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.Result;
+import com.googlecode.contraildb.core.utils.ResultHandler;
 
 
 /**
@@ -21,6 +19,7 @@ import com.googlecode.contraildb.core.utils.Result;
  * implement the actual storage functions.   
  * 
  */
+@SuppressWarnings({ "rawtypes", "unchecked" })
 abstract public class AbstractStorageProvider
 implements IStorageProvider
 {
@@ -45,48 +44,35 @@ implements IStorageProvider
 
 		@Override
 		public IResult<Void> flush() throws IOException {
-			final Result<Void> result= new Result<Void>();
-			_trackerSession.onComplete(new IResultHandler<Void>() {
-				@Override public void complete(IResult<Void> r) {
-					result.complete(doFlush());
-				}
-			});
-			return result;
+			return new ResultHandler(_trackerSession.complete()) {
+				protected void onComplete() throws Exception {
+					spawnChild(doFlush());
+				};
+			}.toResult();
 		}
 
 		@Override
 		public IResult<Void> close() {
-			final Result<Void> result= new Result<Void>();
-			_trackerSession.onComplete(new IResultHandler<Void>() {
-				@Override public void complete(IResult<Void> r) {
-					
-					_trackerSession.close().onComplete(new IResultHandler<Void>() {
-						public void complete(IResult<Void> closeResult) {
-							
-							if (!closeResult.isSuccess())
-								Logging.warning(closeResult.getError());
-							result.complete(doClose());
-						}
-					}); 
-				}
-			});
-			return result;
+			return new ResultHandler(_trackerSession.complete()) {
+				protected void onComplete() throws Exception {
+					spawnChild(doClose());
+				};
+			}.toResult();
 		}
 		
 		@Override
 		public IResult<Collection<Identifier>> listChildren(final Identifier path) {
-			ContrailTask<Collection<Identifier>> action= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected Collection<Identifier> run() throws IOException {
+			return _trackerSession.submit(new ContrailTask(path, Operation.LIST) {
+				protected Object run() throws IOException {
 					return doList(path);
 				}
-			};
-			return _trackerSession.submit(action);
+			});
 		}
 		
 		@Override
 		public IResult<byte[]> fetch(final Identifier path) {
-			return _trackerSession.submit(new ContrailTask<byte[]>(path, Operation.READ) {
-				protected byte[] run() throws IOException {
+			return _trackerSession.submit(new ContrailTask(path, Operation.READ) {
+				protected Object run() throws IOException {
 					return doFetch(path).get();
 				}
 			});
@@ -131,8 +117,8 @@ implements IStorageProvider
 		@Override
 		public IResult<Boolean> create(final Identifier path_, final IResult<byte[]> source_, final long waitMillis_) 
 		{
-			return _trackerSession.submit(new ContrailTask<Boolean>(path_, Operation.CREATE) {
-				protected Boolean run() throws IOException {
+			return _trackerSession.submit(new ContrailTask(path_, Operation.CREATE) {
+				protected Object run() throws IOException {
 						return doCreate(path_, source_.get(), waitMillis_).get();
 				}
 			});

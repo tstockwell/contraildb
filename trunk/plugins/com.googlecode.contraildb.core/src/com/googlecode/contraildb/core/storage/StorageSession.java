@@ -39,7 +39,6 @@ public class StorageSession implements IEntityStorage.Session {
 	private final long _startingCommitNumber;
 	private final Mode _mode;
 	private final ObjectStorage.Session _storage;
-	private final ContrailTaskTracker.Session _trackerSession;
 	
 	HashSet<Identifier> _reads= new HashSet<Identifier>();
 	HashSet<Identifier> _inserts= new HashSet<Identifier>();
@@ -79,7 +78,6 @@ public class StorageSession implements IEntityStorage.Session {
 		_revisionNumber= revisionNumber;
 		_mode= mode;
 		_startingCommitNumber= startingCommitNumber;
-		_trackerSession= storageSystem._tracker.beginSession();
 	}
 	
 	@Override
@@ -156,7 +154,6 @@ public class StorageSession implements IEntityStorage.Session {
 					_storageSystem.closeStorageSession(this);
 				}
 				finally {
-					try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
 					_isActive= false;
 				}
 			}
@@ -316,7 +313,6 @@ public class StorageSession implements IEntityStorage.Session {
 
 	public void flush() throws IOException {
 		try {
-			_trackerSession.join();
 			_storage.flush();
 		}
 		catch (Throwable t) {

@@ -1,7 +1,6 @@
 package com.googlecode.contraildb.core.storage;
 
-import java.io.IOException;
-
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 
 
@@ -10,7 +9,7 @@ import com.googlecode.contraildb.core.Identifier;
  */
 public interface ILifecycle {
 	void setStorage(IEntityStorage.Session storage);
-	void onInsert(Identifier identifier) throws IOException;
-	void onLoad(Identifier identifier) throws IOException;
-	void onDelete() throws IOException;
+	IResult<Void> onInsert(Identifier identifier);
+	IResult<Void> onLoad(Identifier identifier);
+	IResult<Void> onDelete();
 }
