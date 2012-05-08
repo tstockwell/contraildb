@@ -108,7 +108,7 @@ public class ContrailStorageTests extends TestCase {
 			assertNotNull(result);
 			assertTrue(result.get());
 			session.delete(identifier);
-			session.close();
+			session.close().get();
 		}
 		
 	}
@@ -195,7 +195,7 @@ public class ContrailStorageTests extends TestCase {
 			if (error[0] != null)
 				throw error[0];
 			
-			session.close();
+			session.close().get();
 		}
 		
 	}

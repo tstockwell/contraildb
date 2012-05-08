@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
@@ -18,18 +19,11 @@ import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.Result;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
 
-
-/*
- * Implementation Note:
- * I've realized that the caching done by this class is gonna have to change.
- * Caching is problematic since there can be multiple processes writing to storage. 
- * Based on the defined semantics for IStorageSPI,  caching stored objects is 
- * not a problem but caching lists of children is 
- */
 
 /**
  * An API for storing Java objects to a raw storage instance.
@@ -42,7 +36,7 @@ import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
  * 		the Lifecycle methods will be invoked at appropriate points.
  * 
  * 	...cache objects in order to avoid as much serialization and 
- * 		deserialization as possible.
+ * 		deserialization as possible (stored objects are cached, but not the lists of children).
  * 
  * 	...can be used by multiple clients in multiple threads, each client should call the
  * 		ObjectStorage.connect method to create its own session.  
@@ -53,6 +47,9 @@ import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
  * 		its internal tasks are executed so that operations are performed in a 
  * 		way that allows for as much parallelization as possible in order to 
  * 		maximize performance.  
+ * 
+ * Like many of Contrail's internal API's all the methods in this class are asynchronous, 
+ * they all return an instance of IResult.
  *   
  * @author Ted Stockwell
  */
@@ -117,16 +114,19 @@ public class ObjectStorage {
 			});
 		}
 
-		public void delete(final Identifier path) {
-			final Object item= fetch(path).get();
-			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void action() throws IOException {
+		public IResult<Void> delete(final Identifier path) {
+			final IResult<Serializable> itemRef= fetch(path);
+			return new ResultHandler(itemRef) {
+				void success() { 
 					_cache.delete(path);
-					_storageSession.delete(path);
-					if (item instanceof ILifecycle) 
+					handle(_storageSession.delete(path));
+					
+					Object item= itemRef.getResult();
+					if (item instanceof ILifecycle) {
 						((ILifecycle)item).onDelete();
+					}
 				}
-			});
+			}.toResult();
 		}
 
 		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
@@ -191,6 +191,12 @@ public class ObjectStorage {
 		}
 		
 		public void flush() throws IOException {
+			_trackerSession.onComplete(new IResultHandler<Void>() {
+				public void complete(IResult<Void> result) {
+					// TODO Auto-generated method stub
+					
+				}
+			});
 			try {
 				_trackerSession.join();
 				_storageSession.flush();
@@ -202,8 +208,8 @@ public class ObjectStorage {
 		
 		public void close() throws IOException {
 			flush();
-			try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
-			try { _storageSession.close(); } catch (Throwable t) {  Logging.warning(t); }
+			try { _trackerSession.close().get(); } catch (Throwable t) { Logging.warning(t); }
+			try { _storageSession.close().get(); } catch (Throwable t) {  Logging.warning(t); }
 			_trackerSession= null;
 			_storageSession= null;
 			_outerStorage= null;

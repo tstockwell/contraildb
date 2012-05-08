@@ -2,6 +2,7 @@ package com.googlecode.contraildb.core.impl;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import com.googlecode.contraildb.core.ContrailQuery;
@@ -9,6 +10,8 @@ import com.googlecode.contraildb.core.FetchOptions;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.IProcessor;
+import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.utils.ContrailAction;
@@ -43,52 +46,47 @@ implements IPreparedQuery<T>
 		try {
 			final boolean[] complete= new boolean[] { false };
 			final Throwable[] error= new Throwable[] { null }; 
-			final ArrayList<T> results= new ArrayList<T>();
-			IProcessor processor= new IProcessor() {
-				synchronized public boolean result(final Identifier identifier) {
+			final List<T> results= Collections.synchronizedList(new ArrayList<T>());
+			final IProcessor processor= new IProcessor() {
+				public boolean result(final Identifier identifier) {
 					// loads objects concurrently
 					tracker.submit(new ContrailAction() {
 						protected void action() throws Exception {
 							try {
-								T item= _session.<T>fetch(identifier);
-								synchronized (results) {
-									results.add(item);
-								}
+								results.add(_session.<T>fetch(identifier));
 							}
 							catch (IOException x) {
-								synchronized (error) {
-									if (error[0] == null)
-										error[0]= x;
-								}
+								if (error[0] == null)
+									error[0]= x;
 							}
 						}
 					});
 					return error[0] == null; // if an error occurred then cancel query
 				}
-				synchronized public void complete(Throwable t) {
-					try {
-						if (t != null)
-							error[0]= t;
-						tracker.join();
-					}
-					catch (Throwable t2) {
-						error[0]= t2;
-					}
-					finally {
-						complete[0]= true;
-						this.notify();
-					}
+				public void complete(Throwable t) {
+					if (t != null) 
+						error[0]= t;
+					
+					// wait until all items have been fetched 
+					tracker.onComplete(new IResultHandler<Void>() {
+						public void complete(IResult<Void> result) {
+							synchronized (tracker) {
+								complete[0]= true;
+								tracker.notify();
+							}
+						}
+					});
 				}
 			};
 			_session.process(_query, processor);
 			
 			// wait for completion
 			while(true) {
-				synchronized (processor) {
+				synchronized (tracker) {
 					if (complete[0])
 						break;
 					try {
-						processor.wait();
+						tracker.wait();
 					}
 					catch (InterruptedException x) {
 					}
