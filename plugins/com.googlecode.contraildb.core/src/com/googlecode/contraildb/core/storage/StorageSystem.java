@@ -60,6 +60,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
  *  
  * @author Ted Stockwell
  */
+@SuppressWarnings("rawtypes")
 public class StorageSystem {
 	
 
@@ -103,7 +104,7 @@ public class StorageSystem {
 	 * When a readwrite session is started the session will be associated with a new revision of the database.
 	 * When a readonly session is started the session will be associated with the last committed database revision. 
 	 */
-	public StorageSession beginSession(Mode mode) throws IOException, ContrailException {
+	public IResult<Void> beginSession(Mode mode) throws IOException, ContrailException {
 
 		String sessionId= "session."+UUID.randomUUID().toString();
 		StorageSession storageSession;
@@ -134,7 +135,7 @@ public class StorageSystem {
 	/**
 	 * Begin a new readonly session associated with the given database revision.
 	 */
-	public StorageSession beginSession(long revisionNumber) 
+	public IResult<Void> beginSession(long revisionNumber) 
 	throws ContrailException, IOException 
 	{
 		String sessionId= "session."+UUID.randomUUID().toString();
@@ -165,8 +166,8 @@ public class StorageSystem {
 	 * Also cleans up metadata that is no longer needed, like revisions that are no longer active.
 	 * @throws IOException
 	 */
-	public void cleanup() throws IOException {
-		_trackerSession.submit(new StorageCleanupAction(this)).get();
+	public IResult<Void> cleanup() throws IOException {
+		return _trackerSession.submit(new StorageCleanupAction(this));
 	}
 
 	
@@ -331,20 +332,16 @@ public class StorageSystem {
 		return revisions;
 	}
 	
-	public void close() throws IOException {
-		
+	public IResult<Void> close() throws IOException {
 		// close all open sessions
+		ArrayList<IResult> allResults= new ArrayList<IResult>();
 		while (!_activeSessions.isEmpty()) {
-			final StorageSession session= _activeSessions.remove(0);
-			_trackerSession.submit(new ContrailAction(Identifier.create(session.getSessionId()), Operation.DELETE) {
-				protected void action() throws IOException {
-					session.close();
-				}
-			});
+			StorageSession session= _activeSessions.remove(0);
+			allResults.add(session.close());
 		}
+		allResults.add(_trackerSession.complete());
 		
-		// wait for all sessions to close and for any cleanup tasks in progress
-		_trackerSession.join();
+		return TaskUtils.combineResults(allResults);
 	}
 
 }

@@ -10,17 +10,17 @@ import com.googlecode.contraildb.core.FetchOptions;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.IProcessor;
-import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ConversionUtils;
+import com.googlecode.contraildb.core.utils.ResultHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 
+@SuppressWarnings({"unchecked","rawtypes"})
 public class PreparedQueryImpl<T extends Item> 
 implements IPreparedQuery<T> 
 {
@@ -53,7 +53,7 @@ implements IPreparedQuery<T>
 					tracker.submit(new ContrailAction() {
 						protected void action() throws Exception {
 							try {
-								results.add(_session.<T>fetch(identifier));
+								results.add(_session.fetch(identifier).getResult());
 							}
 							catch (IOException x) {
 								if (error[0] == null)
@@ -68,14 +68,14 @@ implements IPreparedQuery<T>
 						error[0]= t;
 					
 					// wait until all items have been fetched 
-					tracker.onComplete(new IResultHandler<Void>() {
-						public void complete(IResult<Void> result) {
+					new ResultHandler(tracker.complete()) {
+						public void onComplete() {
 							synchronized (tracker) {
 								complete[0]= true;
 								tracker.notify();
 							}
 						}
-					});
+					};
 				}
 			};
 			_session.process(_query, processor);

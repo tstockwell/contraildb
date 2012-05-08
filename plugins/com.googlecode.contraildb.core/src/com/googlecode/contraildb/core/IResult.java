@@ -52,29 +52,13 @@ public interface IResult<V> {
 
     /**
      * Add a callback to be invoked when the result is available.
-     * 
-     * The returned IResult instance may be used to handle errors
-     * that occur when the handler is invoked.  That is, if the 
-     * handler throws an error when it is invoked then the returned
-     * result will be completed with an error.  
-     * It is convenient to handle errors that occur in the handler 
-     * by adding an onError handler to the returned IResult. 
-     * 
      */
-	public IResult<Void> onComplete(IResultHandler<V> handler);
+	public void onComplete(IResultHandler<V> handler);
 	
     /**
      * Add a callback to be invoked this result is completed successfully.
-     * 
-     * The returned IResult instance may be used to handle errors
-     * that occur when the handler is invoked.  That is, if the 
-     * handler throws an error when it is invoked then the returned
-     * result will be completed with an error.  
-     * It is convenient to handle errors that occur in the handler 
-     * by adding an onError handler to the returned IResult. 
      */
-	public IResult<Void> onSuccess(IResultHandler<V> handler);
-
+	public void onSuccess(IResultHandler<V> handler);
 
     /**
      * Add a callback to be invoked this result is completed with an error.

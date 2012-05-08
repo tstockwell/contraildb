@@ -14,7 +14,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
 
 /**
- * A convenient task manager for Contrail that coordinates tasks according 
+ * A convenient task scheduler for Contrail that coordinates tasks according 
  * to an associated Identifier and operation type (READ, WRITE, DELETE, LIST, 
  * or CREATE).
  * The purpose of this class is to manage the order in which asynchronous 
@@ -50,7 +50,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
  * A CREATE operation on an object may not proceed until all pending READ, 
  * and WRITE operations on that object have completed.  Since the purpose of 
  * the IStorageProvider.create method is to coordinate asynchronous CREATE 
- * requests CREATE requests do not have to wait for other CREATE requests.   
+ * requests, CREATE requests do not have to wait for other CREATE requests.   
  * 
  * @author Ted Stockwell
  */
@@ -148,10 +148,11 @@ public class ContrailTaskTracker {
 
 	public class Session {
 		
-		IResultHandler _completionListener= new IResultHandler() {
-			@Override public void complete(IResult result) {
+		IResultHandler _completionListener= new ResultHandler() {
+			@Override public void onComplete() {
+				IResult incoming= incoming();
 				for (ContrailTask task:_sessionTasks) {
-					if (task.getResult() == result) {
+					if (task.getResult() == incoming) {
 						removeTask(task);
 						break;
 					}
@@ -221,9 +222,9 @@ public class ContrailTaskTracker {
 		}
 		
 		/**
-		 * Invokes the given handler when all the current tasks are complete.
+		 * Returns all result that completes when all the current tasks are complete.
 		 */
-		public void onComplete(IResultHandler<Void> completionHandler) {
+		public IResult<Void> complete() {
 			List<ContrailTask> tasks;
 			synchronized (this) {
 				tasks= new ArrayList<ContrailTask>(_sessionTasks);
@@ -231,7 +232,7 @@ public class ContrailTaskTracker {
 			ArrayList<IResult> results= new ArrayList<IResult>(tasks.size());
 			for (ContrailTask task:tasks)
 				results.add(task.getResult());
-			TaskUtils.combineResults(results).onComplete(completionHandler);
+			return TaskUtils.combineResults(results);
 		}
 
 //		/**

@@ -1,9 +1,7 @@
 package com.googlecode.contraildb.core.utils;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CancellationException;
 
 import com.googlecode.contraildb.core.IResult;
@@ -17,8 +15,8 @@ public class Result<V> implements IResult<V>{
 	private boolean _success= false;
 	private boolean _cancelled= false;
 	private Throwable _error= null;
-	private Map<IResultHandler, Result> _completedHandlers= null;
-	private Map<IResultHandler, Result> _successHandlers= null;
+	private List<IResultHandler> _completedHandlers= null;
+	private List<IResultHandler> _successHandlers= null;
 	private List<IResultHandler> _errorHandlers= null;
 
 	@Override public synchronized boolean isDone() {
@@ -44,6 +42,9 @@ public class Result<V> implements IResult<V>{
 	}
 
 	@Override synchronized public V get() {
+		if (ContrailTask.isContrailTask())
+			throw new RuntimeException("Contrail actions MUST be atomic!\nUse a ResultHandler instead of calling get().");
+		
 		while (!_done) {
 			try {
 				wait();
@@ -63,9 +64,12 @@ public class Result<V> implements IResult<V>{
 		return _result;
 	}
 
-	synchronized public void complete(IResult<V> result) {
-		if (result.isDone()) 
-			complete(result.isSuccess(), result.getResult(), result.getError());
+	synchronized public void complete(final IResult<V> result) {
+		result.onComplete(new ResultHandler() {
+			public void onComplete() throws Exception {
+				complete(result.isSuccess(), result.getResult(), result.getError());
+			}
+		});
 	}
 	synchronized public void complete(boolean success, V result, Throwable error) {
 		if (_done)
@@ -76,16 +80,14 @@ public class Result<V> implements IResult<V>{
 		_result= result;
 		
 		if (_completedHandlers != null) {
-			for (final IResultHandler handler:_completedHandlers.keySet()) {
+			for (final IResultHandler handler:_completedHandlers) {
 				new ContrailAction() {
 					@Override protected void action() throws Exception {
-						Result<Void> handlerResult= _completedHandlers.get(handler);
 						try {
-							handler.complete(Result.this);
-							handlerResult.success(null);
+							handler.onComplete(Result.this);
 						}
 						catch (Throwable t) {
-							handlerResult.error(t);
+							Logging.warning("Error in completion handler", t);
 						}
 					}
 				}.submit();
@@ -94,16 +96,14 @@ public class Result<V> implements IResult<V>{
 		}
 		
 		if (_successHandlers != null && _success) {
-			for (final IResultHandler handler:_successHandlers.keySet()) {
+			for (final IResultHandler handler:_successHandlers) {
 				new ContrailAction() {
 					@Override protected void action() throws Exception {
-						Result<Void> handlerResult= _successHandlers.get(handler);
 						try {
-							handler.complete(Result.this);
-							handlerResult.success(null);
+							handler.onComplete(Result.this);
 						}
 						catch (Throwable t) {
-							handlerResult.error(t);
+							Logging.warning("Error in success handler", t);
 						}
 					}
 				}.submit();
@@ -116,7 +116,7 @@ public class Result<V> implements IResult<V>{
 				new ContrailAction() {
 					@Override protected void action() throws Exception {
 						try {
-							handler.complete(Result.this);
+							handler.onComplete(Result.this);
 						}
 						catch (Throwable t) {
 							Logging.warning("Error in error handler", t);
@@ -156,22 +156,21 @@ public class Result<V> implements IResult<V>{
 	}
 
 	@Override
-	synchronized public IResult<Void> onComplete(IResultHandler<V> handler) {
+	synchronized public void onComplete(IResultHandler<V> handler) {
 		Result<Void> result= new Result<Void>();
 		if (_done) {
 			try {
-				handler.complete(this);
+				handler.onComplete(this);
 				result.success(null);
 			}
 			catch (Throwable t) {
 				result.error(t);
 			}
-			return result;
+			return;
 		}
 		if (_completedHandlers == null)
-			_completedHandlers= new HashMap<IResultHandler, Result>();
-		_completedHandlers.put(handler, result);
-		return result;
+			_completedHandlers= new ArrayList<IResultHandler>();
+		_completedHandlers.add(handler);
 	}
 
 	@Override
@@ -181,23 +180,22 @@ public class Result<V> implements IResult<V>{
 
 
 	@Override
-	public IResult<Void> onSuccess(IResultHandler<V> handler) {
+	public void onSuccess(IResultHandler<V> handler) {
 		Result<Void> result= new Result<Void>();
 		if (_done) {
 			try {
 				if (_success)
-					handler.complete(this);
+					handler.onComplete(this);
 				result.success(null);
 			}
 			catch (Throwable t) {
 				result.error(t);
 			}
-			return result;
+			return;
 		}
 		if (_successHandlers == null)
-			_successHandlers= new HashMap<IResultHandler, Result>();
-		_successHandlers.put(handler, result);
-		return result;
+			_successHandlers= new ArrayList<IResultHandler>();
+		_successHandlers.add(handler);
 	}
 
 
@@ -206,7 +204,7 @@ public class Result<V> implements IResult<V>{
 		if (_done) {
 			if (!_success && !_cancelled) {
 				try {
-					handler.complete(this);
+					handler.onComplete(this);
 				}
 				catch (Throwable t) {
 					Logging.warning("Error in error handler", t);

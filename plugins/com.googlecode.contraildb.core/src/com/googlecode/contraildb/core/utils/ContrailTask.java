@@ -5,12 +5,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.CancellationException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 
 
@@ -150,20 +148,7 @@ abstract public class ContrailTask<T> {
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
 	private volatile List<ContrailTask<?>> _pendingTasks;
-	private final Result<T> _result= new Result<T>() {
-		public T get() {
-			while (!_done) {
-				ContrailTask currentTask= getContrailTask();
-				if (currentTask != null) {
-					currentTask.yield(100);
-				}
-				else
-					return super.get();
-			}
-			
-			return super.get();
-		}
-	}; 
+	private final Result<T> _result= new Result<T>(); 
 	
 	
 	public ContrailTask(Identifier id, Operation operation) {
@@ -219,10 +204,9 @@ abstract public class ContrailTask<T> {
 		done(true);
 	}
 	protected void setResult(IResult<T> result) {
-		result.onComplete(new IResultHandler<T>() {
-			@Override
-			public void complete(IResult<T> result) {
-				success(result.getResult());
+		result.onComplete(new ResultHandler() {
+			public void onComplete() {
+				success((T)incoming().getResult());
 			}
 		});
 	}
