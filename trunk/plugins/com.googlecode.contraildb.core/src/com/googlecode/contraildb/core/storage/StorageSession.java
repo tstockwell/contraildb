@@ -18,6 +18,7 @@ import com.googlecode.contraildb.core.impl.PathUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.ResultHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -30,6 +31,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  *  
  * @author ted stockwell
  */
+@SuppressWarnings({"unchecked","rawtypes"})
 public class StorageSession implements IEntityStorage.Session {
 	
 	private static final String CONTRAIL_FOLDER = ".contrail";
@@ -111,23 +113,21 @@ public class StorageSession implements IEntityStorage.Session {
 	 * No other methods may be invoked after invoking this method (except the 
 	 * close method, but calling the close method is not necessary after calling this method).
 	 * 
-	 * @throws ConflictingCommitException when a potentially conficting change has been comitted to the database by another process.
+	 * @throws ConflictingCommitException when a potentially conflicting change has been committed to the database by another process.
 	 * When this exception is throw the caller should open a new session and retry the transaction. 
 	 * @throws IOException 
 	 */
-	public void commit() throws ConflictingCommitException, IOException {
-		try {
-			_storage.flush();
-		}
-		finally {
-			try {
-				_storageSystem.commitRevision(this);
-			}
-			finally {
-				_isActive= false;
-				_deletes= _reads= _inserts= _updates= null;
-			}
-		}
+	public IResult<Void> commit() { 
+		return new ResultHandler(_storage.flush()) {
+			protected IResult onSuccess() {
+				spawnChild(new ResultHandler(_storageSystem.commitRevision(this)) {
+					protected void onComplete() throws Exception {
+						_isActive= false;
+						_deletes= _reads= _inserts= _updates= null;
+					};
+				}.toResult());
+			};
+		}.toResult();
 	}
 
 	/**
@@ -139,67 +139,82 @@ public class StorageSession implements IEntityStorage.Session {
 	 * @throws ConflictingCommitException when a potentially conflicting change has been committed to the database by another process.
 	 * When this exception is throw the caller should open a new session and retry the transaction. 
 	 */
-	synchronized public void close() throws IOException {
-		if (!_isActive)
-			return;
-		try {
-			flush();
-		}
-		finally {
-			try {
-				_storage.close(); 
-			} 
-			finally {
-				try {
-					_storageSystem.closeStorageSession(this);
-				}
-				finally {
-					_isActive= false;
-				}
+	synchronized public IResult<Void> close() {
+		return new ResultHandler(_isActive ? flush() : TaskUtils.SUCCESS) {
+			protected void onComplete() throws Exception {
+				spawnChild(new ResultHandler(_storage.close()) {
+					protected void onComplete() throws Exception {
+						spawnChild(_storageSystem.closeStorageSession(this));
+						_isActive= false;
+					}
+				}.toResult());
 			}
-		}
+		}.toResult();
 	}
 
 
-	public <E extends IEntity> void store(E entity) {
-		if (_mode == Mode.READONLY)
-			throw new ContrailException("Session is read only: "+_revisionNumber);
-		
-		// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
-		Identifier originalPath= entity.getId();
-		_storage.store(originalPath, new Entity(originalPath));
-		
-		Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
-		_storage.store(contrailFolder, new Entity(contrailFolder));
-		
-		// we then insert revisions as children
-		Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
-		_storage.store(revisionPath, entity);
-	}
-	
-	public void update(Identifier path, IEntity item) throws IOException {
-		if (_mode == Mode.READONLY)
-			throw new ContrailException("Revision is read only: "+_revisionNumber);
-
-		// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
-		Identifier originalPath= item.getId();
-		Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
-		Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
-		_storage.store(revisionPath, item);
+	public <E extends IEntity> IResult<Void> store(final E entity) {
+		return new ResultHandler() {
+			protected IResult onSuccess() throws Exception {
+				if (_mode == Mode.READONLY)
+					throw new ContrailException("Session is read only: "+_revisionNumber);
+				
+				// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
+				Identifier originalPath= entity.getId();
+				spawnChild(_storage.store(originalPath, new Entity(originalPath)));
+				
+				Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
+				spawnChild(_storage.store(contrailFolder, new Entity(contrailFolder)));
+				
+				// we then insert revisions as children
+				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
+				spawnChild(_storage.store(revisionPath, entity));
+				
+				return TaskUtils.SUCCESS;
+			}
+		}.toResult();
 	}
 	
-	public void deleteAllChildren(Collection<Identifier> paths) throws IOException {
-		if (_mode == Mode.READONLY)
-			throw new ContrailException("Revision is read only: "+_revisionNumber);
-		
-		ArrayList<IResult<Collection<Identifier>>> childrens= new ArrayList<IResult<Collection<Identifier>>>(); 
-		for (Identifier path: paths) 
-			childrens.add(listChildren(path));
-		for (IResult<Collection<Identifier>> result: childrens) {
-			Collection<Identifier> children= result.get();
-			for (Identifier child: children)
-				delete(child);
-		}
+	public IResult<Void> update(final Identifier path, final IEntity item) throws IOException {
+		return new ResultHandler() {
+			protected IResult onSuccess() throws Exception {
+				if (_mode == Mode.READONLY)
+					throw new ContrailException("Revision is read only: "+_revisionNumber);
+
+				// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
+				Identifier originalPath= item.getId();
+				Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
+				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
+				spawnChild(_storage.store(revisionPath, item));
+				
+				return TaskUtils.SUCCESS;
+			}
+		}.toResult();
+	}
+	
+	public IResult<Void> deleteAllChildren(final Collection<Identifier> paths) throws IOException {
+		return new ResultHandler() {
+			protected IResult onSuccess() throws Exception {
+				if (_mode == Mode.READONLY)
+					throw new ContrailException("Revision is read only: "+_revisionNumber);
+				
+				final ArrayList<IResult<Collection<Identifier>>> childrens= new ArrayList<IResult<Collection<Identifier>>>(); 
+				for (Identifier path: paths) 
+					childrens.add(listChildren(path));
+				spawnChild(new ResultHandler(TaskUtils.combineResults(childrens)) {
+					protected IResult onSuccess() throws Exception {
+						for (IResult<Collection<Identifier>> result: childrens) {
+							Collection<Identifier> children= result.getResult();
+							for (Identifier child: children)
+								spawnChild(delete(child));
+						}
+						return TaskUtils.SUCCESS;
+					};
+				});
+				
+				return TaskUtils.SUCCESS;
+			}
+		}.toResult();
 	}
 
 	public void delete(Identifier  path) {
@@ -311,7 +326,7 @@ public class StorageSession implements IEntityStorage.Session {
 		}.submit();
 	}
 
-	public void flush() throws IOException {
+	public IResult<Void> flush() throws IOException {
 		try {
 			_storage.flush();
 		}

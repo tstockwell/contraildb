@@ -4,25 +4,20 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
-import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.Result;
 import com.googlecode.contraildb.core.utils.ResultHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
 
 
@@ -71,11 +66,24 @@ public class ObjectStorage {
 		_storageProvider= storageProvider;
 	}
 
-	public Session connect() throws IOException {
-		return new Session(_tracker.beginSession(), _storageProvider.connect());
+	public IResult<Session> connect() throws IOException {
+		return new ResultHandler(_storageProvider.connect()) {
+			protected IResult onSuccess() throws Exception {
+				IStorageProvider.Session session= (IStorageProvider.Session) incoming().getResult();
+				return TaskUtils.asResult(
+						new Session(_tracker.beginSession(), session));
+			};
+		}.toResult();
 	}
-	public Session connect(EntityStorage.Session entitySession) throws IOException {
-		return new Session(_tracker.beginSession(), _storageProvider.connect(), entitySession);
+	
+	public IResult<Session> connect(final EntityStorage.Session entitySession) {
+		return new ResultHandler(_storageProvider.connect()) {
+			protected IResult onSuccess() throws Exception {
+				IStorageProvider.Session session= (IStorageProvider.Session) incoming().getResult();
+				return TaskUtils.asResult(
+						new Session(_tracker.beginSession(), session, entitySession));
+			};
+		}.toResult();
 	}
 	public IStorageProvider getStorageProvider() {
 		return _storageProvider;
@@ -96,23 +104,24 @@ public class ObjectStorage {
 			_storageSession= storageProvider;
 			_outerStorage= outerStorage; 
 		}
-		public <T extends Serializable> void store(final Identifier identifier, final T item) 
+		public <T extends Serializable> IResult<Void> store(final Identifier identifier, final T item) 
 		{
 			final IResult<byte[]>  serializeTask= new ExternalizationTask(item).submit();
 
 			final ILifecycle lifecycle= (item instanceof ILifecycle) ? (ILifecycle)item : null;
 			if (lifecycle != null)
 				lifecycle.setStorage(_outerStorage);
-
-			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void action() throws IOException {
-					_cache.store(identifier, item);
+			
+			_cache.store(identifier, item);
+			
+			return new ResultHandler() {
+				protected IResult onSuccess() throws Exception {
 					if (lifecycle != null)
-						lifecycle.onInsert(identifier);
-					_storageSession.store(identifier, serializeTask);
-
+						spawnChild(lifecycle.onInsert(identifier));
+					spawnChild(_storageSession.store(identifier, serializeTask));
+					return TaskUtils.SUCCESS;
 				}
-			});
+			}.toResult();
 		}
 
 		public IResult<Void> delete(final Identifier path) {
@@ -193,79 +202,85 @@ public class ObjectStorage {
 
 		public IResult<Collection<Identifier>> listChildren(final Identifier path)
 		{
-			return _trackerSession.submit(new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected Collection<Identifier> run() {
-					return _storageSession.listChildren(path).get();
-				}
-			});
+			return _storageSession.listChildren(path);
 		}
 		
 		public IResult<Void> flush() {
 			return new ResultHandler(_trackerSession.complete()) {
-				public void complete(IResult<Void> result) {
+				protected IResult onSuccess() throws Exception {
 					spawnChild(_storageSession.flush());
+					return TaskUtils.SUCCESS;
 				}
 			}.toResult();
 		}
 		
-		public void close() throws IOException {
-			flush();
-			try { _trackerSession.close().get(); } catch (Throwable t) { Logging.warning(t); }
-			try { _storageSession.close().get(); } catch (Throwable t) {  Logging.warning(t); }
-			_trackerSession= null;
-			_storageSession= null;
-			_outerStorage= null;
+		public IResult<Void> close() {
+			return new ResultHandler(flush()) {
+				protected IResult onSuccess() throws Exception {
+					spawnChild(new ResultHandler(_trackerSession.close()) {
+						protected IResult onSuccess() throws Exception {
+							spawnChild(new ResultHandler(_storageSession.close()) {
+								protected IResult onSuccess() throws Exception {
+									_trackerSession= null;
+									_storageSession= null;
+									_outerStorage= null;
+									return TaskUtils.SUCCESS;
+								};
+							});
+							return TaskUtils.SUCCESS;
+						};
+					});
+					return TaskUtils.SUCCESS;
+				};
+			}.toResult();
 		}
 		
 		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
 		{
-			ContrailTask<Boolean> action= new ContrailTask<Boolean>(identifier, Operation.CREATE) {
-				protected Boolean run() throws IOException {
-
-					IResult<byte[]> serializeTask= new ExternalizationTask(item).submit();
-
-					boolean created= false;
-					IResult<Boolean> result= _storageSession.create(identifier, serializeTask, waitMillis);
-					if (result.get()) {
-						boolean isStorable= item instanceof ILifecycle;
-						if (isStorable)
-							((ILifecycle)item).setStorage(_outerStorage);
-						_cache.store(identifier, item);
-						if (isStorable) 
-							((ILifecycle)item).onInsert(identifier);
-						created= true;
-					}
-					return created;
-				}
-			};
-			return _trackerSession.submit(action);
+			final IResult<byte[]> serializeTask= new ExternalizationTask(item).submit();
+			return new ResultHandler(_storageSession.create(identifier, serializeTask, waitMillis)) {
+				protected IResult onSuccess() throws Exception {
+					boolean isStorable= item instanceof ILifecycle;
+					if (isStorable)
+						((ILifecycle)item).setStorage(_outerStorage);
+					_cache.store(identifier, item);
+					if (isStorable) 
+						spawnChild(((ILifecycle)item).onInsert(identifier));
+					return TaskUtils.SUCCESS;
+				};
+			}.toResult();
 		}
 		
 		
-		public void delete(Identifier... paths) throws IOException {
+		public IResult<Void> delete(Identifier... paths) {
+			ArrayList<IResult> tasks= new ArrayList<IResult>();
 			for (Identifier identifier:paths)
-					delete(identifier);
+					tasks.add(delete(identifier));
+			return TaskUtils.combineResults(tasks);
 		}
 
-		public void deleteAllChildren(Identifier... paths) throws IOException {
-			deleteAllChildren(Arrays.asList(paths));
+		public IResult<Void> deleteAllChildren(Identifier... paths) {
+			return deleteAllChildren(Arrays.asList(paths));
 		}
 
-		public void deleteAllChildren(Iterable<Identifier> paths) throws IOException {
+		public IResult<Void> deleteAllChildren(Iterable<Identifier> paths) {
+			ArrayList<IResult> tasks= new ArrayList<IResult>();
 			for (Identifier identifier:paths)
 				deleteAllChildren(identifier);
+			return TaskUtils.combineResults(tasks);
 		}
 
-		public void deleteAllChildren(Identifier path) {
+		public IResult<Void> deleteAllChildren(Identifier path) {
 			final IResult<Collection<Identifier>> children= listChildren(path);
-			ContrailAction action= new ContrailAction(path, Operation.LIST) {
-				protected void action() {
+			return new ResultHandler(children) {
+				protected IResult onSuccess() throws Exception {
+					ArrayList<IResult> tasks= new ArrayList<IResult>();
 					for (Identifier identifier: children.get()) {
-						delete(identifier);
+						tasks.add(delete(identifier));
 					}
-				}
-			};
-			_trackerSession.submit(action);
+					return TaskUtils.combineResults(tasks);
+				};
+			}.toResult();
 		}
 
 

@@ -9,7 +9,8 @@ import java.util.Map;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -26,6 +27,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask;
  * 
  * @author Ted Stockwell
  */
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class EntityStorage implements IEntityStorage {
 
 	ObjectStorage _objectStorage;
@@ -34,42 +36,52 @@ public class EntityStorage implements IEntityStorage {
 		_objectStorage= new ObjectStorage(storageProvider, this);
 	}
 	
-	public IEntityStorage.Session connect() throws IOException {
-		return new Session();
+	public IResult<IEntityStorage.Session> connect() throws IOException {
+		return createSession();
 	}
 	
 	public IStorageProvider getStorageProvider() {
 		return _objectStorage.getStorageProvider();
 	}
 	
+	private IResult<IEntityStorage.Session> createSession() {
+		final Session session= new Session();
+		final IResult<ObjectStorage.Session> storageSession= _objectStorage.connect(session);
+		return new ResultHandler(storageSession) {
+			protected IResult onSuccess() throws Exception {
+				session._objectSession= storageSession.getResult();
+				return TaskUtils.asResult(session);
+			};
+		}.toResult();
+	}
 
 	public class Session implements IEntityStorage.Session {
 
 		ObjectStorage.Session _objectSession;
+		
 
-		public Session() throws IOException {
-			_objectSession= _objectStorage.connect(this);
+		private Session() {
 		}
 		
-		public void close() throws IOException {
-			_objectSession.close();
+		public IResult<Void>  close()  {
+			return _objectSession.close();
 		}
 		
-		public void delete(Identifier path) {
-			_objectSession.delete(path);
+		public IResult<Void> delete(Identifier path) {
+			return _objectSession.delete(path);
 		}
 		
-		public void delete(Entity entity) {
-			_objectSession.delete(entity.getId());
+		public IResult<Void>  delete(Entity entity) {
+			return _objectSession.delete(entity.getId());
 		}
 
-		public void deleteAllChildren(Identifier path)
+		public IResult<Void>  deleteAllChildren(Identifier path)
 		{
-			_objectSession.deleteAllChildren(path);
+			return _objectSession.deleteAllChildren(path);
 		}
 
-		public void flush() throws IOException {
-			_objectSession.flush();
+		public IResult<Void>  flush() {
+			return _objectSession.flush();
 		}
 
 		public <E extends IEntity> IResult<E> fetch(Identifier path) {
@@ -78,20 +90,20 @@ public class EntityStorage implements IEntityStorage {
 
 		public <E extends IEntity> IResult<Collection<E>> fetchChildren(final Identifier path)
 		{
-			return new ContrailTask<Collection<E>>() {
-				@SuppressWarnings("unchecked")
-				protected Collection<E> run() throws IOException {
-					Map<Identifier, Serializable> children= _objectSession.fetchChildren(path).get();
+			final IResult<Map<Identifier, Serializable>> childrenResult= _objectSession.fetchChildren(path);
+			return new ResultHandler(childrenResult) {
+				protected IResult onSuccess() throws Exception {
+					final Map<Identifier, Serializable> children= childrenResult.getResult();
 					ArrayList<E> list= new ArrayList<E>(children.size());
 					for (Serializable e:children.values())
 						list.add((E)e);
-					return list;
-				}
-			}.submit();
+					return TaskUtils.asResult(list);
+				};
+			}.toResult();
 		}
 
-		public <E extends IEntity> void store(E entity) {
-			_objectSession.store(entity.getId(), entity);
+		public <E extends IEntity> IResult<Void> store(E entity) {
+			return _objectSession.store(entity.getId(), entity);
 		}
 
 		public IResult<Collection<Identifier>> listChildren(Identifier path) 
