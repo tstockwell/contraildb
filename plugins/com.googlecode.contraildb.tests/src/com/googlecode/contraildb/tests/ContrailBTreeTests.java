@@ -39,7 +39,7 @@ import junit.framework.TestCase;
 public class ContrailBTreeTests extends TestCase {
 	
 	public void testBasics() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
 		BPlusTree<String, String> tree= BPlusTree.createInstance(storage);
 		IBTreePlusCursor<String, String> cursor= tree.cursor(Direction.FORWARD);
 		
@@ -80,7 +80,7 @@ public class ContrailBTreeTests extends TestCase {
 	}
 	
 	public void testIncreasingInserts() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
 		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
@@ -122,7 +122,7 @@ public class ContrailBTreeTests extends TestCase {
 	}
 	
 	public void testDecreasingInserts() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
 		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
@@ -163,7 +163,7 @@ public class ContrailBTreeTests extends TestCase {
 	}
 	
 	public void testIncreasingDeletes() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
 		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
@@ -200,7 +200,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	
 	public void testDecreasingDeletes() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
 		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
@@ -236,7 +236,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	
 	public void testIterators() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
 		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 		
 		for (int i= 0; i < 100; i++) {

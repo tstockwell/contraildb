@@ -61,7 +61,7 @@ public class RevisionJournal extends Entity {
 	protected RevisionJournal() { }
 
 	public boolean confictsWith(RevisionJournal journal) {
-		// The revision associated wit this journal was committed before the 
+		// The revision associated with this journal was committed before the 
 		// revision associated with the give journal, check for conflicting changes.
 
 		if (journal.reads.isEmpty())

@@ -70,24 +70,24 @@ public class Entity implements IEntity, ILifecycle {
 	}
 	
 
-	public IResult<Collection<Identifier>> listChildren() throws IOException {
+	public IResult<Collection<Identifier>> listChildren() {
 		return storage.listChildren(id);
 	}
 	
-	public IResult<Collection<Entity>> getChildren() throws IOException {
+	public IResult<Collection<Entity>> getChildren() {
 		return storage.fetchChildren(id);
 	}
 	
-	public void delete() throws IOException {
-		storage.delete(getId());
+	public IResult<Void> delete() {
+		return storage.delete(getId());
 	}
 	
-	public void deleteAllChildren() throws IOException {
-		storage.deleteAllChildren(id);
+	public IResult<Void> deleteAllChildren()  {
+		return storage.deleteAllChildren(id);
 	}
 	
-	public void update() throws IOException {
-		storage.store(this);
+	public IResult<Void> update() {
+		return storage.store(this);
 	}
 	
 	
@@ -100,19 +100,19 @@ public class Entity implements IEntity, ILifecycle {
 	public IResult<Void> onDelete()
 	{
 		// do nothing
-		return TaskUtils.SUCCESS;
+		return TaskUtils.DONE;
 	}
 	@Override
 	public IResult<Void> onInsert(Identifier identifier)
 	{
 		// do nothing
-		return TaskUtils.SUCCESS;
+		return TaskUtils.DONE;
 	}
 	@Override
 	public IResult<Void> onLoad(Identifier identifier)
 	{
 		// do nothing
-		return TaskUtils.SUCCESS;
+		return TaskUtils.DONE;
 	}
 
 
