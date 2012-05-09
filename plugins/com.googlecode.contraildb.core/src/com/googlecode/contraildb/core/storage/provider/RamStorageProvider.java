@@ -20,8 +20,8 @@ public class RamStorageProvider extends AbstractStorageProvider {
 	IdentifierIndexedStorage<byte[]> _storage= new IdentifierIndexedStorage<byte[]>(); 
 	
 	@Override
-	public com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException {
-		return new RamStorageSession();
+	public IResult<IStorageProvider.Session> connect() throws IOException {
+		return TaskUtils.asResult(new RamStorageSession());
 	}
 	
 	private class RamStorageSession 

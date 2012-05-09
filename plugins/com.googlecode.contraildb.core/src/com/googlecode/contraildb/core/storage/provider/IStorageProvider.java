@@ -32,7 +32,7 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException;
+	IResult<Session> connect();
 	
 	
 	static public interface Session {
@@ -83,7 +83,7 @@ public interface IStorageProvider {
 		/**
 		 * Flush any pending changes made by this session to physical storage.
 		 */
-		public IResult<Void> flush() throws IOException;
+		public IResult<Void> flush();
 
 
 	}

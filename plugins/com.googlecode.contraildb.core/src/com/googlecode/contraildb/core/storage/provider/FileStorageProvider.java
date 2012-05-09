@@ -97,8 +97,8 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	}
 	
 	@Override
-	public Session connect() throws IOException {
-		return new FileStorageSession();
+	public IResult<IStorageProvider.Session> connect() throws IOException {
+		return TaskUtils.asResult(new FileStorageSession());
 	}
 	
 	
