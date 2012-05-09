@@ -9,7 +9,10 @@ import com.googlecode.contraildb.core.IResultHandler;
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class TaskUtils {
 	
-	public static final IResult<Void> SUCCESS= asResult(null); 
+	public static final IResult<Void> DONE= asResult(null); 
+	public static final IResult<Boolean> SUCCESS= asResult(true); 
+	public static final IResult<Boolean> FAIL= asResult(false); 
+	public static final IResult NULL= asResult(null); 
 	
 	
 	
@@ -19,7 +22,7 @@ public class TaskUtils {
 	 */
 	public static final <T extends IResult<?>> IResult<Void> combineResults(Collection<T> tasks) {
 		if (tasks == null || tasks.isEmpty())
-			return SUCCESS;
+			return DONE;
 		final Result<Void> result= new Result<Void>();
 		final int[] count= new int[] { tasks.size() };
 		final IResult[] error= new IResult[] { null };
@@ -45,7 +48,7 @@ public class TaskUtils {
 	} 
 	public static final <T extends IResult<?>> IResult<Void> combineResults(T... tasks) {
 		if (tasks == null || tasks.length <= 0)
-			return SUCCESS;
+			return DONE;
 		if (tasks.length <= 1)
 			return (IResult<Void>) tasks[0];
 		return combineResults(Arrays.asList(tasks));

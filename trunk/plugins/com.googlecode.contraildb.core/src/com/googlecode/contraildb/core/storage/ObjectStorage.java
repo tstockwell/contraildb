@@ -119,7 +119,7 @@ public class ObjectStorage {
 					if (lifecycle != null)
 						spawnChild(lifecycle.onInsert(identifier));
 					spawnChild(_storageSession.store(identifier, serializeTask));
-					return TaskUtils.SUCCESS;
+					return TaskUtils.DONE;
 				}
 			}.toResult();
 		}
@@ -191,7 +191,7 @@ public class ObjectStorage {
 						spawnChild(new ResultHandler(readStorable(childId, fetched.get(childId))) {
 							protected IResult onSuccess() throws Exception {
 								results.put(childId, incoming().getResult());
-								return TaskUtils.SUCCESS;
+								return TaskUtils.DONE;
 							}
 						});
 					}
@@ -209,7 +209,7 @@ public class ObjectStorage {
 			return new ResultHandler(_trackerSession.complete()) {
 				protected IResult onSuccess() throws Exception {
 					spawnChild(_storageSession.flush());
-					return TaskUtils.SUCCESS;
+					return TaskUtils.DONE;
 				}
 			}.toResult();
 		}
@@ -224,13 +224,13 @@ public class ObjectStorage {
 									_trackerSession= null;
 									_storageSession= null;
 									_outerStorage= null;
-									return TaskUtils.SUCCESS;
+									return TaskUtils.DONE;
 								};
 							});
-							return TaskUtils.SUCCESS;
+							return TaskUtils.DONE;
 						};
 					});
-					return TaskUtils.SUCCESS;
+					return TaskUtils.DONE;
 				};
 			}.toResult();
 		}
@@ -246,7 +246,7 @@ public class ObjectStorage {
 					_cache.store(identifier, item);
 					if (isStorable) 
 						spawnChild(((ILifecycle)item).onInsert(identifier));
-					return TaskUtils.SUCCESS;
+					return TaskUtils.DONE;
 				};
 			}.toResult();
 		}

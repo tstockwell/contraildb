@@ -16,6 +16,7 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.ResultHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
@@ -60,7 +61,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
  *  
  * @author Ted Stockwell
  */
-@SuppressWarnings("rawtypes")
+@SuppressWarnings({"rawtypes","unchecked"})
 public class StorageSystem {
 	
 
@@ -75,18 +76,33 @@ public class StorageSystem {
 	ContrailTaskTracker _tracker= new ContrailTaskTracker();
 	ContrailTaskTracker.Session _trackerSession= _tracker.beginSession();
 
-
-	public StorageSystem(IStorageProvider rawStorage) 
-	throws IOException 
+	public static IResult<StorageSystem> create(IStorageProvider rawStorage) 
 	{
-		_entityStorage= new EntityStorage(rawStorage);
-		_entitySession= _entityStorage.connect();
-		Identifier rootId= Identifier.create("net/sf/contrail/core/storage/rootFolder");
-		_root= StorageUtils.syncFetch(_entitySession, rootId);
-		if (_root == null) {
-			_entitySession.store(_root= new RootFolder(rootId));
-			_entitySession.flush();
-		}
+		final StorageSystem storageSystem= new StorageSystem();
+		storageSystem._entityStorage= new EntityStorage(rawStorage);
+		final IResult<IEntityStorage.Session> entityStorageConnect= storageSystem._entityStorage.connect();
+		return new ResultHandler(entityStorageConnect) {
+			protected IResult onSuccess() throws Exception {
+				storageSystem._entitySession= entityStorageConnect.getResult();
+				final Identifier rootId= Identifier.create("net/sf/contrail/core/storage/rootFolder");
+				final IResult<RootFolder> fetchRoot= storageSystem._entitySession.fetch(rootId);
+				spawnChild(new ResultHandler(fetchRoot) {
+					protected IResult onSuccess() throws Exception {
+						storageSystem._root= fetchRoot.getResult();
+						if (storageSystem._root == null) {
+							spawnChild(storageSystem._entitySession.store(storageSystem._root= new RootFolder(rootId)));
+							spawnChild(storageSystem._entitySession.flush());
+						}
+						return TaskUtils.DONE;
+					};
+				}.toResult());
+				
+				return TaskUtils.asResult(storageSystem);
+			};
+		}.toResult();
+	}
+	
+	private StorageSystem() {
 	}
 	
 	/**
@@ -104,7 +120,7 @@ public class StorageSystem {
 	 * When a readwrite session is started the session will be associated with a new revision of the database.
 	 * When a readonly session is started the session will be associated with the last committed database revision. 
 	 */
-	public IResult<Void> beginSession(Mode mode) throws IOException, ContrailException {
+	public IResult<StorageSession> beginSession(Mode mode) throws IOException, ContrailException {
 
 		String sessionId= "session."+UUID.randomUUID().toString();
 		StorageSession storageSession;

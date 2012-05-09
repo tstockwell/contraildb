@@ -1,6 +1,5 @@
 package com.googlecode.contraildb.core.storage;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,7 +35,7 @@ public class EntityStorage implements IEntityStorage {
 		_objectStorage= new ObjectStorage(storageProvider, this);
 	}
 	
-	public IResult<IEntityStorage.Session> connect() throws IOException {
+	public IResult<IEntityStorage.Session> connect() {
 		return createSession();
 	}
 	

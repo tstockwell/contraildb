@@ -69,9 +69,9 @@ public class StorageSession implements IEntityStorage.Session {
 		/*
 		 * Ok, I guess the next line requires some explanation (and of course if it requires so much explanation then 
 		 * it's not good code, but I'm not ready to clean this up)...
-		 * I need an ObjectStore session (cause this class needs to save entities under an ID other than the Entitie's ID) 
+		 * I need an ObjectStore session (cause this class needs to save entities under an ID other than the Entity's ID) 
 		 * but I also want all StorageSessions from the same StorageService to share the same cache.
-		 * So... here I create an entity session from the StorageService's EntityStore and then use the EnitySession's 
+		 * So... here I create an entity session from the StorageService's EntityStore and then use the EntitySession's 
 		 * embedded ObjectStore.Session. 
 		 */
 		_storage= ((EntityStorage.Session)((EntityStorage)storageSystem._entityStorage).connect())._objectSession;
@@ -120,11 +120,11 @@ public class StorageSession implements IEntityStorage.Session {
 	public IResult<Void> commit() { 
 		return new ResultHandler(_storage.flush()) {
 			protected IResult onSuccess() {
-				spawnChild(new ResultHandler(_storageSystem.commitRevision(this)) {
+				spawnChild(new ResultHandler(_storageSystem.commitRevision(StorageSession.this)) {
 					protected void onComplete() throws Exception {
 						_isActive= false;
 						_deletes= _reads= _inserts= _updates= null;
-					};
+					}
 				}.toResult());
 			};
 		}.toResult();
@@ -140,11 +140,11 @@ public class StorageSession implements IEntityStorage.Session {
 	 * When this exception is throw the caller should open a new session and retry the transaction. 
 	 */
 	synchronized public IResult<Void> close() {
-		return new ResultHandler(_isActive ? flush() : TaskUtils.SUCCESS) {
+		return new ResultHandler(_isActive ? flush() : TaskUtils.DONE) {
 			protected void onComplete() throws Exception {
 				spawnChild(new ResultHandler(_storage.close()) {
 					protected void onComplete() throws Exception {
-						spawnChild(_storageSystem.closeStorageSession(this));
+						spawnChild(_storageSystem.closeStorageSession(StorageSession.this));
 						_isActive= false;
 					}
 				}.toResult());
@@ -170,7 +170,7 @@ public class StorageSession implements IEntityStorage.Session {
 				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
 				spawnChild(_storage.store(revisionPath, entity));
 				
-				return TaskUtils.SUCCESS;
+				return TaskUtils.DONE;
 			}
 		}.toResult();
 	}
@@ -187,7 +187,7 @@ public class StorageSession implements IEntityStorage.Session {
 				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
 				spawnChild(_storage.store(revisionPath, item));
 				
-				return TaskUtils.SUCCESS;
+				return TaskUtils.DONE;
 			}
 		}.toResult();
 	}
@@ -208,22 +208,27 @@ public class StorageSession implements IEntityStorage.Session {
 							for (Identifier child: children)
 								spawnChild(delete(child));
 						}
-						return TaskUtils.SUCCESS;
+						return TaskUtils.DONE;
 					};
 				});
 				
-				return TaskUtils.SUCCESS;
+				return TaskUtils.DONE;
 			}
 		}.toResult();
 	}
 
-	public void delete(Identifier  path) {
-		if (_mode == Mode.READONLY)
-			throw new ContrailException("Revision is read only: "+_revisionNumber);
+	public IResult<Void> delete(final Identifier  path) {
+		return new ResultHandler() {
+			protected IResult onSuccess() throws Exception {
+				if (_mode == Mode.READONLY)
+					throw new ContrailException("Revision is read only: "+_revisionNumber);
 
-		Identifier contrailFolder= Identifier.create(path, CONTRAIL_FOLDER);
-		Identifier revisionPath= Identifier.create(contrailFolder, "delete-"+_revisionNumber);
-		_storage.store(revisionPath, new Entity(revisionPath));
+				Identifier contrailFolder= Identifier.create(path, CONTRAIL_FOLDER);
+				Identifier revisionPath= Identifier.create(contrailFolder, "delete-"+_revisionNumber);
+				spawnChild(_storage.store(revisionPath, new Entity(revisionPath)));
+				return TaskUtils.SUCCESS;
+			};
+		}.toResult();
 	}
 
 
@@ -326,13 +331,8 @@ public class StorageSession implements IEntityStorage.Session {
 		}.submit();
 	}
 
-	public IResult<Void> flush() throws IOException {
-		try {
-			_storage.flush();
-		}
-		catch (Throwable t) {
-			TaskUtils.throwSomething(t, IOException.class);
-		}
+	public IResult<Void> flush()  {
+		return _storage.flush();
 	}
 
 	@Override
@@ -341,12 +341,22 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 	@Override
-	public void deleteAllChildren(Identifier path) {
-		if (_mode == Mode.READONLY)
-			throw new ContrailException("Revision is read only: "+_revisionNumber);
-		
-		IResult<Collection<Identifier>> children= listChildren(path);
-		for (Identifier child: children.get())
-			delete(child);
+	public IResult<Void> deleteAllChildren(final Identifier path) {
+		return new ResultHandler() {
+			protected IResult onSuccess() throws Exception {
+				if (_mode == Mode.READONLY)
+					throw new ContrailException("Revision is read only: "+_revisionNumber);
+				
+				final IResult<Collection<Identifier>> children= listChildren(path);
+				spawnChild(new ResultHandler(children) {
+					protected IResult onSuccess() throws Exception {
+						for (Identifier child: children.getResult())
+							spawnChild(delete(child));
+						return TaskUtils.SUCCESS;
+					}
+				}.toResult());
+				return TaskUtils.SUCCESS;
+			};
+		}.toResult();
 	}
 }

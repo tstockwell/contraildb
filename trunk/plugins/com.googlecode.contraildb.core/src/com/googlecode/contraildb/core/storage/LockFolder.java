@@ -7,9 +7,10 @@ import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Magic;
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
+import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -18,6 +19,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
  * This class uses a home-grown consensus algorithm which enables remote processes 
  * to decide among themselves who gets the lock.
  */
+@SuppressWarnings({ "unchecked", "rawtypes" })
 public class LockFolder extends Entity {
 	private static final long serialVersionUID = 1L;
 	
@@ -77,46 +79,50 @@ public class LockFolder extends Entity {
 	 * @return true if the process was awarded the lock   
 	 * @throws IOException 
 	 */
-	public boolean lock(String processId, boolean waitForNext) 
-	throws IOException
+	public IResult<Boolean> lock(final String processId, final boolean waitForNext) 
 	{
-		Lock lock= new Lock(id, processId);
-		long waitMillis= waitForNext? Magic.SESSION_MAX_MILLIS+1000 : 0;
-		IResult<Boolean> result= storage.create(lock, waitMillis);
-		if (result.get()) {
-			return true;
-		}
-		else if (waitForNext) {
-			// break existing lock
-			storage.delete(lock.getId());
-			if (storage.create(lock, waitMillis).get()) {
-				return true;
-			}
-			else
-				throw new ContrailException("Database is locked, waitMillis="+waitMillis);
-		}
-		return false;
+		final Lock lock= new Lock(id, processId);
+		final long waitMillis= waitForNext? Magic.SESSION_MAX_MILLIS+1000 : 0;
+		final IResult<Boolean> result= storage.create(lock, waitMillis);
+		return new ResultHandler(result) {
+			protected IResult onSuccess() throws Exception {
+				if (result.getResult()) {
+					return TaskUtils.SUCCESS;
+				}
+				else if (waitForNext) {
+					// break existing lock
+					storage.delete(lock.getId());
+					if (storage.create(lock, waitMillis).get()) {
+						return TaskUtils.SUCCESS;
+					}
+					else
+						throw new ContrailException("Database is locked, waitMillis="+waitMillis);
+				}
+				return TaskUtils.FAIL;
+			};
+		}.toResult();
 	}
 
 
-	public void unlock(final String processId)  
+	public IResult<Void> unlock(final String processId)  
 	{
 		final Identifier lockId= Identifier.create(id, "lock");
 		final IResult<Lock> lockResult= storage.fetch(lockId);
-		new ContrailAction() {
-			protected void action() {
+		return new ResultHandler(lockResult) {
+			protected IResult onSuccess() throws Exception {
 				try {
-					Lock lock= lockResult.get();
+					Lock lock= lockResult.getResult();
 					if (lock == null || !lock.processId.equals(processId))
 						throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
-					storage.delete(lock.getId());
-					storage.flush();
+					spawnChild(storage.delete(lock.getId()));
+					spawnChild(storage.flush());
 				} 
 				catch (Throwable e) {
 					Logging.warning("Error while unlocking folder "+lockId, e);
 				}
-			}
-		}.submit();
+				return TaskUtils.DONE;
+			};
+		}.toResult();
 	}
 	
 

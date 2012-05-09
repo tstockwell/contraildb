@@ -216,7 +216,7 @@ implements IContrailSession
 	}
 
 	@Override
-	public <T extends Item> void store(Iterable<T> entities) throws IOException {
+	public <T extends Item> IResult<Void> store(Iterable<T> entities) throws IOException {
 		if (_storageSession == null)
 			throw new SessionAlreadyClosedException();
 

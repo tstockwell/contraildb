@@ -43,7 +43,7 @@ implements IStorageProvider
 		
 
 		@Override
-		public IResult<Void> flush() throws IOException {
+		public IResult<Void> flush() {
 			return new ResultHandler(_trackerSession.complete()) {
 				protected void onComplete() throws Exception {
 					spawnChild(doFlush());

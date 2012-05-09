@@ -75,7 +75,7 @@ public class ResultHandler<I,O> implements IResultHandler<I> {
 	}
 	
 	protected void onComplete() throws Exception { }
-	protected IResult<O> onSuccess() throws Exception { return null; }
+	protected IResult<O> onSuccess() throws Exception { return TaskUtils.NULL; }
 	protected void onError() { }
 	protected void onCancelled() { }
 	

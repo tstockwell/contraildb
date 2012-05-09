@@ -70,7 +70,7 @@ public class ContrailStorageTests extends TestCase {
 
 		_rawStorage= new RamStorageProvider();
 		//_rawStorage= new FileStorageProvider(new File("/temp/test/contrail"), true);
-		_storage= new StorageSystem(_rawStorage);
+		_storage= StorageSystem.create(_rawStorage).get();
 	}
 	
 	@Override
@@ -102,7 +102,7 @@ public class ContrailStorageTests extends TestCase {
 		
 		for (int f= 0; f < 10; f++) {			
 			Identifier identifier= Identifier.create("file-"+f);
-			IStorageProvider.Session session= _rawStorage.connect();
+			IStorageProvider.Session session= _rawStorage.connect().get();
 			assertNotNull(session);
 			IResult<Boolean> result= session.create(identifier, content, Integer.MAX_VALUE);
 			assertNotNull(result);
@@ -116,7 +116,7 @@ public class ContrailStorageTests extends TestCase {
 	public void testObjectStorage() throws Exception {
 		for (int i= 0; i < 100; i++) {
 			IEntityStorage.Session storage= 
-					new EntityStorage(_storage.getStorageProvider()).connect();
+					new EntityStorage(_storage.getStorageProvider()).connect().get();
 
 			Entity object= new Entity("person-"+i);
 			storage.store(object);
@@ -128,7 +128,7 @@ public class ContrailStorageTests extends TestCase {
 	public void testFetchObjectStore() throws Exception {
 		
 		for (int i= 1; i <= 100; i++) {
-			ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect();
+			ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect().get();
 			Identifier entity= Identifier.create("person-"+i);
 			objectStorage.store(entity, entity);
 			if (objectStorage.fetch(entity) == null) 
@@ -141,7 +141,7 @@ public class ContrailStorageTests extends TestCase {
 	public void testEntityStore() throws Exception {
 		
 		for (int i= 1; i <= 100; i++) {
-			IEntityStorage.Session objectStorage= new EntityStorage(_rawStorage).connect();
+			IEntityStorage.Session objectStorage= new EntityStorage(_rawStorage).connect().get();
 			Entity object= new Entity("person-"+i);
 			objectStorage.store(object);
 			if (objectStorage.fetch(object.getId()) == null) 
@@ -161,7 +161,7 @@ public class ContrailStorageTests extends TestCase {
 		// test that only thread can create the same file at a time
 		for (int f= 0; f < 10; f++) {			
 			final Identifier identifier= Identifier.create("file-"+f);
-			final IStorageProvider.Session session= _rawStorage.connect();
+			final IStorageProvider.Session session= _rawStorage.connect().get();
 			assertNotNull(session);
 			final List count= Collections.synchronizedList(new ArrayList());
 			ExecutorService executorService= Executors.newFixedThreadPool(20);
@@ -207,7 +207,7 @@ public class ContrailStorageTests extends TestCase {
 	public void testLocks() throws Throwable {
 		
 		// test that only one lock is ever granted at a time
-		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
+		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect().get();
 		for (int f= 0; f < 10; f++) {			
 			Entity rootFolder= new Entity(Identifier.create());
 			storage.store(rootFolder);
@@ -251,7 +251,7 @@ public class ContrailStorageTests extends TestCase {
 	 * threads at once.
 	 */
 	public void testConcurrentFileCreation() throws Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect();
+		final IStorageProvider.Session storage= _rawStorage.connect().get();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			ArrayList<IResult<Boolean>> results= new ArrayList<IResult<Boolean>>();
@@ -267,18 +267,18 @@ public class ContrailStorageTests extends TestCase {
 	}
 	
 	public void testBasicTransaction() throws Exception {
-			StorageSession session= _storage.beginSession(Mode.READWRITE);
+			StorageSession session= _storage.beginSession(Mode.READWRITE).get();
 			assertEquals(1, session.getRevisionNumber());
 			Entity object_0_1= new Entity("person-0.1");
 			session.store(object_0_1);
 			assertNotNull(session.fetch(object_0_1.getId()).get());
 			session.commit();
 			
-			StorageSession T1= _storage.beginSession(Mode.READWRITE);
+			StorageSession T1= _storage.beginSession(Mode.READWRITE).get();
 			assertEquals(1, T1.getStartingCommitNumber());
 			assertEquals(2, T1.getRevisionNumber());
 			assertNotNull(T1.fetch(object_0_1.getId()).get());
-			StorageSession T2= _storage.beginSession(Mode.READONLY);
+			StorageSession T2= _storage.beginSession(Mode.READONLY).get();
 			assertEquals(1, T2.getRevisionNumber());
 			
 			// TEST PUT ISOLATION
@@ -288,11 +288,11 @@ public class ContrailStorageTests extends TestCase {
 			assertNotNull(T1.fetch(object_1_1.getId()).get());
 			// object-1.1 should not be visible outside of T1 since it is not yet committed 
 			assertNull("transaction isolation violated", T2.fetch(object_1_1.getId()).get());
-			StorageSession T3= _storage.beginSession(Mode.READONLY);
+			StorageSession T3= _storage.beginSession(Mode.READONLY).get();
 			assertEquals(1, T3.getRevisionNumber());
 			assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()).get());
 			T3.close();
-			StorageSession T4= _storage.beginSession(Mode.READWRITE);
+			StorageSession T4= _storage.beginSession(Mode.READWRITE).get();
 			assertEquals(3, T4.getRevisionNumber());
 			assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()).get());
 			T4.close();
@@ -303,10 +303,10 @@ public class ContrailStorageTests extends TestCase {
 			assertNull("transaction isolation violated", T1.fetch(object_0_1.getId()).get());
 			// object-0.1 should still be visible outside of T1 since it is not yet committed 
 			assertNotNull("transaction isolation violated", T2.fetch(object_0_1.getId()).get());
-			T3= _storage.beginSession(Mode.READONLY);
+			T3= _storage.beginSession(Mode.READONLY).get();
 			assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()).get());
 			T3.close();
-			T4= _storage.beginSession(Mode.READWRITE);
+			T4= _storage.beginSession(Mode.READWRITE).get();
 			assertEquals(4, T4.getRevisionNumber());
 			assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()).get());
 			T4.close();
@@ -318,11 +318,11 @@ public class ContrailStorageTests extends TestCase {
 
 			// TEST PUT ISOLATION
 			// object-1.1 should now be visible to new transactions
-			T3= _storage.beginSession(Mode.READONLY);
+			T3= _storage.beginSession(Mode.READONLY).get();
 			assertEquals(2, T3.getRevisionNumber());
 			assertNotNull(T3.fetch(object_1_1.getId()).get());
 			T3.close();
-			T4= _storage.beginSession(Mode.READWRITE);
+			T4= _storage.beginSession(Mode.READWRITE).get();
 			assertNotNull(T4.fetch(object_1_1.getId()).get());
 			T4.close();
 			// object-1.1 should still not be visible to T2 since T2 was started before object-1.1 was committed
@@ -330,10 +330,10 @@ public class ContrailStorageTests extends TestCase {
 			
 			// TEST DELETE ISOLATION
 			// object-0.1 should not be visible to new transactions 
-			T3= _storage.beginSession(Mode.READONLY);
+			T3= _storage.beginSession(Mode.READONLY).get();
 			assertNull(T3.fetch(object_0_1.getId()).get());
 			T3.close();
-			T4= _storage.beginSession(Mode.READWRITE);
+			T4= _storage.beginSession(Mode.READWRITE).get();
 			assertNull(T4.fetch(object_0_1.getId()).get());
 			T4.close();
 			// object-0.1 should still be visible to T2 
@@ -341,14 +341,14 @@ public class ContrailStorageTests extends TestCase {
 	}
 	
 	public void testRollback() throws Exception {
-		StorageSession session= _storage.beginSession(Mode.READWRITE);
+		StorageSession session= _storage.beginSession(Mode.READWRITE).get();
 		assertEquals(1, session.getRevisionNumber());
 		Entity object_0_1= new Entity("person-0.1");
 		session.store(object_0_1);
 		session.commit();
 		session.close();
 		
-		StorageSession T1= _storage.beginSession(Mode.READWRITE);
+		StorageSession T1= _storage.beginSession(Mode.READWRITE).get();
 		
 		// put object-1.1 in transaction 1
 		Entity object_1_1= new Entity("person-1.1");
@@ -364,11 +364,11 @@ public class ContrailStorageTests extends TestCase {
 
 		// object-1.1 should not be visible 
 		// object-0.1 should still be visible 
-		StorageSession T3= _storage.beginSession(Mode.READONLY);
+		StorageSession T3= _storage.beginSession(Mode.READONLY).get();
 		assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()).get());
 		assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()).get());
 		T3.close();
-		StorageSession T4= _storage.beginSession(Mode.READWRITE);
+		StorageSession T4= _storage.beginSession(Mode.READWRITE).get();
 		assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()).get());
 		assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()).get());
 		T4.close();
@@ -378,7 +378,7 @@ public class ContrailStorageTests extends TestCase {
 	public void testFetchMultipleSessions() throws Exception {
 		
 		for (int i= 1; i <= 100; i++) {
-			StorageSession session= _storage.beginSession(Mode.READWRITE);
+			StorageSession session= _storage.beginSession(Mode.READWRITE).get();
 			Entity entity= new Entity("person-"+i);
 			session.store(entity);
 			if (session.fetch(entity.getId()) == null) 
@@ -389,7 +389,7 @@ public class ContrailStorageTests extends TestCase {
 	
 	public void testCleanup() throws Exception {
 		for (int i= 1; i <= 100; i++) {
-			StorageSession session= _storage.beginSession(Mode.READWRITE);
+			StorageSession session= _storage.beginSession(Mode.READWRITE).get();
 			Entity entity= new Entity("person-"+i);
 			session.store(entity);
 			if (session.fetch(entity.getId()) == null) 
@@ -407,7 +407,7 @@ public class ContrailStorageTests extends TestCase {
 	 */
 	public void testConcurrentObjectStoreListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
-		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect();
+		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect().get();
 		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
@@ -438,7 +438,7 @@ public class ContrailStorageTests extends TestCase {
 	 */
 	public void testConcurrentStoreAPIListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
-		final IStorageProvider.Session storage= _rawStorage.connect();
+		final IStorageProvider.Session storage= _rawStorage.connect().get();
 		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));

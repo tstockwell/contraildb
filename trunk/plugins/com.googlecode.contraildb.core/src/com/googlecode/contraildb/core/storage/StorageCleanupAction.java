@@ -6,10 +6,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.PathUtils;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -18,23 +21,39 @@ import com.googlecode.contraildb.core.utils.Logging;
  * @author Ted Stockwell
  *
  */
-public class StorageCleanupAction extends ContrailAction {
+@SuppressWarnings({ "unchecked", "rawtypes" })
+public class StorageCleanupAction {
 
 	private RootFolder _rootFolder;
 	private IEntityStorage.Session _storageSession;
 	private StorageSystem _storageSystem;
 
-	public StorageCleanupAction(StorageSystem storageSystem) 
-	throws IOException 
+	public static final IResult<StorageCleanupAction> create(final StorageSystem storageSystem) 
 	{
-		_storageSystem= storageSystem;
-		_storageSession= storageSystem._entityStorage.connect();
-		_rootFolder= (RootFolder) _storageSession.fetch(storageSystem._root.getId()).get();
+		final IResult<IEntityStorage.Session> entityStorage= storageSystem._entityStorage.connect();
+		return new ResultHandler(entityStorage) {
+			protected IResult onSuccess() throws Exception {
+				final StorageCleanupAction cleanupAction= new StorageCleanupAction();
+				cleanupAction._storageSystem= storageSystem;
+				cleanupAction._storageSession= entityStorage.getResult();
+				final IResult<RootFolder> rf= cleanupAction._storageSession.fetch(storageSystem._root.getId());
+				spawnChild(new ResultHandler(rf) {
+					protected IResult onSuccess() throws Exception {
+						cleanupAction._rootFolder= rf.get();
+						return TaskUtils.DONE;
+					};
+				}.toResult());
+				return TaskUtils.asResult(cleanupAction);
+			};
+		}.toResult();
+	}
+
+	private StorageCleanupAction() 
+	{
 	}
 
 
-	@Override
-	protected void action() throws Exception {
+	public IResult<Void> run() {
 		
 		final String sessionId= "cleanup."+UUID.randomUUID().toString();
 
@@ -110,31 +129,91 @@ public class StorageCleanupAction extends ContrailAction {
 			Logging.warning("Error while cleaning up storage", t);
 		}
 	}
+	
+	private IResult<Void> cleanupAndDeleteRevision(final RevisionFolder revision, final String sessionId) {
+		return new ResultHandler() {
+			protected IResult onSuccess() throws Exception {
+
+					spawnChild(cleanupFiles(revision));
+
+					final String session= Identifier.create().toString();
+					IResult deleteRevision= new ResultHandler(_rootFolder.lock(session, true)) {
+						protected IResult onSuccess() throws Exception {
+							
+							IResult doDelete= new ResultHandler(_rootFolder.deleteRevision(revision)) {
+								protected void onComplete() throws Exception {
+									spawnChild(new ResultHandler(_storageSession.flush()));
+								}
+							}.toResult();
+							
+							spawnChild(new ResultHandler(doDelete) {
+								protected void onComplete() throws Exception {
+										_rootFolder.unlock(session);
+								}
+							}.toResult());
+							
+							return TaskUtils.DONE;
+						}
+					}.toResult();
+					
+					IResult flush= new ResultHandler(deleteRevision) {
+						protected void onComplete() throws Exception {
+							_storageSession.flush();
+							Logging.fine("revision "+revision.revisionNumber+" cleaned up, session="+sessionId);
+							if (_storageSystem._lastKnownDeletedRevision < revision.revisionNumber)
+								_storageSystem.updateLastKnownDeletedRevision(revision.revisionNumber);
+						}
+					}.toResult();
+					
+					spawnChild(new ResultHandler(flush) {
+						protected void onError() {
+							Logging.severe("Error while attempting to clean up revision "+revision.revisionNumber, incoming().getError());
+						}
+					}.toResult());
+						
+
+					//_root.revisionDeletionCompleted(revision.revisionNumber);
+				return TaskUtils.DONE;
+			};
+		}.toResult();
+		
+	}
 
 	/**
 	 * When removing a revision we also remove revisions of individual 
 	 * files that are made obsolete by newer file revisions. 
 	 */
-	private void cleanupFiles(RevisionFolder revision) 
-	throws IOException 
+	private IResult<Void> cleanupFiles(final RevisionFolder revision) 
 	{
-		RevisionJournal journal= revision.getRevisionJournal();
-		if (journal == null) 
-			return;
-		HashSet<Identifier> files= new HashSet<Identifier>();
-		files.addAll(journal.deletes);
-		files.addAll(journal.inserts);
-		files.addAll(journal.updates);
-		for (Identifier id: files) {
-			Collection<Identifier> children= _storageSession.listChildren(id).get();
-			for (Identifier child: children) {
-				long rev= PathUtils.getRevisionNumber(child);
-				if (rev < 0)
-					continue;
-				if (rev < revision.revisionNumber)
-					_storageSession.delete(child);
+		final IResult<RevisionJournal> getRevisionJournal= revision.getRevisionJournal();
+		return new ResultHandler(getRevisionJournal) {
+			protected IResult onSuccess() throws Exception {
+				RevisionJournal journal= getRevisionJournal.getResult();
+				if (journal == null) 
+					return TaskUtils.DONE;
+				HashSet<Identifier> files= new HashSet<Identifier>();
+				files.addAll(journal.deletes);
+				files.addAll(journal.inserts);
+				files.addAll(journal.updates);
+				for (Identifier id: files) {
+					final IResult<Collection<Identifier>> listChildren= _storageSession.listChildren(id);
+					spawnChild(new ResultHandler(listChildren) {
+						protected IResult onSuccess() throws Exception {
+							Collection<Identifier> children= listChildren.get();
+							for (Identifier child: children) {
+								long rev= PathUtils.getRevisionNumber(child);
+								if (rev < 0)
+									continue;
+								if (rev < revision.revisionNumber)
+									_storageSession.delete(child);
+							}
+							return TaskUtils.DONE;
+						}
+					}.toResult());
+				}
+				return TaskUtils.DONE;
 			}
-		}
+		}.toResult();
 	}
 
 }
