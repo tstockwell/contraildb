@@ -12,6 +12,8 @@ public class TaskUtils {
 	public static final IResult<Void> DONE= asResult(null); 
 	public static final IResult<Boolean> SUCCESS= asResult(true); 
 	public static final IResult<Boolean> FAIL= asResult(false); 
+	public static final IResult<Boolean> TRUE= asResult(true); 
+	public static final IResult<Boolean> FALSE= asResult(false); 
 	public static final IResult NULL= asResult(null); 
 	
 	
@@ -26,7 +28,7 @@ public class TaskUtils {
 		final Result<Void> result= new Result<Void>();
 		final int[] count= new int[] { tasks.size() };
 		final IResult[] error= new IResult[] { null };
-		IResultHandler handler= new ResultHandler() {
+		IResultHandler handler= new Handler() {
 			synchronized public void onComplete() {
 				IResult r= incoming();
 				if (!r.isSuccess()) {

@@ -16,7 +16,7 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
 
@@ -67,7 +67,7 @@ public class ObjectStorage {
 	}
 
 	public IResult<Session> connect() throws IOException {
-		return new ResultHandler(_storageProvider.connect()) {
+		return new Handler(_storageProvider.connect()) {
 			protected IResult onSuccess() throws Exception {
 				IStorageProvider.Session session= (IStorageProvider.Session) incoming().getResult();
 				return TaskUtils.asResult(
@@ -77,7 +77,7 @@ public class ObjectStorage {
 	}
 	
 	public IResult<Session> connect(final EntityStorage.Session entitySession) {
-		return new ResultHandler(_storageProvider.connect()) {
+		return new Handler(_storageProvider.connect()) {
 			protected IResult onSuccess() throws Exception {
 				IStorageProvider.Session session= (IStorageProvider.Session) incoming().getResult();
 				return TaskUtils.asResult(
@@ -114,7 +114,7 @@ public class ObjectStorage {
 			
 			_cache.store(identifier, item);
 			
-			return new ResultHandler() {
+			return new Handler() {
 				protected IResult onSuccess() throws Exception {
 					if (lifecycle != null)
 						spawnChild(lifecycle.onInsert(identifier));
@@ -125,10 +125,10 @@ public class ObjectStorage {
 		}
 
 		public IResult<Void> delete(final Identifier path) {
-			return new ResultHandler(fetch(path)) {
+			return new Handler(fetch(path)) {
 				protected IResult onSuccess() throws IOException {
 
-					spawnChild(new ResultHandler(_storageSession.delete(path)) {
+					spawnChild(new Handler(_storageSession.delete(path)) {
 						protected IResult onSuccess() throws IOException {
 							_cache.delete(path);
 							return null;
@@ -146,7 +146,7 @@ public class ObjectStorage {
 
 		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
 		{
-			return new ResultHandler(_cache.fetch(path)) {
+			return new Handler(_cache.fetch(path)) {
 				protected IResult onSuccess() throws IOException {
 					Object storable= incoming().getResult();
 					if (storable != null)
@@ -161,7 +161,7 @@ public class ObjectStorage {
 		private <T extends Serializable> IResult<T> readStorable(final Identifier id, IResult<byte[]> contents)
 		throws IOException
 		{
-			return new ResultHandler(contents) {
+			return new Handler(contents) {
 				protected IResult onSuccess() throws Exception {
 					byte[] bytes= (byte[]) incoming().getResult();
 					T s= ExternalizationManager.readExternal(new DataInputStream(new ByteArrayInputStream(bytes)));
@@ -178,7 +178,7 @@ public class ObjectStorage {
 
 		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path)
 		{
-			return new ResultHandler<Collection<Identifier>,Map<Identifier, T>>(_storageSession.listChildren(path)) {
+			return new Handler<Collection<Identifier>,Map<Identifier, T>>(_storageSession.listChildren(path)) {
 				protected IResult<Map<Identifier, T>> onSuccess() throws Exception {
 					Collection<Identifier> children= incoming().getResult();
 					
@@ -188,7 +188,7 @@ public class ObjectStorage {
 					
 					final HashMap results= new HashMap<Identifier, T>();
 					for (final Identifier childId:children) {
-						spawnChild(new ResultHandler(readStorable(childId, fetched.get(childId))) {
+						spawnChild(new Handler(readStorable(childId, fetched.get(childId))) {
 							protected IResult onSuccess() throws Exception {
 								results.put(childId, incoming().getResult());
 								return TaskUtils.DONE;
@@ -206,7 +206,7 @@ public class ObjectStorage {
 		}
 		
 		public IResult<Void> flush() {
-			return new ResultHandler(_trackerSession.complete()) {
+			return new Handler(_trackerSession.complete()) {
 				protected IResult onSuccess() throws Exception {
 					spawnChild(_storageSession.flush());
 					return TaskUtils.DONE;
@@ -215,11 +215,11 @@ public class ObjectStorage {
 		}
 		
 		public IResult<Void> close() {
-			return new ResultHandler(flush()) {
+			return new Handler(flush()) {
 				protected IResult onSuccess() throws Exception {
-					spawnChild(new ResultHandler(_trackerSession.close()) {
+					spawnChild(new Handler(_trackerSession.close()) {
 						protected IResult onSuccess() throws Exception {
-							spawnChild(new ResultHandler(_storageSession.close()) {
+							spawnChild(new Handler(_storageSession.close()) {
 								protected IResult onSuccess() throws Exception {
 									_trackerSession= null;
 									_storageSession= null;
@@ -238,7 +238,7 @@ public class ObjectStorage {
 		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
 		{
 			final IResult<byte[]> serializeTask= new ExternalizationTask(item).submit();
-			return new ResultHandler(_storageSession.create(identifier, serializeTask, waitMillis)) {
+			return new Handler(_storageSession.create(identifier, serializeTask, waitMillis)) {
 				protected IResult onSuccess() throws Exception {
 					boolean isStorable= item instanceof ILifecycle;
 					if (isStorable)
@@ -272,7 +272,7 @@ public class ObjectStorage {
 
 		public IResult<Void> deleteAllChildren(Identifier path) {
 			final IResult<Collection<Identifier>> children= listChildren(path);
-			return new ResultHandler(children) {
+			return new Handler(children) {
 				protected IResult onSuccess() throws Exception {
 					ArrayList<IResult> tasks= new ArrayList<IResult>();
 					for (Identifier identifier: children.get()) {

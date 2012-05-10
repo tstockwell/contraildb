@@ -6,19 +6,19 @@ import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.IResultHandler;
 
 @SuppressWarnings({"rawtypes","unchecked"})
-public class ResultHandler<I,O> implements IResultHandler<I> {
+public class Handler<I,O> implements IResultHandler<I> {
 
 	IResult _incoming;
 	Result _outgoing= new Result();
 	ArrayList<IResult> _pending= new ArrayList<IResult>(); 
 	
-	public ResultHandler(IResult<I> task) {
+	public Handler(IResult<I> task) {
 		task.onComplete(this);
 	}
-	public ResultHandler(IResult... tasks) {
+	public Handler(IResult... tasks) {
 		this((IResult<I>)TaskUtils.combineResults(tasks));
 	}
-	public ResultHandler(I value) {
+	public Handler(I value) {
 		this(TaskUtils.asResult(value));
 	}
 
@@ -35,7 +35,7 @@ public class ResultHandler<I,O> implements IResultHandler<I> {
 			try {
 				final IResult<O> retval= onSuccess();
 				IResult finalResult= TaskUtils.combineResults( retval, TaskUtils.combineResults(_pending));
-				finalResult.onComplete(new ResultHandler() {
+				finalResult.onComplete(new Handler() {
 					public void onComplete() {
 						IResult result= incoming();
 						if (result.isSuccess()) {
@@ -91,6 +91,9 @@ public class ResultHandler<I,O> implements IResultHandler<I> {
 	 */
 	protected void spawnChild(IResult task) {
 		_pending.add(task);
+	}
+	protected void spawnChild(Handler handler) {
+		spawnChild(handler.toResult());
 	}
 	/**
 	 * A subtask this is a logical part of this handler.

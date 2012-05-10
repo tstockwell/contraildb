@@ -399,7 +399,7 @@ public class ContrailStorageTests extends TestCase {
 		
 		_storage.cleanup();
 		
-		assertEquals("Failed to clean up all unused revisions", 1, _storage.getAvailableRevisions().size());
+		assertEquals("Failed to clean up all unused revisions", 1, _storage.getAvailableRevisions().get().size());
 	}
 	
 	/**

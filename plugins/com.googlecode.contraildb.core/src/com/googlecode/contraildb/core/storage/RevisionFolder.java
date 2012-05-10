@@ -12,7 +12,7 @@ import java.util.List;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -67,7 +67,7 @@ public class RevisionFolder extends Entity {
 	
 	@Override
 	public IResult<Void> onInsert(Identifier identifier) {
-		return new ResultHandler(super.onInsert(identifier)) {
+		return new Handler(super.onInsert(identifier)) {
 			protected IResult onSuccess() throws Exception {
 				spawnChild(storage.store(_sessionsFolder));
 				spawnChild(storage.store(_lockFolder));
@@ -77,11 +77,11 @@ public class RevisionFolder extends Entity {
 	}
 	@Override
 	public IResult<Void> onLoad(Identifier identifier) {
-		return new ResultHandler(super.onLoad(identifier)) {
+		return new Handler(super.onLoad(identifier)) {
 			protected IResult onSuccess() throws Exception {
 				final IResult<Entity> sf= storage.fetch(Identifier.create(id, "sessions"));
 				final IResult<LockFolder> lf= storage.fetch(LockFolder.createId(RevisionFolder.this));
-				spawnChild(new ResultHandler(sf,lf) {
+				spawnChild(new Handler(sf,lf) {
 					protected IResult onSuccess() throws Exception {
 						_sessionsFolder= sf.getResult();
 						_lockFolder= lf.getResult();
@@ -112,7 +112,7 @@ public class RevisionFolder extends Entity {
 //TODO  This method should check to see if the session claims are expired
 //A session can only hold a revision active for a limited amount of time, about a minute.			
 		final IResult<Collection<Identifier>> listResult= _sessionsFolder.listChildren();
-		return new ResultHandler(listResult) {
+		return new Handler(listResult) {
 			protected IResult onSuccess() throws Exception {
 				return TaskUtils.asResult(!listResult.getResult().isEmpty());
 			};
@@ -125,7 +125,7 @@ public class RevisionFolder extends Entity {
 		final ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (final RevisionFolder revision: revisions)  {
 			final IResult<CommitMarker> getCommitMarker= revision.getCommitMarker();
-			tasks.add(new ResultHandler(getCommitMarker) {
+			tasks.add(new Handler(getCommitMarker) {
 				protected IResult onSuccess() throws Exception {
 					long commitNumber= -1;
 					CommitMarker commitMarker= getCommitMarker.getResult();
@@ -136,7 +136,7 @@ public class RevisionFolder extends Entity {
 				}
 			}.toResult());
 		}
-		return new ResultHandler(TaskUtils.combineResults(tasks)) {
+		return new Handler(TaskUtils.combineResults(tasks)) {
 			protected IResult onSuccess() throws Exception {
 				
 				// sort in decending order by final commit number;
@@ -161,7 +161,7 @@ public class RevisionFolder extends Entity {
 	}
 	public IResult<Boolean> isCommitted() {
 		final IResult<CommitMarker> commitMarker= getCommitMarker();
-		return new ResultHandler(commitMarker) {
+		return new Handler(commitMarker) {
 			protected IResult onSuccess() throws Exception {
 				return TaskUtils.asResult(commitMarker.getResult() != null);
 			};
@@ -169,7 +169,7 @@ public class RevisionFolder extends Entity {
 	}
 	public IResult<Long> getFinalCommitNumber() {
 		final IResult<CommitMarker> getCommitMarker= getCommitMarker();
-		return new ResultHandler(getCommitMarker) {
+		return new Handler(getCommitMarker) {
 			protected IResult onSuccess() throws Exception {
 				CommitMarker commitMarker= getCommitMarker.getResult();
 				if (commitMarker == null)

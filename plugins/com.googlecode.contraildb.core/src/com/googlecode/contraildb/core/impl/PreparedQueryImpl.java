@@ -15,7 +15,7 @@ import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ConversionUtils;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -68,7 +68,7 @@ implements IPreparedQuery<T>
 						error[0]= t;
 					
 					// wait until all items have been fetched 
-					new ResultHandler(tracker.complete()) {
+					new Handler(tracker.complete()) {
 						public void onComplete() {
 							synchronized (tracker) {
 								complete[0]= true;

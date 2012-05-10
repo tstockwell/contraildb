@@ -17,7 +17,7 @@ import com.googlecode.contraildb.core.utils.Result;
 import com.googlecode.contraildb.core.utils.OrderedResults;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 
 
 /**
@@ -52,7 +52,6 @@ public class RootFolder extends Entity  {
 	}
 
 	public IResult<RevisionFolder> getRevisionFolder(long revisionNumber) 
-	throws IOException 
 	{
 		return storage.fetch(RevisionFolder.createId(this, revisionNumber));
 	}
@@ -64,7 +63,7 @@ public class RootFolder extends Entity  {
 	{
 		final IResult<Collection<Identifier>> deletedResult= _deletionsFolder.listChildren();
 		final IResult<Collection<Entity>> childrenResult= _revisionsFolder.getChildren();
-		return new ResultHandler(deletedResult, childrenResult) {
+		return new Handler(deletedResult, childrenResult) {
 			protected IResult onSuccess() throws Exception {
 				Collection<Identifier> deleted= deletedResult.getResult();
 				Collection<Entity> children= childrenResult.getResult();
@@ -95,7 +94,7 @@ public class RootFolder extends Entity  {
 	
 	public IResult<Boolean> lock(final String processId, boolean waitForLock) {
 		final IResult<Boolean> lock= _lockFolder.lock(processId, waitForLock);
-		return new ResultHandler(lock) {
+		return new Handler(lock) {
 			protected IResult onSuccess() throws Exception {
 				if (lock.getResult() && __logger.isLoggable(Level.FINER))
 					__logger.finer("root locked by "+processId);
@@ -104,7 +103,7 @@ public class RootFolder extends Entity  {
 		}.toResult();
 	}
 	public IResult<Void> unlock(final String processId) {
-		return new ResultHandler(_lockFolder.unlock(processId)) {
+		return new Handler(_lockFolder.unlock(processId)) {
 			protected IResult onSuccess() throws Exception {
 				if (__logger.isLoggable(Level.FINER))
 					__logger.finer("root unlocked by "+processId);
@@ -115,14 +114,14 @@ public class RootFolder extends Entity  {
 
 	public IResult<RevisionFolder> getLastCommittedRevision() {
 		final IResult<List<RevisionFolder>> getRevisionFolders= getRevisionFolders();
-		return new ResultHandler(getRevisionFolders) {
+		return new Handler(getRevisionFolders) {
 			protected IResult onSuccess() throws Exception {
 				final RevisionFolder[] folder= new RevisionFolder[] { null };
 				final OrderedResults syncResults= new OrderedResults();
 				for (final RevisionFolder revision: getRevisionFolders.getResult()) {
 					final IResult<Boolean> isCommitted= revision.isCommitted();
 					final IResult<Boolean> latch= syncResults.create();
-					new ResultHandler(isCommitted, latch) {
+					new Handler(isCommitted, latch) {
 						protected void onComplete() throws Exception {
 							if (isCommitted.getResult()) {
 								if (folder[0] == null) {
@@ -131,7 +130,7 @@ public class RootFolder extends Entity  {
 								else {
 									final IResult<Long> folderFinalCommitNumber= folder[0].getFinalCommitNumber();
 									final IResult<Long> revisionFinalCommitNumber= revision.getFinalCommitNumber();
-									new ResultHandler(folderFinalCommitNumber, revisionFinalCommitNumber) {
+									new Handler(folderFinalCommitNumber, revisionFinalCommitNumber) {
 										protected void onComplete() throws Exception {
 											if (folderFinalCommitNumber.getResult() < revisionFinalCommitNumber.getResult())
 												folder[0]= revision;
@@ -145,7 +144,7 @@ public class RootFolder extends Entity  {
 					};
 				}
 				
-				return new ResultHandler(syncResults.complete()) {
+				return new Handler(syncResults.complete()) {
 					protected IResult onSuccess() throws Exception {
 						return TaskUtils.asResult(folder[0]);
 					};
@@ -156,7 +155,7 @@ public class RootFolder extends Entity  {
 
 	@Override
 	public IResult<Void> onInsert(Identifier identifier) {
-		return new ResultHandler(super.onInsert(identifier)) {
+		return new Handler(super.onInsert(identifier)) {
 			protected IResult onSuccess() throws Exception {
 				spawnChild(storage.store(_revisionsFolder));
 				spawnChild(storage.store(_deletionsFolder));
@@ -173,12 +172,12 @@ public class RootFolder extends Entity  {
 
 	@Override
 	public IResult<Void> onLoad(final Identifier identifier) {
-		return new ResultHandler(super.onLoad(identifier)) {
+		return new Handler(super.onLoad(identifier)) {
 			protected IResult onSuccess() throws Exception {
 				final IResult<Entity> rf= storage.fetch(Identifier.create(identifier, "revisions"));
 				final IResult<Entity> df= storage.fetch(Identifier.create(identifier, "deletions"));
 				final IResult<LockFolder> lf= storage.fetch(LockFolder.createId(RootFolder.this));
-				spawnChild(new ResultHandler(rf, df, lf) {
+				spawnChild(new Handler(rf, df, lf) {
 					protected IResult onSuccess() throws Exception {
 						_revisionsFolder= rf.getResult();
 						_deletionsFolder= df.getResult();

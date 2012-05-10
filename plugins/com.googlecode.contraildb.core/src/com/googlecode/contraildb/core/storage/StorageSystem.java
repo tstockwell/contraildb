@@ -16,7 +16,7 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
@@ -81,12 +81,12 @@ public class StorageSystem {
 		final StorageSystem storageSystem= new StorageSystem();
 		storageSystem._entityStorage= new EntityStorage(rawStorage);
 		final IResult<IEntityStorage.Session> entityStorageConnect= storageSystem._entityStorage.connect();
-		return new ResultHandler(entityStorageConnect) {
+		return new Handler(entityStorageConnect) {
 			protected IResult onSuccess() throws Exception {
 				storageSystem._entitySession= entityStorageConnect.getResult();
 				final Identifier rootId= Identifier.create("net/sf/contrail/core/storage/rootFolder");
 				final IResult<RootFolder> fetchRoot= storageSystem._entitySession.fetch(rootId);
-				spawnChild(new ResultHandler(fetchRoot) {
+				spawnChild(new Handler(fetchRoot) {
 					protected IResult onSuccess() throws Exception {
 						storageSystem._root= fetchRoot.getResult();
 						if (storageSystem._root == null) {
@@ -120,61 +120,112 @@ public class StorageSystem {
 	 * When a readwrite session is started the session will be associated with a new revision of the database.
 	 * When a readonly session is started the session will be associated with the last committed database revision. 
 	 */
-	public IResult<StorageSession> beginSession(Mode mode) throws IOException, ContrailException {
+	public IResult<StorageSession> beginSession(final Mode mode) {
 
-		String sessionId= "session."+UUID.randomUUID().toString();
-		StorageSession storageSession;
+		final String sessionId= "session."+UUID.randomUUID().toString();
+		final StorageSession[] storageSession= new StorageSession[] { null };
 		
-		_root.lock(sessionId, true);
-		try {
-			if (Mode.READONLY == mode) {
-				RevisionFolder revision= _root.getLastCommittedRevision();
-				revision.addSession(sessionId);
-				storageSession= new StorageSession(this, sessionId, revision.revisionNumber, -1, mode);
+		IResult beginSession= new Handler(_root.lock(sessionId, true)) {
+			protected IResult onSuccess() throws Exception {
+				if (Mode.READONLY == mode) {
+					final IResult<RevisionFolder> getLastCommittedRevision= _root.getLastCommittedRevision();
+					spawnChild(new Handler(getLastCommittedRevision) {
+						protected IResult onSuccess() throws Exception {
+							final RevisionFolder revision= getLastCommittedRevision.getResult();
+							final IResult<StorageSession> createStorageSession= StorageSession.create(this, sessionId, revision.revisionNumber, -1, mode);
+							spawnChild(new Handler(createStorageSession) {
+								protected IResult onSuccess() throws Exception {
+									return TaskUtils.asResult(storageSession[0]= createStorageSession.getResult());
+								}
+							});
+						}
+					});
+				}
+				else {
+					final IResult<RevisionFolder> createNewRevision= createNewRevision(sessionId);;
+					spawnChild(new Handler(createNewRevision) {
+						protected IResult onSuccess() throws Exception {
+							final RevisionFolder revision= createNewRevision.getResult();
+							final IResult<StorageSession> createStorageSession= StorageSession.create(this, sessionId, revision.revisionNumber, revision.startCommitNumber, mode);
+							spawnChild(new Handler(createStorageSession) {
+								protected IResult onSuccess() throws Exception {
+									return TaskUtils.asResult(storageSession[0]= createStorageSession.getResult());
+								}
+							});
+						}
+					});
+				}
+				return TaskUtils.asResult(storageSession[0]);
 			}
-			else {
-				RevisionFolder revision= createNewRevision(sessionId);
-				storageSession= new StorageSession(this, sessionId, revision.revisionNumber, revision.startCommitNumber, mode);
+		}.toResult();
+		
+		return new Handler(beginSession) {
+			protected void onComplete() throws Exception {
+				spawnChild(_root.unlock(sessionId));
+				spawnChild(_root.getStorage().flush());
 			}
-		}
-		finally {
-			_root.unlock(sessionId);
-			_root.getStorage().flush();
-		}
+			protected IResult onSuccess() throws Exception {
+				Logging.info("Created session "+sessionId);
 
-		Logging.info("Created session "+sessionId);
-
-		_activeSessions.add(storageSession);
-		return storageSession;
+				_activeSessions.add(storageSession[0]);
+				return TaskUtils.asResult(storageSession[0]);
+			}
+		}.toResult();
 	}
 
 	/**
 	 * Begin a new readonly session associated with the given database revision.
 	 */
-	public IResult<Void> beginSession(long revisionNumber) 
-	throws ContrailException, IOException 
+	public IResult<StorageSession> beginSession(final long revisionNumber) 
 	{
-		String sessionId= "session."+UUID.randomUUID().toString();
-		StorageSession  storageSession= null;
-		// NOTE: it is not possible to lock an uncommitted revision 
-		// since the revision remains locked until its committed  
-		while (storageSession == null) {
-			RevisionFolder revision= (RevisionFolder) 
-				_entitySession.fetch(RevisionFolder.createId(_root, revisionNumber));
-			if (revision == null)
-				throw new IOException("Revision does not exist: "+ revisionNumber);
-			revision.lock(sessionId, true);
-			try {
-				revision.addSession(sessionId);
-				storageSession= new StorageSession(this, sessionId, revisionNumber, -1, Mode.READONLY);
-			}
-			finally {
-				revision.unlock(sessionId);
-			}
+		final String sessionId= "session."+UUID.randomUUID().toString();
+		class state { 
+			RevisionFolder revision;
+			StorageSession storageSession;
 		}
-		_entitySession.flush();
-		_activeSessions.add(storageSession);
-		return storageSession;
+		final state local= new state();
+		final IResult<RevisionFolder> revisionFolder= _entitySession.fetch(RevisionFolder.createId(_root, revisionNumber));
+		IResult<Void> lockRevision= new Handler(revisionFolder) {
+			protected IResult onSuccess() throws Exception {
+				local.revision= revisionFolder.getResult();
+				if (local.revision == null)
+					throw new IOException("Revision does not exist: "+ revisionNumber);
+				spawnChild(local.revision.lock(sessionId, true/*waitForLock*/));
+				return TaskUtils.DONE;
+			}
+		}.toResult();
+		IResult<Void> addSession= new Handler(lockRevision) {
+			protected IResult onSuccess() throws Exception {
+				spawnChild(new Handler(local.revision.addSession(sessionId)) {
+					protected IResult onSuccess() throws Exception {
+						spawnChild(new Handler(StorageSession.create(this, sessionId, revisionNumber, -1, Mode.READONLY)) {
+							protected IResult onSuccess() throws Exception {
+								local.storageSession= (StorageSession) incoming().getResult();
+							}
+						});
+					}
+				});
+				return TaskUtils.DONE;
+			}
+		}.toResult();
+		return new Handler(addSession) {
+			protected void onComplete() throws Exception {
+				RevisionFolder revision= revisionFolder.getResult();
+				spawnChild(new Handler(revision.unlock(sessionId)) {
+					protected void onComplete() throws Exception {
+						_entitySession.flush();
+						spawnChild(new Handler(_entitySession.flush()) {
+							protected void onComplete() throws Exception {
+								_activeSessions.add(local.storageSession);
+							}
+						});
+					}
+				});
+			}
+			protected IResult onSuccess() throws Exception {
+				return TaskUtils.asResult(local.storageSession);
+			}
+		}.toResult();
 	}
 	
 	/**
@@ -183,12 +234,42 @@ public class StorageSystem {
 	 * @throws IOException
 	 */
 	public IResult<Void> cleanup() throws IOException {
-		return _trackerSession.submit(new StorageCleanupAction(this));
+		return StorageCleanupAction.cleanup(this);
 	}
 
 	
-	private RevisionFolder createNewRevision(String sessionId) throws IOException {
+	private IResult<RevisionFolder> createNewRevision(final String sessionId) throws IOException {
 
+		class state {
+			List<RevisionFolder> revisions;
+			RevisionFolder lastRevision;
+			RevisionFolder startRevision;
+		}
+		final state local= new state();
+		IResult getRevisionFolders= new Handler(_root.getRevisionFolders()) {
+			protected IResult onSuccess() throws Exception {
+				local.revisions= (List<RevisionFolder>) incoming().getResult();
+				local.lastRevision= local.revisions.get(0);
+				local.startRevision= null;
+				for (final RevisionFolder revision: local.revisions) {
+					spawnChild(new Handler(revision.isCommitted()) {
+						protected IResult onSuccess() throws Exception {
+							if ((Boolean) incoming().get()) {
+								synchronized (local) {
+									if (local.startRevision == null || local.startRevision.getFinalCommitNumber() < revision.getFinalCommitNumber())  
+										startRevision= revision;
+								}
+							}
+						}
+					});
+					if (revision.isCommitted()) 
+						if (startRevision == null || startRevision.getFinalCommitNumber() < revision.getFinalCommitNumber())  
+							startRevision= revision;
+				}
+			}
+		}.toResult();
+		
+		
 		List<RevisionFolder> revisions= _root.getRevisionFolders();
 		RevisionFolder lastRevision= revisions.get(0);
 		RevisionFolder startRevision= null;
@@ -311,25 +392,29 @@ public class StorageSystem {
 		}
 	}
 
-	public boolean isRevisionCommitted(long revisionNumber) 
-	throws IOException 
+	public IResult<Boolean> isRevisionCommitted(final long revisionNumber) 
 	{
 		if (revisionNumber <= _lastKnownDeletedRevision)
-			return true;
+			return TaskUtils.TRUE;
 		if (_knownUncommittedRevisions.contains(revisionNumber))
-			return false;
-		RevisionFolder folder= _root.getRevisionFolder(revisionNumber);
-		if (folder == null) { 
-			/*
-			 * Revision was committed and revision info has already been cleaned up.
-			 * Since a revision cannot be cleaned until all previous revisions were 
-			 * cleaned we can ignore any revisions prior to this one (which saves us a 
-			 * boatload of file lookups).  
-			 */
-			updateLastKnownDeletedRevision(revisionNumber);
-			return true;
-		}
-		return folder.isCommitted();
+			return TaskUtils.FALSE;
+		final IResult<RevisionFolder> getRevisionFolder= _root.getRevisionFolder(revisionNumber);
+		return new Handler(getRevisionFolder) {
+			protected IResult onSuccess() throws Exception {
+				RevisionFolder folder= getRevisionFolder.getResult();
+				if (folder == null) { 
+					/*
+					 * Revision was committed and revision info has already been cleaned up.
+					 * Since a revision cannot be cleaned until all previous revisions were 
+					 * cleaned we can ignore any revisions prior to this one (which saves us a 
+					 * boatload of file lookups).  
+					 */
+					updateLastKnownDeletedRevision(revisionNumber);
+					return TaskUtils.TRUE;
+				}
+				return folder.isCommitted();
+			}
+		}.toResult();
 	}
 
 	void updateLastKnownDeletedRevision(long revisionNumber) {
@@ -340,15 +425,20 @@ public class StorageSystem {
 		}
 	}
 
-	public List<Long> getAvailableRevisions() throws IOException {
-		List<RevisionFolder> folders= _root.getRevisionFolders();
-		ArrayList<Long> revisions= new ArrayList<Long>();
-		for (RevisionFolder folder: folders)
-			revisions.add(folder.revisionNumber);
-		return revisions;
+	public IResult<List<Long>> getAvailableRevisions() {
+		final IResult<List<RevisionFolder>> getRevisionFolders= _root.getRevisionFolders();
+		return new Handler(getRevisionFolders) {
+			protected IResult onSuccess() throws Exception {
+				List<RevisionFolder> folders= getRevisionFolders.getResult();
+				ArrayList<Long> revisions= new ArrayList<Long>();
+				for (RevisionFolder folder: folders)
+					revisions.add(folder.revisionNumber);
+				return TaskUtils.asResult(revisions);
+			}
+		}.toResult();
 	}
 	
-	public IResult<Void> close() throws IOException {
+	public IResult<Void> close() {
 		// close all open sessions
 		ArrayList<IResult> allResults= new ArrayList<IResult>();
 		while (!_activeSessions.isEmpty()) {

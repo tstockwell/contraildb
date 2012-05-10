@@ -8,12 +8,15 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import com.googlecode.contraildb.core.ContrailException;
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
+import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -115,30 +118,37 @@ implements Iterable<T>
 	protected BPlusTree() { }
 
 	@Override
-	public void onLoad(Identifier identifier)
-	throws IOException 
+	public IResult<Void> onLoad(Identifier identifier)
 	{
-		super.onLoad(identifier);
-		if (_rootId != null)
-			_root = StorageUtils.syncFetch(storage, _rootId);
+		final IResult fetch= storage.fetch(_rootId);
+		return new Handler(super.onLoad(identifier)) {
+			protected IResult onSuccess() throws Exception {
+				_root= (Node<T>) fetch.getResult();
+				return TaskUtils.DONE;
+			}
+		}.toResult();
 	}
 
 	@Override
-	public void onInsert(Identifier identifier)
-	throws IOException 
+	public IResult<Void> onInsert(Identifier identifier)
 	{
-		super.onInsert(identifier);
-		if (_root != null)
-			storage.store(_root);
+		final IResult store= _root != null ? storage.store(_root) : TaskUtils.DONE;
+		return new Handler(super.onInsert(identifier)) {
+			protected IResult onSuccess() throws Exception {
+				return store;
+			}
+		}.toResult();
 	}
 
 	@Override
-	public void onDelete()
-	throws IOException 
+	public IResult<Void> onDelete()
 	{
-		if (_root != null)
-			_root.delete();
-		super.onDelete();
+		final IResult delete= _root != null ? _root.delete() : TaskUtils.DONE;
+		return new Handler(super.onDelete()) {
+			protected IResult onSuccess() throws Exception {
+				return delete;
+			}
+		}.toResult();
 	}
 
 	/**
@@ -231,11 +241,18 @@ implements Iterable<T>
 	 * Deletes all BPages in this BTree, then deletes the tree from the record
 	 * manager
 	 */
-	public synchronized void delete() throws IOException {
-		if (_root != null)
-			_root.delete();
-		_root= null;
-		super.delete();
+	public synchronized IResult<Void> delete() {
+		final IResult delete= _root != null ? _root.delete() : TaskUtils.DONE;
+		return new Handler(super.onDelete()) {
+			protected IResult onSuccess() throws Exception {
+				return new Handler(delete) {
+					protected IResult onSuccess() throws Exception {
+						_root= null;
+						return TaskUtils.DONE;
+					}
+				}.toResult();
+			}
+		}.toResult();
 	}
 
 	/**

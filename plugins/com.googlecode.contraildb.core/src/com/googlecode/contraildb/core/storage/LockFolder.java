@@ -9,7 +9,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Magic;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -84,7 +84,7 @@ public class LockFolder extends Entity {
 		final Lock lock= new Lock(id, processId);
 		final long waitMillis= waitForNext? Magic.SESSION_MAX_MILLIS+1000 : 0;
 		final IResult<Boolean> result= storage.create(lock, waitMillis);
-		return new ResultHandler(result) {
+		return new Handler(result) {
 			protected IResult onSuccess() throws Exception {
 				if (result.getResult()) {
 					return TaskUtils.SUCCESS;
@@ -108,7 +108,7 @@ public class LockFolder extends Entity {
 	{
 		final Identifier lockId= Identifier.create(id, "lock");
 		final IResult<Lock> lockResult= storage.fetch(lockId);
-		return new ResultHandler(lockResult) {
+		return new Handler(lockResult) {
 			protected IResult onSuccess() throws Exception {
 				try {
 					Lock lock= lockResult.getResult();
