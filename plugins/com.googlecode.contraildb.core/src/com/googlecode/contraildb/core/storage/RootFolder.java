@@ -14,6 +14,7 @@ import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.Result;
+import com.googlecode.contraildb.core.utils.OrderedResults;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 import com.googlecode.contraildb.core.utils.ResultHandler;
@@ -117,10 +118,10 @@ public class RootFolder extends Entity  {
 		return new ResultHandler(getRevisionFolders) {
 			protected IResult onSuccess() throws Exception {
 				final RevisionFolder[] folder= new RevisionFolder[] { null };
-				final SyncResults syncResults= new SyncResults();
+				final OrderedResults syncResults= new OrderedResults();
 				for (final RevisionFolder revision: getRevisionFolders.getResult()) {
 					final IResult<Boolean> isCommitted= revision.isCommitted();
-					final IResult<Boolean> latch= SyncResults.create();
+					final IResult<Boolean> latch= syncResults.create();
 					new ResultHandler(isCommitted, latch) {
 						protected void onComplete() throws Exception {
 							if (isCommitted.getResult()) {
@@ -139,7 +140,7 @@ public class RootFolder extends Entity  {
 								}
 							}
 							else 
-								syncResults.release(latch);
+								syncResults.next();
 						};
 					};
 				}
