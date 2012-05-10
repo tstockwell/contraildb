@@ -40,6 +40,8 @@ import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
+import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 
@@ -48,6 +50,7 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
  * 
  * @author Ted Stockwell
  */
+@SuppressWarnings({ "unchecked", "rawtypes" })
 public class ContrailSessionImpl
 implements IContrailSession 
 {
@@ -56,26 +59,45 @@ implements IContrailSession
 	private StorageSession _storageSession;
 	private ContrailServiceImpl _service;
 	
-	ContrailSessionImpl(ContrailServiceImpl service) 
-	throws ContrailException, IOException 
+	public static IResult<ContrailSessionImpl> create(final ContrailServiceImpl service) 
 	{
-		this(service, Mode.READONLY);
+		return create(service, Mode.READONLY);
+	}
+	public static IResult<ContrailSessionImpl> create(final ContrailServiceImpl service, final long revisionNumber) 
+	{
+		final IResult<StorageSession> beginSession= service._storageSystem.beginSession(revisionNumber);
+		return new Handler(beginSession) {
+			protected IResult onSuccess() throws Exception {
+				ContrailSessionImpl impl= new ContrailSessionImpl(service, revisionNumber, beginSession.get());
+				return TaskUtils.asResult(impl);
+			}
+		}.toResult();
+	}
+	public static IResult<ContrailSessionImpl> create(final ContrailServiceImpl service, final Mode mode) 
+	{
+		final IResult<StorageSession> beginSession= service._storageSystem.beginSession(mode);
+		return new Handler(beginSession) {
+			protected IResult onSuccess() throws Exception {
+				ContrailSessionImpl impl= new ContrailSessionImpl(service, mode, beginSession.get());
+				return TaskUtils.asResult(impl);
+			}
+		}.toResult();
 	}
 
-	public ContrailSessionImpl(ContrailServiceImpl service, long revisionNumber) 
+	private ContrailSessionImpl(ContrailServiceImpl service, long revisionNumber, StorageSession storageSession) 
 	throws ContrailException, IOException 
 	{
 		_service= service;
-		_storageSession= service._storageSystem.beginSession(revisionNumber);
+		_storageSession= storageSession;
 		_searcher= new IndexSearcher(_storageSession);
 	}
 	
 
-	public ContrailSessionImpl(ContrailServiceImpl service, Mode mode) 
+	private ContrailSessionImpl(ContrailServiceImpl service, Mode mode, StorageSession storageSession) 
 	throws ContrailException, IOException 
 	{
 		_service= service;
-		_storageSession= service._storageSystem.beginSession(mode);
+		_storageSession= storageSession;
 		_searcher= new IndexSearcher(_storageSession);
 	}
 

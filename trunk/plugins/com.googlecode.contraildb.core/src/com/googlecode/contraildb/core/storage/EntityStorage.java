@@ -8,7 +8,7 @@ import java.util.Map;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -46,7 +46,7 @@ public class EntityStorage implements IEntityStorage {
 	private IResult<IEntityStorage.Session> createSession() {
 		final Session session= new Session();
 		final IResult<ObjectStorage.Session> storageSession= _objectStorage.connect(session);
-		return new ResultHandler(storageSession) {
+		return new Handler(storageSession) {
 			protected IResult onSuccess() throws Exception {
 				session._objectSession= storageSession.getResult();
 				return TaskUtils.asResult(session);
@@ -90,7 +90,7 @@ public class EntityStorage implements IEntityStorage {
 		public <E extends IEntity> IResult<Collection<E>> fetchChildren(final Identifier path)
 		{
 			final IResult<Map<Identifier, Serializable>> childrenResult= _objectSession.fetchChildren(path);
-			return new ResultHandler(childrenResult) {
+			return new Handler(childrenResult) {
 				protected IResult onSuccess() throws Exception {
 					final Map<Identifier, Serializable> children= childrenResult.getResult();
 					ArrayList<E> list= new ArrayList<E>(children.size());

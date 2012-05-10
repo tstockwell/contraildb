@@ -5,18 +5,21 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.UUID;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
+import com.googlecode.contraildb.core.utils.Handler;
 
 
 
 /**
  * Leaf nodes
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked","rawtypes"})
 public class Node<K extends Comparable<?>>
 extends Entity 
 implements Cloneable
@@ -49,11 +52,15 @@ implements Cloneable
 	Node<K> getNextSibling() throws IOException { if (_next == null) return null; return StorageUtils.syncFetch(getStorage(), _next); }
 	K getLookupKey() throws IOException { if (_next == null) return getLargestKey(); return getNextSibling().getSmallestKey(); }		
 
-	public void onLoad(Identifier identifier)
-	throws IOException 
+	public IResult<Void> onLoad(Identifier identifier)
 	{
-		super.onLoad(identifier);
-		_index= StorageUtils.syncFetch(storage, _indexId);
+		final IResult fetch= storage.fetch(_indexId);
+		return new Handler(super.onLoad(identifier)) {
+			protected IResult onSuccess() throws Exception {
+				_index= (BPlusTree<K, ?>) fetch.getResult();
+				return TaskUtils.DONE;
+			}
+		}.toResult();
 	}
 
 	K getSmallestKey() { return _keys[0]; }

@@ -9,7 +9,7 @@ import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 
 
 /**
@@ -44,7 +44,7 @@ implements IStorageProvider
 
 		@Override
 		public IResult<Void> flush() {
-			return new ResultHandler(_trackerSession.complete()) {
+			return new Handler(_trackerSession.complete()) {
 				protected void onComplete() throws Exception {
 					spawnChild(doFlush());
 				};
@@ -53,7 +53,7 @@ implements IStorageProvider
 
 		@Override
 		public IResult<Void> close() {
-			return new ResultHandler(_trackerSession.complete()) {
+			return new Handler(_trackerSession.complete()) {
 				protected void onComplete() throws Exception {
 					spawnChild(doClose());
 				};

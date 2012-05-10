@@ -17,7 +17,6 @@
  ******************************************************************************/
 package com.googlecode.contraildb.core;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 
@@ -43,17 +42,14 @@ public interface IContrailService {
 	 * When a readwrite session is started the session will be associated with a new revision of the database.
 	 * When a readonly session is started the session will be associated with the last committed database revision. 
 	 */
-	public IContrailSession beginSession(Mode mode) 
-		throws IOException, ContrailException;
+	public IResult<IContrailSession> beginSession(Mode mode);
 
 	/**
 	 * Begin a new readonly session associated with the given database revision.
 	 */
-	public IContrailSession beginSession(long revisionNumber) 
-		throws IOException, ContrailException;
+	public IResult<IContrailSession> beginSession(long revisionNumber);
 
-	public Collection<IContrailSession> getActiveSessions()
-		throws IOException, ContrailException;
+	public IResult<Collection<IContrailSession>> getActiveSessions();
 	
 	/**
 	 * Returns the numbers of all available revisions.
@@ -64,10 +60,8 @@ public interface IContrailService {
 	 * 
 	 * @return A list of revision numbers in descending order
 	 */
-	public List<Long> getAvailableRevisions()
-		throws IOException, ContrailException;
+	public IResult<List<Long>> getAvailableRevisions();
 
-	public void close() 
-		throws IOException, ContrailException;
+	public IResult<Void> close();
 	
 }

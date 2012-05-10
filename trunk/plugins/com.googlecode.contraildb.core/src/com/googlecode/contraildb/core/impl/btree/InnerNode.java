@@ -3,9 +3,13 @@ package com.googlecode.contraildb.core.impl.btree;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.ArrayList;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.StorageUtils;
+import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -14,7 +18,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 /**
  * An inner node in a BTree
  */
-@SuppressWarnings("rawtypes")
+@SuppressWarnings({"rawtypes","unchecked"})
 public class InnerNode<K extends Comparable>
 extends Node<K>
 {
@@ -130,12 +134,22 @@ extends Node<K>
 	/**
 	 * Deletes this node and all children
 	 */
-	public void delete() throws IOException {
+	public IResult<Void> delete() {
+		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (int i= _size; 0 < i--;) {
-			Node<?> childBPage = StorageUtils.syncFetch(getStorage(), (Identifier)_values[i]);
-			childBPage.delete();
+			final IResult fetch = getStorage().fetch((Identifier)_values[i]);
+			tasks.add(new Handler(fetch) {
+				protected IResult onSuccess() throws Exception {
+					Node<?> childBPage = (Node<?>) fetch.getResult();
+					return childBPage.delete();
+				}
+			}.toResult());
 		}
-		super.delete();
+		return new Handler(TaskUtils.combineResults(tasks)) {
+			protected IResult onSuccess() throws Exception {
+				return InnerNode.super.delete();
+			}
+		}.toResult();
 	}
 
 	/**

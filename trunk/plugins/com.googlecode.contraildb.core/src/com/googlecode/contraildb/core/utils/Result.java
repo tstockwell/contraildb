@@ -43,7 +43,7 @@ public class Result<V> implements IResult<V>{
 
 	@Override synchronized public V get() {
 		if (ContrailTask.isContrailTask())
-			throw new RuntimeException("Contrail actions MUST be atomic!\nUse a ResultHandler instead of calling get().");
+			throw new RuntimeException("Contrail actions MUST be atomic!\nUse a Handler instead of calling get().");
 		
 		while (!_done) {
 			try {
@@ -65,7 +65,7 @@ public class Result<V> implements IResult<V>{
 	}
 
 	synchronized public void complete(final IResult<V> result) {
-		result.onComplete(new ResultHandler() {
+		result.onComplete(new Handler() {
 			public void onComplete() throws Exception {
 				complete(result.isSuccess(), result.getResult(), result.getError());
 			}

@@ -17,8 +17,6 @@
  ******************************************************************************/
 package com.googlecode.contraildb.core;
 
-import java.io.IOException;
-
 import com.googlecode.contraildb.core.impl.ContrailServiceImpl;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 
@@ -29,12 +27,7 @@ public class ContrailServiceFactory {
 	 * @param storageProvider 
 	 * 		A low-level storage provider that provides access to a Contrail database.  
 	 */
-	public static IContrailService getContrailService(IStorageProvider storageProvider) {
-		try {
-			return new ContrailServiceImpl(storageProvider);
-		} 
-		catch (IOException e) {
-			throw new ContrailException("Error creating service:"+e.getMessage(), e);
-		}
+	public static IResult<? extends IContrailService> getContrailService(IStorageProvider storageProvider) {
+		return ContrailServiceImpl.create(storageProvider);
 	}
 }

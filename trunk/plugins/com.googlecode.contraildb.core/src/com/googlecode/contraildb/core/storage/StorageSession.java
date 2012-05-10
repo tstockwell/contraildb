@@ -18,7 +18,7 @@ import com.googlecode.contraildb.core.impl.PathUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.ResultHandler;
+import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -118,9 +118,9 @@ public class StorageSession implements IEntityStorage.Session {
 	 * @throws IOException 
 	 */
 	public IResult<Void> commit() { 
-		return new ResultHandler(_storage.flush()) {
+		return new Handler(_storage.flush()) {
 			protected IResult onSuccess() {
-				spawnChild(new ResultHandler(_storageSystem.commitRevision(StorageSession.this)) {
+				spawnChild(new Handler(_storageSystem.commitRevision(StorageSession.this)) {
 					protected void onComplete() throws Exception {
 						_isActive= false;
 						_deletes= _reads= _inserts= _updates= null;
@@ -140,9 +140,9 @@ public class StorageSession implements IEntityStorage.Session {
 	 * When this exception is throw the caller should open a new session and retry the transaction. 
 	 */
 	synchronized public IResult<Void> close() {
-		return new ResultHandler(_isActive ? flush() : TaskUtils.DONE) {
+		return new Handler(_isActive ? flush() : TaskUtils.DONE) {
 			protected void onComplete() throws Exception {
-				spawnChild(new ResultHandler(_storage.close()) {
+				spawnChild(new Handler(_storage.close()) {
 					protected void onComplete() throws Exception {
 						spawnChild(_storageSystem.closeStorageSession(StorageSession.this));
 						_isActive= false;
@@ -154,7 +154,7 @@ public class StorageSession implements IEntityStorage.Session {
 
 
 	public <E extends IEntity> IResult<Void> store(final E entity) {
-		return new ResultHandler() {
+		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Session is read only: "+_revisionNumber);
@@ -176,7 +176,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 	
 	public IResult<Void> update(final Identifier path, final IEntity item) throws IOException {
-		return new ResultHandler() {
+		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
@@ -193,7 +193,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 	
 	public IResult<Void> deleteAllChildren(final Collection<Identifier> paths) throws IOException {
-		return new ResultHandler() {
+		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
@@ -201,7 +201,7 @@ public class StorageSession implements IEntityStorage.Session {
 				final ArrayList<IResult<Collection<Identifier>>> childrens= new ArrayList<IResult<Collection<Identifier>>>(); 
 				for (Identifier path: paths) 
 					childrens.add(listChildren(path));
-				spawnChild(new ResultHandler(TaskUtils.combineResults(childrens)) {
+				spawnChild(new Handler(TaskUtils.combineResults(childrens)) {
 					protected IResult onSuccess() throws Exception {
 						for (IResult<Collection<Identifier>> result: childrens) {
 							Collection<Identifier> children= result.getResult();
@@ -218,7 +218,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 	public IResult<Void> delete(final Identifier  path) {
-		return new ResultHandler() {
+		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
@@ -342,13 +342,13 @@ public class StorageSession implements IEntityStorage.Session {
 
 	@Override
 	public IResult<Void> deleteAllChildren(final Identifier path) {
-		return new ResultHandler() {
+		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
 				
 				final IResult<Collection<Identifier>> children= listChildren(path);
-				spawnChild(new ResultHandler(children) {
+				spawnChild(new Handler(children) {
 					protected IResult onSuccess() throws Exception {
 						for (Identifier child: children.getResult())
 							spawnChild(delete(child));

@@ -101,7 +101,7 @@ public class BasicContrailTests extends TestCase {
 //				new RamStorageSPI(), 
 //				new SimpleFileStorageSPI(new File("/temp/test/contrail"), true));
 		_datastore = 
-			ContrailServiceFactory.getContrailService(_storageProvider);
+			ContrailServiceFactory.getContrailService(_storageProvider).get();
 		
 		// put data
 		Item fixture= new Item("Good Guys");
@@ -173,7 +173,7 @@ public class BasicContrailTests extends TestCase {
 		addFixture(fixture);
 		
 		// test put
-		IContrailSession transaction= _datastore.beginSession(Mode.READWRITE);
+		IContrailSession transaction= _datastore.beginSession(Mode.READWRITE).get();
 		for (String kind : _fixturesByType.keySet()) {
 			List<Item> list= _fixturesByType.get(kind);
 			transaction.store(list);
@@ -203,44 +203,44 @@ public class BasicContrailTests extends TestCase {
 		Identifier id= Identifier.create("1");
 		String name= "$$$$$$$$$$$$$$$$$$";
 		ContrailQuery query = new ContrailQuery().where(eq("NAME", name));
-		IContrailSession transaction= _datastore.beginSession(Mode.READWRITE);
+		IContrailSession transaction= _datastore.beginSession(Mode.READWRITE).get();
 		{
 			Item item= new Item(id);
 			item.setProperty("NAME", name);
 			transaction.store(item);
 			
-			Item f= transaction.fetch(id);
+			Item f= transaction.fetch(id).get();
 			assertNotNull(f);
 			assertEquals(id, f.getId());
-			assertNotNull(transaction.prepare(query).item());
+			assertNotNull(transaction.prepare(query).get().item());
 		}
 		transaction.commit();
 		
-		transaction= _datastore.beginSession(Mode.READWRITE);
+		transaction= _datastore.beginSession(Mode.READWRITE).get();
 		{
-			Item f= transaction.fetch(id);
+			Item f= transaction.fetch(id).get();
 			assertNotNull(f);
 			assertEquals(id, f.getId());
-			assertNotNull(transaction.prepare(query).item());
+			assertNotNull(transaction.prepare(query).get().item());
 		}
 		transaction.commit();
 	}
 
 	public void testBootstrap() throws Exception {
 		
-		IContrailSession transaction= _datastore.beginSession(Mode.READWRITE);
+		IContrailSession transaction= _datastore.beginSession(Mode.READWRITE).get();
 
 		for (String kind : _fixturesByType.keySet()) {
 			List<Identifier> keys= _fixtureKeysByType.get(kind);
 			
 			// fetch all keys and make sure we get them all 
-			Collection<Item> allEntities= transaction.fetch(keys);
+			Collection<Item> allEntities= transaction.fetch(keys).get();
 			assertEquals(keys.size(), allEntities.size());
 
 			// fetch all entities and check all fetched properties
 			for (Identifier key : keys) {
 				Item fixture= _fixturesByKey.get(key);
-				Item fetched= transaction.fetch(key);
+				Item fetched= transaction.fetch(key).get();
 				assertNotNull(fetched);
 				assertEquals(key, fetched.getId());
 				assertEquals(kind, fetched.getProperty(TYPE));
@@ -257,99 +257,99 @@ public class BasicContrailTests extends TestCase {
 			// delete a Record and make sure its deleted
 			transaction.delete(keys.get(keys.size()/2));
 			ContrailQuery query = new ContrailQuery().where(eq(TYPE, kind));
-			assertEquals(keys.size()-1, transaction.prepare(query).count());
+			assertEquals(keys.size()-1, transaction.prepare(query).get().count());
 		}
 
 		transaction.close();
 	}
 	
 	public void testBasicQueries() throws Exception {
-		IContrailSession transaction= _datastore.beginSession(Mode.READONLY);
+		IContrailSession transaction= _datastore.beginSession(Mode.READONLY).get();
 
 			int personCount= _fixturesByType.get(PERSON).size();
 
 			// test query
 			ContrailQuery query = new ContrailQuery().where(eq(TYPE, PERSON));
-			IPreparedQuery results= transaction.prepare(query);
+			IPreparedQuery results= transaction.prepare(query).get();
 			assertEquals(personCount, results.count());
 
 			// test filters
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.EQUAL, "lawyer");
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(1, results.count());
 			assertEquals(Identifier.create("Gandhi"), results.item().getId());
 
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.EQUAL, "politician");
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(2, results.count());
 
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.GREATER_THAN, "lawyer");
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(3, results.count());
 
 			query = new ContrailQuery();
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.LESS_THAN, "lawyer");
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(1, results.count());
 
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.LESS_THAN, "lawyer");
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(1, results.count());
 
 			query = new ContrailQuery();
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.GREATER_THAN, "carpenter");
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.LESS_THAN, "politician");
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(2, results.count());
 
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.GREATER_THAN, "carpenter");
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.LESS_THAN, "politician");
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(2, results.count());
 			
 			query = new ContrailQuery().where(eq(PROFESSION, "politician"));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(2, results.count());
 			
 			query = new ContrailQuery().where(ne(PROFESSION, "politician"));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(3, results.count());
 			
 			query = new ContrailQuery().where(or( eq(PROFESSION, "carpenter"), eq(PROFESSION, "politician")));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(3, results.count());
 			
 			query = new ContrailQuery().where(gt(PROFESSION, "carpenter"));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(4, results.count());
 			
 			query = new ContrailQuery().where(lt(PROFESSION, "politician"));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(3, results.count());
 			
 			query = new ContrailQuery().where(and(gt(PROFESSION, "carpenter"), lt(PROFESSION, "politician")));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(2, results.count());
 
 			query = new ContrailQuery().where(and(eq(TYPE, PERSON), gt(PROFESSION, "carpenter"), lt(PROFESSION, "politician")));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(2, results.count());
 			
 			query = new ContrailQuery().where(
 					or( and(gt(PROFESSION, "carpenter"), lt(PROFESSION, "politician")), 
 						eq(PROFESSION, "carpenter")));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(3, results.count());
 			
 			query = new ContrailQuery().where(and(eq(TYPE, PERSON), 
 					or( and(gt(PROFESSION, "carpenter"), lt(PROFESSION, "politician")), 
 						eq(PROFESSION, "carpenter"))));
-			results= transaction.prepare(query);
+			results= transaction.prepare(query).get();
 			assertEquals(3, results.count());
 			
 			// test in collection
@@ -357,27 +357,27 @@ public class BasicContrailTests extends TestCase {
 			Identifier keyChurchill= Identifier.create("Churchill");
 			query = new ContrailQuery().where(eq(TYPE, POSSE)); 
 			query.addFilter(MEMBERS, ContrailQuery.FilterOperator.EQUAL, keyHitler);
-			results= transaction.prepare(query); // find POSSES that contain Hitler as a member
+			results= transaction.prepare(query).get(); // find POSSES that contain Hitler as a member
 			assertEquals(2, results.count());
 			query.addFilter(MEMBERS, ContrailQuery.FilterOperator.EQUAL, keyChurchill);
-			results= transaction.prepare(query); // find POSSES that contain Hitler and Churchill as members
+			results= transaction.prepare(query).get(); // find POSSES that contain Hitler and Churchill as members
 			assertEquals(1, results.count());
 			
 			query = new ContrailQuery().where(and(eq(TYPE, POSSE), eq(MEMBERS, keyHitler)));
-			results= transaction.prepare(query); // find POSSES that contain Hitler as a member
+			results= transaction.prepare(query).get(); // find POSSES that contain Hitler as a member
 			assertEquals(2, results.count());
 			
 			query = new ContrailQuery().where(and(eq(TYPE, POSSE), any(MEMBERS, keyHitler, keyChurchill)));
-			results= transaction.prepare(query); // find POSSES that either Hitler or Churchill as members
+			results= transaction.prepare(query).get(); // find POSSES that either Hitler or Churchill as members
 			assertEquals(3, results.count());
 			
 			query = new ContrailQuery().where(and(eq(TYPE, POSSE), all(MEMBERS, keyHitler, keyChurchill)));
-			results= transaction.prepare(query); // find POSSES that contain Hitler and Churchill as members
+			results= transaction.prepare(query).get(); // find POSSES that contain Hitler and Churchill as members
 			assertEquals(1, results.count());
 			assertEquals(Identifier.create("Politicians"), results.item().getId());
 			
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
-			results= transaction.prepare(query); // find POSSES that contain Hitler and Churchill as members
+			results= transaction.prepare(query).get(); // find POSSES that contain Hitler and Churchill as members
 			assertNotNull(results.identifiers());
 			
 //			query = new ContrailQuery().where(and(eq(TYPE, POSSE), none(MEMBERS, keyHitler)));
@@ -416,13 +416,13 @@ public class BasicContrailTests extends TestCase {
 	}
 	
 	public void testSorting() throws Exception {
-		IContrailSession transaction= _datastore.beginSession(Mode.READONLY);
+		IContrailSession transaction= _datastore.beginSession(Mode.READONLY).get();
 
 			for (SortDirection direction : SortDirection.values()) {
 				for (String property : Arrays.asList(PROFESSION, SALARY, MARRIED)) {
 					ContrailQuery query = new ContrailQuery().where(eq(TYPE, PERSON));
 					query.addSort(property, direction);
-					IPreparedQuery<Item> results= transaction.prepare(query);
+					IPreparedQuery<Item> results= transaction.prepare(query).get();
 					Comparable last= null;
 					List<Item> items= results.list();
 					for (Item e : items) {
@@ -445,13 +445,13 @@ public class BasicContrailTests extends TestCase {
 	
 	
 	public void testBasicTransaction() throws Exception {
-			IContrailSession session= _datastore.beginSession(Mode.READWRITE);
+			IContrailSession session= _datastore.beginSession(Mode.READWRITE).get();
 			Item object_0_1= new Item("person-0.1");
 			session.store(object_0_1);
 			session.commit();
 			
-			IContrailSession T1= _datastore.beginSession(Mode.READWRITE);
-			IContrailSession T2= _datastore.beginSession(Mode.READONLY);
+			IContrailSession T1= _datastore.beginSession(Mode.READWRITE).get();
+			IContrailSession T2= _datastore.beginSession(Mode.READONLY).get();
 			
 			// TEST PUT ISOLATION
 			// put object-1.1 in transaction 1
@@ -463,10 +463,10 @@ public class BasicContrailTests extends TestCase {
 			assertNotNull("transaction isolation violated", T1.fetch(object_1_1.getId()));
 			// object-1.1 should not be visible outside of T1 since it is not yet committed 
 			assertNull("transaction isolation violated", T2.fetch(object_1_1.getId()));
-			IContrailSession T3= _datastore.beginSession(Mode.READONLY);
+			IContrailSession T3= _datastore.beginSession(Mode.READONLY).get();
 			assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()));
 			T3.close();
-			IContrailSession T4= _datastore.beginSession(Mode.READWRITE);
+			IContrailSession T4= _datastore.beginSession(Mode.READWRITE).get();
 			assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()));
 			T4.close();
 			
@@ -475,10 +475,10 @@ public class BasicContrailTests extends TestCase {
 			assertNull("transaction isolation violated", T1.fetch(object_0_1.getId()));
 			// object-0.1 should still be visible outside of T1 since it is not yet committed 
 			assertNotNull("transaction isolation violated", T2.fetch(object_0_1.getId()));
-			T3= _datastore.beginSession(Mode.READONLY);
+			T3= _datastore.beginSession(Mode.READONLY).get();
 			assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()));
 			T3.close();
-			T4= _datastore.beginSession(Mode.READWRITE);
+			T4= _datastore.beginSession(Mode.READWRITE).get();
 			assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()));
 			T4.close();
 			
@@ -489,10 +489,10 @@ public class BasicContrailTests extends TestCase {
 
 			// TEST PUT ISOLATION
 			// object-1.1 should now be visible to new transactions
-			T3= _datastore.beginSession(Mode.READONLY);
+			T3= _datastore.beginSession(Mode.READONLY).get();
 			assertNotNull(T3.fetch(object_1_1.getId()));
 			T3.close();
-			T4= _datastore.beginSession(Mode.READWRITE);
+			T4= _datastore.beginSession(Mode.READWRITE).get();
 			assertNotNull(T4.fetch(object_1_1.getId()));
 			T4.close();
 			// object-1.1 should still not be visible to T2 since T2 was started before object-1.1 was committed
@@ -500,10 +500,10 @@ public class BasicContrailTests extends TestCase {
 			
 			// TEST DELETE ISOLATION
 			// object-0.1 should not be visible to new transactions 
-			T3= _datastore.beginSession(Mode.READONLY);
+			T3= _datastore.beginSession(Mode.READONLY).get();
 			assertNull(T3.fetch(object_0_1.getId()));
 			T3.close();
-			T4= _datastore.beginSession(Mode.READWRITE);
+			T4= _datastore.beginSession(Mode.READWRITE).get();
 			assertNull(T4.fetch(object_0_1.getId()));
 			T4.close();
 			// object-0.1 should still be visible to T2 
@@ -517,19 +517,19 @@ public class BasicContrailTests extends TestCase {
 	public void testRecreateMultipleIndexValues() throws Exception {
 		Item i1= new Item(Identifier.create("1")).setProperty(Item.KEY_KIND, "TestItem");
 		Item i2= new Item(Identifier.create("2")).setProperty(Item.KEY_KIND, "TestItem");
-		IContrailSession session= _datastore.beginSession(Mode.READWRITE);
+		IContrailSession session= _datastore.beginSession(Mode.READWRITE).get();
 		session.store(i1);
 		session.store(i2);
 		session.commit();
 		session.close();
 		
-		session= _datastore.beginSession(Mode.READWRITE);
+		session= _datastore.beginSession(Mode.READWRITE).get();
 		session.delete(i1);
 		session.delete(i2);
 		session.commit();
 		session.close();
 		
-		session= _datastore.beginSession(Mode.READWRITE);
+		session= _datastore.beginSession(Mode.READWRITE).get();
 		session.store(i1);
 		session.store(i2);
 		session.commit();
@@ -537,13 +537,13 @@ public class BasicContrailTests extends TestCase {
 	}
 	
 	public void testRollback() throws Exception {
-		IContrailSession session= _datastore.beginSession(Mode.READWRITE);
+		IContrailSession session= _datastore.beginSession(Mode.READWRITE).get();
 		Item object_0_1= new Item("person-0.1");
 		session.store(object_0_1);
 		session.commit();
 		session.close();
 		
-		IContrailSession T1= _datastore.beginSession(Mode.READWRITE);
+		IContrailSession T1= _datastore.beginSession(Mode.READWRITE).get();
 		
 		// put object-1.1 in transaction 1
 		Item object_1_1= new Item("person-1.1");
@@ -556,11 +556,11 @@ public class BasicContrailTests extends TestCase {
 
 		// object-1.1 should not be visible 
 		// object-0.1 should still be visible 
-		IContrailSession T3= _datastore.beginSession(Mode.READONLY);
+		IContrailSession T3= _datastore.beginSession(Mode.READONLY).get();
 		assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()));
 		assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()));
 		T3.close();
-		IContrailSession T4= _datastore.beginSession(Mode.READWRITE);
+		IContrailSession T4= _datastore.beginSession(Mode.READWRITE).get();
 		assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()));
 		assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()));
 		T4.close();

@@ -148,7 +148,7 @@ public class ContrailTaskTracker {
 
 	public class Session {
 		
-		IResultHandler _completionListener= new ResultHandler() {
+		IResultHandler _completionListener= new Handler() {
 			@Override public void onComplete() {
 				IResult incoming= incoming();
 				for (ContrailTask task:_sessionTasks) {
