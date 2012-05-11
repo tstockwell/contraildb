@@ -96,8 +96,9 @@ public class ContrailServiceImpl implements IContrailService {
 		return _storageSystem.getAvailableRevisions();
 	}
 	
-	void onClose(IContrailSession session) {
+	IResult<Void> onClose(IContrailSession session) {
 		_transactions.remove(session);
+		return TaskUtils.DONE;
 	}
 
 	@Override
