@@ -31,7 +31,7 @@ public class StorageCleanupAction {
 	public static IResult<Void> cleanup(StorageSystem storageSystem) {
 		return new Handler(StorageCleanupAction.create(storageSystem)) {
 			protected IResult onSuccess() throws Exception {
-				spawnChild(((StorageCleanupAction)incoming().getResult()).run());
+				spawn(((StorageCleanupAction)incoming().getResult()).run());
 				return TaskUtils.DONE;
 			}
 		}.toResult();	
@@ -46,7 +46,7 @@ public class StorageCleanupAction {
 				cleanupAction._storageSystem= storageSystem;
 				cleanupAction._storageSession= entityStorage.getResult();
 				final IResult<RootFolder> rf= cleanupAction._storageSession.fetch(storageSystem._root.getId());
-				spawnChild(new Handler(rf) {
+				spawn(new Handler(rf) {
 					protected IResult onSuccess() throws Exception {
 						cleanupAction._rootFolder= rf.get();
 						return TaskUtils.DONE;
@@ -143,7 +143,7 @@ public class StorageCleanupAction {
 		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 
-					spawnChild(cleanupFiles(revision));
+					spawn(cleanupFiles(revision));
 
 					final String session= Identifier.create().toString();
 					IResult deleteRevision= new Handler(_rootFolder.lock(session, true)) {
@@ -151,11 +151,11 @@ public class StorageCleanupAction {
 							
 							IResult doDelete= new Handler(_rootFolder.deleteRevision(revision)) {
 								protected void onComplete() throws Exception {
-									spawnChild(new Handler(_storageSession.flush()));
+									spawn(new Handler(_storageSession.flush()));
 								}
 							}.toResult();
 							
-							spawnChild(new Handler(doDelete) {
+							spawn(new Handler(doDelete) {
 								protected void onComplete() throws Exception {
 										_rootFolder.unlock(session);
 								}
@@ -174,7 +174,7 @@ public class StorageCleanupAction {
 						}
 					}.toResult();
 					
-					spawnChild(new Handler(flush) {
+					spawn(new Handler(flush) {
 						protected void onError() {
 							Logging.severe("Error while attempting to clean up revision "+revision.revisionNumber, incoming().getError());
 						}
@@ -206,7 +206,7 @@ public class StorageCleanupAction {
 				files.addAll(journal.updates);
 				for (Identifier id: files) {
 					final IResult<Collection<Identifier>> listChildren= _storageSession.listChildren(id);
-					spawnChild(new Handler(listChildren) {
+					spawn(new Handler(listChildren) {
 						protected IResult onSuccess() throws Exception {
 							Collection<Identifier> children= listChildren.get();
 							for (Identifier child: children) {

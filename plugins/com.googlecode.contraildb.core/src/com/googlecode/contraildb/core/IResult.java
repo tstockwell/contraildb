@@ -53,15 +53,5 @@ public interface IResult<V> {
     /**
      * Add a callback to be invoked when the result is available.
      */
-	public void onComplete(IResultHandler<V> handler);
-	
-    /**
-     * Add a callback to be invoked this result is completed successfully.
-     */
-	public void onSuccess(IResultHandler<V> handler);
-
-    /**
-     * Add a callback to be invoked this result is completed with an error.
-     */
-	public void onError(IResultHandler<V> handler);
+	public void addHandler(IResultHandler<V> handler);
 }

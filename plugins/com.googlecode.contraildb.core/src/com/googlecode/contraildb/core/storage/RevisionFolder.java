@@ -69,8 +69,8 @@ public class RevisionFolder extends Entity {
 	public IResult<Void> onInsert(Identifier identifier) {
 		return new Handler(super.onInsert(identifier)) {
 			protected IResult onSuccess() throws Exception {
-				spawnChild(storage.store(_sessionsFolder));
-				spawnChild(storage.store(_lockFolder));
+				spawn(storage.store(_sessionsFolder));
+				spawn(storage.store(_lockFolder));
 				return TaskUtils.DONE;
 			};
 		}.toResult();
@@ -81,7 +81,7 @@ public class RevisionFolder extends Entity {
 			protected IResult onSuccess() throws Exception {
 				final IResult<Entity> sf= storage.fetch(Identifier.create(id, "sessions"));
 				final IResult<LockFolder> lf= storage.fetch(LockFolder.createId(RevisionFolder.this));
-				spawnChild(new Handler(sf,lf) {
+				spawn(new Handler(sf,lf) {
 					protected IResult onSuccess() throws Exception {
 						_sessionsFolder= sf.getResult();
 						_lockFolder= lf.getResult();

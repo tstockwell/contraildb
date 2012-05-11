@@ -204,7 +204,7 @@ public class ContrailTaskTracker {
 				tasks.add(task);
 			}
 			_sessionTasks.add(task);
-			task.getResult().onComplete(_completionListener);
+			task.getResult().addHandler(_completionListener);
 		}
 		
 		private void removeTask(ContrailTask<?> task) {

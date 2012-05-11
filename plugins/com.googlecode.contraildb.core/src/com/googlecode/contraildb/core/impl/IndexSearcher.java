@@ -31,8 +31,9 @@ import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.storage.StorageSession;
-import com.googlecode.contraildb.core.storage.StorageUtils;
-import com.googlecode.contraildb.core.utils.ContrailAction;
+import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.InvocationAction;
+import com.googlecode.contraildb.core.utils.NullHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -54,93 +55,107 @@ public class IndexSearcher {
 	/**
 	 * Index the given entities.
 	 */
-	public <T extends Item> void index(Iterable<T> entities) throws IOException {
-		Map<String, Collection<T>> entitiesByProperty= new HashMap<String, Collection<T>>();
-		BTree<Identifier> idIndex= getIdIndex();
-		for (T t: entities) {
-			for (String property: t.getIndexedProperties().keySet()) {
-				Collection<T> c= entitiesByProperty.get(property);
-				if (c == null) {
-					c= new ArrayList<T>();
-					entitiesByProperty.put(property, c);
-				}
-				c.add(t);
-			}
-			idIndex.insert(t.getId());
+	public <T extends Item> IResult<Void> index(final Iterable<T> entities) {
+		class shared {
+			Map<String, Collection<T>> entitiesByProperty= new HashMap<String, Collection<T>>();
 		}
+		final shared shared= new shared();
 		
-		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
-		for (final Map.Entry<String, Collection<T>> e: entitiesByProperty.entrySet()) {
-			tasks.add(new ContrailAction() {
-				protected void action() throws IOException {
+		IResult<Void> getEntitiesByProperty= new InvocationAction<BTree<Identifier>>(getIdIndex()) {
+			protected void onSuccess(BTree<Identifier> idIndex) throws Exception {
+				for (T t: entities) {
+					for (String property: t.getIndexedProperties().keySet()) {
+						Collection<T> c= shared.entitiesByProperty.get(property);
+						if (c == null) {
+							c= new ArrayList<T>();
+							shared.entitiesByProperty.put(property, c);
+						}
+						c.add(t);
+					}
+					spawn(idIndex.insert(t.getId()));
+				}
+			};
+		}.toResult();
+		
+		return new Handler(getEntitiesByProperty) {
+			protected IResult onSuccess() throws Exception {
+				ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
+				for (final Map.Entry<String, Collection<T>> e: shared.entitiesByProperty.entrySet()) {
 					final String propertyName= e.getKey();
-					PropertyIndex var= getPropertyIndex(propertyName);
-					if (var == null)
-						var= createPropertyIndex(propertyName);
-					final PropertyIndex propertyIndex= var;
 					
-					ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
-					for (final T t: e.getValue()) {
-						tasks.add(new ContrailAction() {
-							protected void action() throws IOException {
+					final IResult<PropertyIndex> getPropertyIndex= 
+						new NullHandler<PropertyIndex>(getPropertyIndex(propertyName)) {
+							protected IResult onNull() throws Exception {
+								return createPropertyIndex(propertyName);}};
+								
+					spawn(new Handler(getPropertyIndex) {
+						protected IResult onSuccess() throws Exception {
+							final PropertyIndex propertyIndex= getPropertyIndex.getResult();
+							for (final T t: e.getValue()) {
 								Object propertyValue= t.getProperty(propertyName);
 								if (propertyValue instanceof Comparable || propertyValue == null) {
-									propertyIndex.insert((Comparable<?>) propertyValue, t.getId());
+									spawn(propertyIndex.insert((Comparable<?>) propertyValue, t.getId()));
 								}
 								else if (propertyValue instanceof Collection) {
 									Collection<Comparable> collection= (Collection)propertyValue;
 									for (Comparable comparable: collection) 
-										propertyIndex.insert(comparable, t.getId());
+										spawn(propertyIndex.insert(comparable, t.getId()));
 								}
 								else
 									throw new ContrailException("Cannot store property value. A value must be one of the basic types supported by Contrail or a collection supported types:"+propertyValue);
 							}
-						}.submit());
-					}
-					try {
-						TaskUtils.combineResults(tasks).get();
-					}
-					catch (Throwable t) {
-						TaskUtils.throwSomething(t, IOException.class);
-					}
+							return TaskUtils.DONE;
+						}
+					});
 				}
-			}.submit());
-		}
-		try {
-			TaskUtils.combineResults(tasks).get();
-		}
-		catch (Throwable t) {
-			TaskUtils.throwSomething(t, IOException.class);
-		}
+				return TaskUtils.DONE;
+			}
+		}.toResult();
+		
+		
+		
 	}
 	
-	private BTree<Identifier> getIdIndex() throws IOException {
-		Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+Item.KEY_ID);
-		BTree tree= StorageUtils.syncFetch(_storageSession, indexId);
-		if (tree == null)
-			tree= BTree.createInstance(_storageSession, indexId);
-		return tree;
+	private IResult<BTree<Identifier>> getIdIndex() {
+		final Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+Item.KEY_ID);
+		final IResult<BTree> fetch= _storageSession.fetch(indexId);
+		return new Handler(fetch) {
+			protected IResult onSuccess() throws Exception {
+				BTree tree= fetch.getResult();
+				if (tree == null)
+					tree= BTree.createInstance(_storageSession, indexId);
+				return asResult(tree);
+			}
+		};
 	}
 	
 	
-	private PropertyIndex getPropertyIndex(String propertyName) throws IOException {
+	private IResult<PropertyIndex> getPropertyIndex(String propertyName) {
 		Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+propertyName);
-		BPlusTree tree= StorageUtils.syncFetch(_storageSession, indexId);
-		if (tree == null)
-			return null;
-		return new PropertyIndex(tree);
+		final IResult<BPlusTree> fetch= _storageSession.fetch(indexId);
+		return new Handler(fetch) {
+			protected IResult onSuccess() throws Exception {
+				BPlusTree tree= fetch.getResult();
+				if (tree == null)
+					return TaskUtils.NULL;
+				return PropertyIndex.create(tree);
+			}
+		};
 	}
 
-	private PropertyIndex createPropertyIndex(String propertyName) 
-	throws IOException 
+	private IResult<PropertyIndex> createPropertyIndex(String propertyName) 
 	{
 		Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+propertyName);
-		BPlusTree tree= BPlusTree.createBPlusTree(_storageSession, indexId);
-		PropertyIndex propertyIndex= new PropertyIndex(tree);
-		return propertyIndex;
+		final IResult<BPlusTree> createBPlusTree= BPlusTree.createBPlusTree(_storageSession, indexId);
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				BPlusTree tree= createBPlusTree.getResult();
+				return PropertyIndex.create(tree);
+			}
+		};
 	}
 
-	public <T extends Item> void unindex(Iterable<T> entities) throws IOException {
+	public <T extends Item> IResult<Void> unindex(Iterable<T> entities)  {
 		Map<String, Collection<T>> entitiesByProperty= new HashMap<String, Collection<T>>();
 		for (T t: entities) {
 			for (String property: t.getIndexedProperties().keySet()) {
@@ -155,98 +170,107 @@ public class IndexSearcher {
 		
 		ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 		for (final Map.Entry<String, Collection<T>> e: entitiesByProperty.entrySet()) {
-			tasks.add(new ContrailAction() {
-				protected void action() throws IOException {
-					final String propertyName= e.getKey();
-					final PropertyIndex propertyIndex= getPropertyIndex(propertyName);
+			final String propertyName= e.getKey();
+			final IResult<PropertyIndex> getPropertyIndex= getPropertyIndex(propertyName);
+			tasks.add(new Handler(getPropertyIndex) {
+				protected IResult onSuccess() throws Exception {
+					final PropertyIndex propertyIndex= getPropertyIndex.getResult();
 					if (propertyIndex == null) 
 						throw new ContrailException("Missing index for property "+propertyName);
 					
 					ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 					for (final T t: e.getValue()) {
-						tasks.add(new ContrailAction() {
-							protected void action() throws IOException {
-								Object propertyValue= t.getProperty(propertyName);
-								if (propertyValue instanceof Comparable || propertyValue == null) {
-									propertyIndex.remove((Comparable<?>) propertyValue, t.getId());
-								}
-								else if (propertyValue instanceof Collection) {
-									Collection<Comparable> collection= (Collection)propertyValue;
-									for (Comparable comparable: collection) 
-										propertyIndex.remove(comparable, t.getId());
-								}
-								else
-									throw new ContrailException("Cannot store property value. A value must be one of the basic types supported by Contrail or a collection supported types:"+propertyValue);
-							}
-						}.submit());
+						Object propertyValue= t.getProperty(propertyName);
+						if (propertyValue instanceof Comparable || propertyValue == null) {
+							propertyIndex.remove((Comparable<?>) propertyValue, t.getId());
+						}
+						else if (propertyValue instanceof Collection) {
+							Collection<Comparable> collection= (Collection)propertyValue;
+							for (Comparable comparable: collection) 
+								propertyIndex.remove(comparable, t.getId());
+						}
+						else
+							throw new ContrailException("Cannot store property value. A value must be one of the basic types supported by Contrail or a collection supported types:"+propertyValue);
 					}
-					try {
-						TaskUtils.combineResults(tasks).get();
-					}
-					catch (Throwable t) {
-						TaskUtils.throwSomething(t, IOException.class);
-					}
+					return TaskUtils.combineResults(tasks);
 				}
-			}.submit());
+			}.toResult());
 		}
-		try {
-			TaskUtils.combineResults(tasks).get();
-		}
-		catch (Throwable t) {
-			TaskUtils.throwSomething(t, IOException.class);
-		}
+		return TaskUtils.combineResults(tasks);
 	}
 	
 
-	public void fetchIdentifiers(final ContrailQuery query, final IProcessor processor) {
-		new ContrailAction() {
-			protected void action() throws Exception {
+	public IResult<Void> fetchIdentifiers(final ContrailQuery query, final IProcessor processor) {
+		final IResult<List<IForwardCursor<Identifier>>> createFilterCursors= createFilterCursors(query.getFilterPredicates());
+		return new Handler(createFilterCursors) {
+			protected IResult onSuccess() throws Exception {
 				try {
-					List<IForwardCursor<Identifier>> filterCursors= createFilterCursors(query.getFilterPredicates());
+					List<IForwardCursor<Identifier>> filterCursors= createFilterCursors.getResult();
 					final IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?
-						filterCursors.get(0) :
-						new ConjunctiveCursor<Identifier>(filterCursors);
-					while (queryCursor.next()) {
-						if (!processor.result(queryCursor.keyValue()))
-							break;
-					}
-					processor.complete(null);
+							filterCursors.get(0) :
+								new ConjunctiveCursor<Identifier>(filterCursors);
+							while (queryCursor.next()) {
+								if (!processor.result(queryCursor.keyValue()))
+									break;
+							}
+							processor.complete(null);
 				}
 				catch (IOException x) {
 					processor.complete(x);
 				}
+				return TaskUtils.DONE;
 			}
-		}.submit();
+		};
 	}
 	
-	private List<IForwardCursor<Identifier>> createFilterCursors(Iterable<FilterPredicate> clauses) 
-	throws IOException 
+	private IResult<List<IForwardCursor<Identifier>>> createFilterCursors(Iterable<FilterPredicate> clauses) 
 	{
-		List<IForwardCursor<Identifier>> filterCursors= new ArrayList<IForwardCursor<Identifier>>();
-		for (FilterPredicate filterPredicate: clauses) {
+		ArrayList<IResult> tasks= new ArrayList<IResult>();
+		final List<IForwardCursor<Identifier>> filterCursors= new ArrayList<IForwardCursor<Identifier>>();
+		for (final FilterPredicate filterPredicate: clauses) {
 			IForwardCursor<Identifier> filterCursor= null;
 			FilterOperator op= filterPredicate.getOperator();
-			String propertyName= filterPredicate.getPropertyName();
+			final String propertyName= filterPredicate.getPropertyName();
 			List<FilterPredicate> subClauses= filterPredicate.getClauses();
 			if (op == FilterOperator.AND) {
-				filterCursor= new ConjunctiveCursor<Identifier>(createFilterCursors(subClauses));
+				tasks.add(new InvocationAction<List<IForwardCursor<Identifier>>>(createFilterCursors(subClauses)){
+					protected void onSuccess(List<IForwardCursor<Identifier>> cursors) throws Exception {
+						filterCursors.add(new ConjunctiveCursor<Identifier>(cursors));
+					}
+				});
 			}
 			else if (op == FilterOperator.OR) {
-				filterCursor= new DisjunctiveCursor<Identifier>(createFilterCursors(subClauses));
+				tasks.add(new InvocationAction<List<IForwardCursor<Identifier>>>(createFilterCursors(subClauses)){
+					protected void onSuccess(List<IForwardCursor<Identifier>> cursors) throws Exception {
+						filterCursors.add(new DisjunctiveCursor<Identifier>(cursors));
+					}
+				});
 			}
 			else {
-				PropertyIndex index= getPropertyIndex(propertyName);
-				if (index == null)
-					throw new ContrailException("No index found for property: "+propertyName);
-				filterCursor= createFilterCursor(index, filterPredicate);
+				final IResult<PropertyIndex> getPropertyIndex= getPropertyIndex(propertyName);
+				tasks.add(new Handler(getPropertyIndex) {
+					protected IResult onSuccess() throws Exception {
+						PropertyIndex index= getPropertyIndex.getResult();
+						if (index == null)
+							throw new ContrailException("No index found for property: "+propertyName);
+						return new InvocationAction<IForwardCursor<Identifier>>(createFilterCursor(index, filterPredicate)){
+							protected void onSuccess(IForwardCursor<Identifier> cursor) throws Exception {
+								filterCursors.add(cursor);
+							}
+						};
+					}
+				});
 			}
 			filterCursors.add(filterCursor);
 		}
-		return filterCursors;
+		return new Handler(TaskUtils.combineResults(tasks)) {
+			protected IResult onSuccess() throws Exception {
+				return asResult(filterCursors);
+			}
+		};
 	}
 
-	private IForwardCursor<Identifier> createFilterCursor(PropertyIndex index, FilterPredicate filterPredicate) 
-	throws IOException 
+	private IResult<IForwardCursor<Identifier>> createFilterCursor(PropertyIndex index, FilterPredicate filterPredicate) 
 	{
 		final QuantifiedValues quantifiedValues= filterPredicate.getQuantifiedValues();
 		final FilterOperator op= filterPredicate.getOperator();

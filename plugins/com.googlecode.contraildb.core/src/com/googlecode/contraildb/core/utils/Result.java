@@ -16,8 +16,6 @@ public class Result<V> implements IResult<V>{
 	private boolean _cancelled= false;
 	private Throwable _error= null;
 	private List<IResultHandler> _completedHandlers= null;
-	private List<IResultHandler> _successHandlers= null;
-	private List<IResultHandler> _errorHandlers= null;
 
 	@Override public synchronized boolean isDone() {
 		return _done;
@@ -65,7 +63,7 @@ public class Result<V> implements IResult<V>{
 	}
 
 	synchronized public void complete(final IResult<V> result) {
-		result.onComplete(new Handler() {
+		result.addHandler(new Handler() {
 			public void onComplete() throws Exception {
 				complete(result.isSuccess(), result.getResult(), result.getError());
 			}
@@ -95,37 +93,6 @@ public class Result<V> implements IResult<V>{
 			_completedHandlers= null;
 		}
 		
-		if (_successHandlers != null && _success) {
-			for (final IResultHandler handler:_successHandlers) {
-				new ContrailAction() {
-					@Override protected void action() throws Exception {
-						try {
-							handler.onComplete(Result.this);
-						}
-						catch (Throwable t) {
-							Logging.warning("Error in success handler", t);
-						}
-					}
-				}.submit();
-			}
-			_successHandlers= null;
-		}
-		
-		if (_errorHandlers != null && !_success && !_cancelled) {
-			for (final IResultHandler handler:_errorHandlers) {
-				new ContrailAction() {
-					@Override protected void action() throws Exception {
-						try {
-							handler.onComplete(Result.this);
-						}
-						catch (Throwable t) {
-							Logging.warning("Error in error handler", t);
-						}
-					}
-				}.submit();
-			}
-			_completedHandlers= null;
-		}
 		
 		notify(); // notify the get() method that results are available
 	}
@@ -156,7 +123,7 @@ public class Result<V> implements IResult<V>{
 	}
 
 	@Override
-	synchronized public void onComplete(IResultHandler<V> handler) {
+	synchronized public void addHandler(IResultHandler<V> handler) {
 		Result<Void> result= new Result<Void>();
 		if (_done) {
 			try {
@@ -178,42 +145,4 @@ public class Result<V> implements IResult<V>{
 		return _cancelled;
 	}
 
-
-	@Override
-	public void onSuccess(IResultHandler<V> handler) {
-		Result<Void> result= new Result<Void>();
-		if (_done) {
-			try {
-				if (_success)
-					handler.onComplete(this);
-				result.success(null);
-			}
-			catch (Throwable t) {
-				result.error(t);
-			}
-			return;
-		}
-		if (_successHandlers == null)
-			_successHandlers= new ArrayList<IResultHandler>();
-		_successHandlers.add(handler);
-	}
-
-
-	@Override
-	public void onError(IResultHandler<V> handler) {
-		if (_done) {
-			if (!_success && !_cancelled) {
-				try {
-					handler.onComplete(this);
-				}
-				catch (Throwable t) {
-					Logging.warning("Error in error handler", t);
-				}
-			}
-			return;
-		}
-		if (_errorHandlers == null)
-			_errorHandlers= new ArrayList<IResultHandler>();
-		_errorHandlers.add(handler);
-	}
 }

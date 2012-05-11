@@ -117,8 +117,8 @@ public class ObjectStorage {
 			return new Handler() {
 				protected IResult onSuccess() throws Exception {
 					if (lifecycle != null)
-						spawnChild(lifecycle.onInsert(identifier));
-					spawnChild(_storageSession.store(identifier, serializeTask));
+						spawn(lifecycle.onInsert(identifier));
+					spawn(_storageSession.store(identifier, serializeTask));
 					return TaskUtils.DONE;
 				}
 			}.toResult();
@@ -128,7 +128,7 @@ public class ObjectStorage {
 			return new Handler(fetch(path)) {
 				protected IResult onSuccess() throws IOException {
 
-					spawnChild(new Handler(_storageSession.delete(path)) {
+					spawn(new Handler(_storageSession.delete(path)) {
 						protected IResult onSuccess() throws IOException {
 							_cache.delete(path);
 							return null;
@@ -137,7 +137,7 @@ public class ObjectStorage {
 
 					Object item= incoming().getResult();
 					if (item instanceof ILifecycle) 
-						spawnChild(((ILifecycle)item).onDelete());
+						spawn(((ILifecycle)item).onDelete());
 					
 					return null;
 				}
@@ -170,7 +170,7 @@ public class ObjectStorage {
 						((ILifecycle)s).setStorage(_outerStorage);
 					_cache.store(id, s);
 					if (isStorable)
-						spawnChild(((ILifecycle)s).onLoad(id));
+						spawn(((ILifecycle)s).onLoad(id));
 					return TaskUtils.asResult(s);
 				};
 			}.toResult();
@@ -188,7 +188,7 @@ public class ObjectStorage {
 					
 					final HashMap results= new HashMap<Identifier, T>();
 					for (final Identifier childId:children) {
-						spawnChild(new Handler(readStorable(childId, fetched.get(childId))) {
+						spawn(new Handler(readStorable(childId, fetched.get(childId))) {
 							protected IResult onSuccess() throws Exception {
 								results.put(childId, incoming().getResult());
 								return TaskUtils.DONE;
@@ -208,7 +208,7 @@ public class ObjectStorage {
 		public IResult<Void> flush() {
 			return new Handler(_trackerSession.complete()) {
 				protected IResult onSuccess() throws Exception {
-					spawnChild(_storageSession.flush());
+					spawn(_storageSession.flush());
 					return TaskUtils.DONE;
 				}
 			}.toResult();
@@ -217,9 +217,9 @@ public class ObjectStorage {
 		public IResult<Void> close() {
 			return new Handler(flush()) {
 				protected IResult onSuccess() throws Exception {
-					spawnChild(new Handler(_trackerSession.close()) {
+					spawn(new Handler(_trackerSession.close()) {
 						protected IResult onSuccess() throws Exception {
-							spawnChild(new Handler(_storageSession.close()) {
+							spawn(new Handler(_storageSession.close()) {
 								protected IResult onSuccess() throws Exception {
 									_trackerSession= null;
 									_storageSession= null;
@@ -245,7 +245,7 @@ public class ObjectStorage {
 						((ILifecycle)item).setStorage(_outerStorage);
 					_cache.store(identifier, item);
 					if (isStorable) 
-						spawnChild(((ILifecycle)item).onInsert(identifier));
+						spawn(((ILifecycle)item).onInsert(identifier));
 					return TaskUtils.DONE;
 				};
 			}.toResult();

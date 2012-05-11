@@ -7,14 +7,14 @@ import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.IResultHandler;
 
 @SuppressWarnings({"rawtypes","unchecked"})
-public class Handler<I,O> implements IResultHandler<I> {
+public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 
-	IResult _incoming;
-	Result _outgoing= new Result();
+	IResult<I> _incoming;
+	Result<O> _outgoing= new Result();
 	ArrayList<IResult> _pending= new ArrayList<IResult>(); 
 	
 	public Handler(IResult<I> task) {
-		task.onComplete(this);
+		task.addHandler(this);
 	}
 	public Handler(IResult... tasks) {
 		this((IResult<I>)TaskUtils.combineResults(tasks));
@@ -43,7 +43,7 @@ public class Handler<I,O> implements IResultHandler<I> {
 			try {
 				final IResult<O> retval= onSuccess();
 				IResult finalResult= TaskUtils.combineResults( retval, TaskUtils.combineResults(_pending));
-				finalResult.onComplete(new Handler() {
+				finalResult.addHandler(new Handler() {
 					public void onComplete() {
 						IResult result= incoming();
 						if (result.isSuccess()) {
@@ -92,25 +92,13 @@ public class Handler<I,O> implements IResultHandler<I> {
 	}
 
 	/**
-	 * A subtask this is a logical part of this handler.
+	 * Run a subtask that is a logical part of this handler.
 	 * Monitor the given result and if it completes with an error then 
 	 * complete this handler's result with an error.  
 	 * Same for cancellation.
 	 */
-	protected void spawnChild(IResult task) {
+	protected void spawn(IResult task) {
 		_pending.add(task);
-	}
-	protected void spawnChild(Handler handler) {
-		spawnChild(handler.toResult());
-	}
-	/**
-	 * A subtask this is a logical part of this handler.
-	 * Monitor the given result and if it completes with an error then 
-	 * complete this handler's result with an error.  
-	 * Same for cancellation.
-	 */
-	protected void spawnChild(IResultHandler task) {
-		_pending.add(task.toResult());
 	}
 	
 	protected Result<O> outgoing() {
@@ -124,4 +112,30 @@ public class Handler<I,O> implements IResultHandler<I> {
 		return _outgoing;
 	}
 
+	
+	/////////////////////
+	//
+	// IResult methods
+	//
+    public boolean isDone() {
+    	return _outgoing.isDone();
+    }
+    public boolean isSuccess() {
+    	return _outgoing.isSuccess();
+    }
+    public boolean isCancelled() {
+    	return _outgoing.isCancelled();
+    }
+    public Throwable getError() {
+    	return _outgoing.getError();
+    }
+    public O getResult() {
+    	return _outgoing.getResult();
+    }
+    public O get() {
+    	return _outgoing.get();
+    }
+	public void addHandler(IResultHandler<O> handler) {
+		_outgoing.addHandler(handler);
+	}
 }

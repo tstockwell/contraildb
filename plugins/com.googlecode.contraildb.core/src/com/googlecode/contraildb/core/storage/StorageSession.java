@@ -120,7 +120,7 @@ public class StorageSession implements IEntityStorage.Session {
 	public IResult<Void> commit() { 
 		return new Handler(_storage.flush()) {
 			protected IResult onSuccess() {
-				spawnChild(new Handler(_storageSystem.commitRevision(StorageSession.this)) {
+				spawn(new Handler(_storageSystem.commitRevision(StorageSession.this)) {
 					protected void onComplete() throws Exception {
 						_isActive= false;
 						_deletes= _reads= _inserts= _updates= null;
@@ -142,9 +142,9 @@ public class StorageSession implements IEntityStorage.Session {
 	synchronized public IResult<Void> close() {
 		return new Handler(_isActive ? flush() : TaskUtils.DONE) {
 			protected void onComplete() throws Exception {
-				spawnChild(new Handler(_storage.close()) {
+				spawn(new Handler(_storage.close()) {
 					protected void onComplete() throws Exception {
-						spawnChild(_storageSystem.closeStorageSession(StorageSession.this));
+						spawn(_storageSystem.closeStorageSession(StorageSession.this));
 						_isActive= false;
 					}
 				}.toResult());
@@ -161,14 +161,14 @@ public class StorageSession implements IEntityStorage.Session {
 				
 				// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
 				Identifier originalPath= entity.getId();
-				spawnChild(_storage.store(originalPath, new Entity(originalPath)));
+				spawn(_storage.store(originalPath, new Entity(originalPath)));
 				
 				Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
-				spawnChild(_storage.store(contrailFolder, new Entity(contrailFolder)));
+				spawn(_storage.store(contrailFolder, new Entity(contrailFolder)));
 				
 				// we then insert revisions as children
 				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
-				spawnChild(_storage.store(revisionPath, entity));
+				spawn(_storage.store(revisionPath, entity));
 				
 				return TaskUtils.DONE;
 			}
@@ -185,7 +185,7 @@ public class StorageSession implements IEntityStorage.Session {
 				Identifier originalPath= item.getId();
 				Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
 				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
-				spawnChild(_storage.store(revisionPath, item));
+				spawn(_storage.store(revisionPath, item));
 				
 				return TaskUtils.DONE;
 			}
@@ -201,12 +201,12 @@ public class StorageSession implements IEntityStorage.Session {
 				final ArrayList<IResult<Collection<Identifier>>> childrens= new ArrayList<IResult<Collection<Identifier>>>(); 
 				for (Identifier path: paths) 
 					childrens.add(listChildren(path));
-				spawnChild(new Handler(TaskUtils.combineResults(childrens)) {
+				spawn(new Handler(TaskUtils.combineResults(childrens)) {
 					protected IResult onSuccess() throws Exception {
 						for (IResult<Collection<Identifier>> result: childrens) {
 							Collection<Identifier> children= result.getResult();
 							for (Identifier child: children)
-								spawnChild(delete(child));
+								spawn(delete(child));
 						}
 						return TaskUtils.DONE;
 					};
@@ -225,7 +225,7 @@ public class StorageSession implements IEntityStorage.Session {
 
 				Identifier contrailFolder= Identifier.create(path, CONTRAIL_FOLDER);
 				Identifier revisionPath= Identifier.create(contrailFolder, "delete-"+_revisionNumber);
-				spawnChild(_storage.store(revisionPath, new Entity(revisionPath)));
+				spawn(_storage.store(revisionPath, new Entity(revisionPath)));
 				return TaskUtils.SUCCESS;
 			};
 		}.toResult();
@@ -348,10 +348,10 @@ public class StorageSession implements IEntityStorage.Session {
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
 				
 				final IResult<Collection<Identifier>> children= listChildren(path);
-				spawnChild(new Handler(children) {
+				spawn(new Handler(children) {
 					protected IResult onSuccess() throws Exception {
 						for (Identifier child: children.getResult())
-							spawnChild(delete(child));
+							spawn(delete(child));
 						return TaskUtils.SUCCESS;
 					}
 				}.toResult());

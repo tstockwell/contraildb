@@ -15,6 +15,7 @@ import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
+import com.googlecode.contraildb.core.utils.InvocationAction;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -86,20 +87,20 @@ public class StorageSystem {
 				storageSystem._entitySession= entityStorageConnect.getResult();
 				final Identifier rootId= Identifier.create("net/sf/contrail/core/storage/rootFolder");
 				final IResult<RootFolder> fetchRoot= storageSystem._entitySession.fetch(rootId);
-				spawnChild(new Handler(fetchRoot) {
+				spawn(new Handler(fetchRoot) {
 					protected IResult onSuccess() throws Exception {
 						storageSystem._root= fetchRoot.getResult();
 						if (storageSystem._root == null) {
-							spawnChild(storageSystem._entitySession.store(storageSystem._root= new RootFolder(rootId)));
-							spawnChild(storageSystem._entitySession.flush());
+							spawn(storageSystem._entitySession.store(storageSystem._root= new RootFolder(rootId)));
+							spawn(storageSystem._entitySession.flush());
 						}
 						return TaskUtils.DONE;
 					};
-				}.toResult());
+				});
 				
-				return TaskUtils.asResult(storageSystem);
+				return asResult(storageSystem);
 			};
-		}.toResult();
+		};
 	}
 	
 	private StorageSystem() {
@@ -129,11 +130,11 @@ public class StorageSystem {
 			protected IResult onSuccess() throws Exception {
 				if (Mode.READONLY == mode) {
 					final IResult<RevisionFolder> getLastCommittedRevision= _root.getLastCommittedRevision();
-					spawnChild(new Handler(getLastCommittedRevision) {
+					spawn(new Handler(getLastCommittedRevision) {
 						protected IResult onSuccess() throws Exception {
 							final RevisionFolder revision= getLastCommittedRevision.getResult();
 							final IResult<StorageSession> createStorageSession= StorageSession.create(this, sessionId, revision.revisionNumber, -1, mode);
-							spawnChild(new Handler(createStorageSession) {
+							spawn(new Handler(createStorageSession) {
 								protected IResult onSuccess() throws Exception {
 									return TaskUtils.asResult(storageSession[0]= createStorageSession.getResult());
 								}
@@ -143,11 +144,11 @@ public class StorageSystem {
 				}
 				else {
 					final IResult<RevisionFolder> createNewRevision= createNewRevision(sessionId);;
-					spawnChild(new Handler(createNewRevision) {
+					spawn(new Handler(createNewRevision) {
 						protected IResult onSuccess() throws Exception {
 							final RevisionFolder revision= createNewRevision.getResult();
 							final IResult<StorageSession> createStorageSession= StorageSession.create(this, sessionId, revision.revisionNumber, revision.startCommitNumber, mode);
-							spawnChild(new Handler(createStorageSession) {
+							spawn(new Handler(createStorageSession) {
 								protected IResult onSuccess() throws Exception {
 									return TaskUtils.asResult(storageSession[0]= createStorageSession.getResult());
 								}
@@ -161,8 +162,8 @@ public class StorageSystem {
 		
 		return new Handler(beginSession) {
 			protected void onComplete() throws Exception {
-				spawnChild(_root.unlock(sessionId));
-				spawnChild(_root.getStorage().flush());
+				spawn(_root.unlock(sessionId));
+				spawn(_root.getStorage().flush());
 			}
 			protected IResult onSuccess() throws Exception {
 				Logging.info("Created session "+sessionId);
@@ -190,15 +191,15 @@ public class StorageSystem {
 				local.revision= revisionFolder.getResult();
 				if (local.revision == null)
 					throw new IOException("Revision does not exist: "+ revisionNumber);
-				spawnChild(local.revision.lock(sessionId, true/*waitForLock*/));
+				spawn(local.revision.lock(sessionId, true/*waitForLock*/));
 				return TaskUtils.DONE;
 			}
 		}.toResult();
 		IResult<Void> addSession= new Handler(lockRevision) {
 			protected IResult onSuccess() throws Exception {
-				spawnChild(new Handler(local.revision.addSession(sessionId)) {
+				spawn(new Handler(local.revision.addSession(sessionId)) {
 					protected IResult onSuccess() throws Exception {
-						spawnChild(new Handler(StorageSession.create(this, sessionId, revisionNumber, -1, Mode.READONLY)) {
+						spawn(new Handler(StorageSession.create(this, sessionId, revisionNumber, -1, Mode.READONLY)) {
 							protected IResult onSuccess() throws Exception {
 								local.storageSession= (StorageSession) incoming().getResult();
 							}
@@ -207,14 +208,14 @@ public class StorageSystem {
 				});
 				return TaskUtils.DONE;
 			}
-		}.toResult();
+		};
 		return new Handler(addSession) {
 			protected void onComplete() throws Exception {
 				RevisionFolder revision= revisionFolder.getResult();
-				spawnChild(new Handler(revision.unlock(sessionId)) {
+				spawn(new Handler(revision.unlock(sessionId)) {
 					protected void onComplete() throws Exception {
 						_entitySession.flush();
-						spawnChild(new Handler(_entitySession.flush()) {
+						spawn(new Handler(_entitySession.flush()) {
 							protected void onComplete() throws Exception {
 								_activeSessions.add(local.storageSession);
 							}
@@ -223,9 +224,9 @@ public class StorageSystem {
 				});
 			}
 			protected IResult onSuccess() throws Exception {
-				return TaskUtils.asResult(local.storageSession);
+				return asResult(local.storageSession);
 			}
-		}.toResult();
+		};
 	}
 	
 	/**
@@ -252,7 +253,7 @@ public class StorageSystem {
 				local.lastRevision= local.revisions.get(0);
 				local.startRevision= null;
 				for (final RevisionFolder revision: local.revisions) {
-					spawnChild(new Handler(revision.isCommitted()) {
+					spawn(new Handler(revision.isCommitted()) {
 						protected IResult onSuccess() throws Exception {
 							if ((Boolean) incoming().get()) {
 								synchronized (local) {
@@ -267,7 +268,7 @@ public class StorageSystem {
 							startRevision= revision;
 				}
 			}
-		}.toResult();
+		};
 		
 		
 		List<RevisionFolder> revisions= _root.getRevisionFolders();
@@ -294,9 +295,37 @@ public class StorageSystem {
 		return revision;
 	}
 	
-	void closeStorageSession(StorageSession storageSession) 
-	throws IOException 
+	IResult<Void> closeStorageSession(final StorageSession storageSession) 
 	{
+		// remove the session reference from the session's starting revision
+		final long startingCommitNumber= storageSession.getStartingCommitNumber();
+		final long revisionNumber= storageSession.getRevisionNumber();
+		IResult removeStartSession= TaskUtils.DONE;
+		if (0 <= startingCommitNumber) {
+			final IResult<RevisionFolder> getRevisionFolder= _root.getRevisionFolder(startingCommitNumber);
+			removeStartSession= new Handler(getRevisionFolder) {
+				protected IResult onSuccess() throws Exception {
+					RevisionFolder startRevision= getRevisionFolder.getResult();
+					assert startRevision != null : "Revision "+startingCommitNumber+" has apparently been deleted when it should have been leased by a session associated with revision "+storageSession.getRevisionNumber();
+					startRevision.removeSession(storageSession.getSessionId());
+				}
+			};
+		}
+		
+		return new Handler(removeStartSession) {
+			protected IResult onSuccess() throws Exception {
+				final IResult<RevisionFolder> getRevisionFolder= _root.getRevisionFolder(revisionNumber);
+				return new Handler(getRevisionFolder) {
+					protected IResult onSuccess() throws Exception {
+						RevisionFolder revisionFolder= getRevisionFolder.getResult();
+						return revisionFolder.removeSession(storageSession.getSessionId());
+					}
+				};
+			}
+		};
+		
+
+		---------------
 		try {
 			// remove the session reference from the session's starting revision
 			long startingCommitNumber= storageSession.getStartingCommitNumber();
