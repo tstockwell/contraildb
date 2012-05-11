@@ -157,14 +157,14 @@ public class RootFolder extends Entity  {
 	public IResult<Void> onInsert(Identifier identifier) {
 		return new Handler(super.onInsert(identifier)) {
 			protected IResult onSuccess() throws Exception {
-				spawnChild(storage.store(_revisionsFolder));
-				spawnChild(storage.store(_deletionsFolder));
-				spawnChild(storage.store(_lockFolder));
+				spawn(storage.store(_revisionsFolder));
+				spawn(storage.store(_deletionsFolder));
+				spawn(storage.store(_lockFolder));
 				
 				RevisionFolder revision= new RevisionFolder(RootFolder.this, 0L, 0L);  
-				spawnChild(storage.store(revision));
-				spawnChild(storage.store(new CommitMarker(revision, 0L)));
-				spawnChild(storage.store(new RevisionJournal(revision)));
+				spawn(storage.store(revision));
+				spawn(storage.store(new CommitMarker(revision, 0L)));
+				spawn(storage.store(new RevisionJournal(revision)));
 				return TaskUtils.DONE;
 			};
 		}.toResult();
@@ -177,7 +177,7 @@ public class RootFolder extends Entity  {
 				final IResult<Entity> rf= storage.fetch(Identifier.create(identifier, "revisions"));
 				final IResult<Entity> df= storage.fetch(Identifier.create(identifier, "deletions"));
 				final IResult<LockFolder> lf= storage.fetch(LockFolder.createId(RootFolder.this));
-				spawnChild(new Handler(rf, df, lf) {
+				spawn(new Handler(rf, df, lf) {
 					protected IResult onSuccess() throws Exception {
 						_revisionsFolder= rf.getResult();
 						_deletionsFolder= df.getResult();

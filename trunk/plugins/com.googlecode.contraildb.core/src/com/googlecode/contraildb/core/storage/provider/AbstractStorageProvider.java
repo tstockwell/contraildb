@@ -46,7 +46,7 @@ implements IStorageProvider
 		public IResult<Void> flush() {
 			return new Handler(_trackerSession.complete()) {
 				protected void onComplete() throws Exception {
-					spawnChild(doFlush());
+					spawn(doFlush());
 				};
 			}.toResult();
 		}
@@ -55,7 +55,7 @@ implements IStorageProvider
 		public IResult<Void> close() {
 			return new Handler(_trackerSession.complete()) {
 				protected void onComplete() throws Exception {
-					spawnChild(doClose());
+					spawn(doClose());
 				};
 			}.toResult();
 		}

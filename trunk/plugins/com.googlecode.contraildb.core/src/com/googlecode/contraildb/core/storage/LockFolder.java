@@ -114,8 +114,8 @@ public class LockFolder extends Entity {
 					Lock lock= lockResult.getResult();
 					if (lock == null || !lock.processId.equals(processId))
 						throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
-					spawnChild(storage.delete(lock.getId()));
-					spawnChild(storage.flush());
+					spawn(storage.delete(lock.getId()));
+					spawn(storage.flush());
 				} 
 				catch (Throwable e) {
 					Logging.warning("Error while unlocking folder "+lockId, e);

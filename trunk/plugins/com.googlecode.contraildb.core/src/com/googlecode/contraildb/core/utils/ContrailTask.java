@@ -204,7 +204,7 @@ abstract public class ContrailTask<T> {
 		done(true);
 	}
 	protected void setResult(IResult<T> result) {
-		result.onComplete(new Handler() {
+		result.addHandler(new Handler() {
 			public void onComplete() {
 				success((T)incoming().getResult());
 			}

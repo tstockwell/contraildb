@@ -112,7 +112,7 @@ implements IContrailSession
 		_storageSession= null;
 		return new Handler(session.commit()) {
 			protected void onComplete() throws Exception {
-				spawnChild(_service.onClose(ContrailSessionImpl.this));
+				spawn(_service.onClose(ContrailSessionImpl.this));
 			}
 		}.toResult();
 	}
@@ -124,7 +124,7 @@ implements IContrailSession
 		_storageSession= null;
 		return new Handler(_storageSession != null ? session.close() : TaskUtils.DONE) {
 			protected void onComplete() throws Exception {
-				spawnChild(_service.onClose(ContrailSessionImpl.this));
+				spawn(_service.onClose(ContrailSessionImpl.this));
 			}
 		}.toResult();
 	}
@@ -161,8 +161,12 @@ implements IContrailSession
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
-				
-				return delete(fetch(paths));
+				final IResult<Collection<Item>> fetch= fetch(paths);
+				return new Handler() {
+					protected IResult onSuccess() throws Exception {
+						return delete(fetch.getResult());
+					}
+				}.toResult();
 			}
 		}.toResult();
 	}

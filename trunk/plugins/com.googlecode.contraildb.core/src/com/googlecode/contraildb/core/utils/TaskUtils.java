@@ -44,7 +44,7 @@ public class TaskUtils {
 			}
 		};
 		for (IResult<?> task: tasks) {
-			task.onComplete(handler);
+			task.addHandler(handler);
 		}
 		return result;
 	} 
@@ -142,21 +142,13 @@ public class TaskUtils {
 				return false;
 			}
 			@Override
-			public void onComplete(IResultHandler<X> handler) {
+			public void addHandler(IResultHandler<X> handler) {
 				try {
 					handler.onComplete(this);
 				}
 				catch (Throwable t) {
 					Logging.warning("Error while handling completion", t);
 				}
-			}
-			@Override
-			public void onSuccess(IResultHandler<X> handler) {
-				onComplete(handler);
-			}
-			@Override
-			public void onError(IResultHandler<X> handler) {
-				// do nothing
 			}
 		};
 	}
