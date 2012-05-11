@@ -105,33 +105,28 @@ implements IContrailSession
 		return _storageSession.getRevisionNumber();
 	}
 
-	@Override public void commit() 
-	throws ConflictingCommitException, IOException 
+	@Override public IResult<Void> commit() 
 	{
-		try {
-			StorageSession session= _storageSession;
-			_searcher= null;
-			_storageSession= null;
-			session.commit();
-		}
-		finally {
-			_service.onClose(this);
-		}
+		final StorageSession session= _storageSession;
+		_searcher= null;
+		_storageSession= null;
+		return new Handler(session.commit()) {
+			protected void onComplete() throws Exception {
+				spawnChild(_service.onClose(ContrailSessionImpl.this));
+			}
+		}.toResult();
 	}
 
 	@Override
-	public void close() throws IOException  {
-		try {
-			if (_storageSession != null) {
-				StorageSession session= _storageSession;
-				_searcher= null;
-				_storageSession= null;
-				session.close();
+	public IResult<Void> close() {
+		StorageSession session= _storageSession;
+		_searcher= null;
+		_storageSession= null;
+		return new Handler(_storageSession != null ? session.close() : TaskUtils.DONE) {
+			protected void onComplete() throws Exception {
+				spawnChild(_service.onClose(ContrailSessionImpl.this));
 			}
-		}
-		finally {
-			_service.onClose(this);
-		}
+		}.toResult();
 	}
 
 	@Override
@@ -142,11 +137,15 @@ implements IContrailSession
 	}
 
 	@Override
-	public <T extends Item> IPreparedQuery<T> prepare(ContrailQuery query) {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		
-		return new PreparedQueryImpl<T>(_service, this, query);
+	public <T extends Item> IResult<IPreparedQuery<T>> prepare(final ContrailQuery query) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
+				
+				return TaskUtils.asResult(new PreparedQueryImpl<T>(_service, ContrailSessionImpl.this, query));
+			}
+		}.toResult();
 	}
 
 //	public <T extends Item> Iterable<T> search(ContrailQuery query) throws IOException {
@@ -157,57 +156,87 @@ implements IContrailSession
 //	}
 
 	@Override
-	public void delete(Collection<Identifier> paths) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		
-		delete(fetch(paths));
+	public IResult<Void> delete(final Collection<Identifier> paths) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
+				
+				return delete(fetch(paths));
+			}
+		}.toResult();
 	}
 
 	@Override
-	public void deleteAllChildren(Collection<Identifier> paths) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		
-		Map<Identifier, Collection<Item>> allChildren= fetchChildren(paths);
-		_storageSession.deleteAllChildren(paths);
-		ArrayList<Item> all= new ArrayList<Item>();
-		for (Collection<Item> children: allChildren.values())
-			all.addAll(children);
-		_searcher.unindex(all);
+	public IResult<Void> deleteAllChildren(final Collection<Identifier> paths) {
+		final IResult<Map<Identifier, Collection<Item>>> fetchChildren= fetchChildren(paths);
+		return new Handler(fetchChildren) {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
+				
+				final Map<Identifier, Collection<Item>> allChildren= fetchChildren.getResult();
+				return new Handler(_storageSession.deleteAllChildren(paths)) {
+					protected IResult onSuccess() throws Exception {
+						
+						ArrayList<Item> all= new ArrayList<Item>();
+						for (Collection<Item> children: allChildren.values())
+							all.addAll(children);
+								
+						return _searcher.unindex(all);
+					}
+				}.toResult();
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> Collection<T> fetch(Iterable<Identifier> paths) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		return StorageUtils.syncFetch(_storageSession, paths);
+	public <T extends Item> IResult<Collection<T>> fetch(final Iterable<Identifier> paths) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
+				return StorageUtils.fetchAll(_storageSession, paths);
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> Map<Identifier, Collection<T>> fetchChildren(Collection<Identifier> paths) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
+	public <T extends Item> IResult<Map<Identifier, Collection<T>>> fetchChildren(final Collection<Identifier> paths) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
 
-		HashMap<Identifier, IResult<Collection<T>>> fetched= new HashMap<Identifier, IResult<Collection<T>>>();
-		for (Identifier path:paths) {
-			IResult<Collection<T>> result= _storageSession.fetchChildren(path);
-			fetched.put(path, result);
-		}
-		HashMap<Identifier, Collection<T>> items= new HashMap<Identifier, Collection<T>>();
-		for (Identifier path:paths) {
-			IResult<Collection<T>> result= fetched.get(path);
-			items.put(path, result.get());
-		}
-		
-		return items;
+				final HashMap<Identifier, IResult<Collection<T>>> fetched= new HashMap<Identifier, IResult<Collection<T>>>();
+				for (Identifier path:paths) {
+					IResult<Collection<T>> result= _storageSession.fetchChildren(path);
+					fetched.put(path, result);
+				}
+				return new Handler(TaskUtils.combineResults(fetched.values())) {
+					protected IResult onSuccess() throws Exception {
+						HashMap<Identifier, Collection<T>> items= new HashMap<Identifier, Collection<T>>();
+						for (Identifier path:paths) {
+							IResult<Collection<T>> result= fetched.get(path);
+							items.put(path, result.getResult());
+						}
+						
+						return TaskUtils.asResult(items);
+					}
+				}.toResult();
+			}
+		}.toResult();
 	}
 
-	public void flush() throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		
-		_storageSession.flush();
+	public IResult<Void> flush() {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
+				
+				return _storageSession.flush();
+			}
+		}.toResult();
 	}
 
 	@Override
@@ -219,89 +248,118 @@ implements IContrailSession
 	}
 
 	@Override
-	public Map<Identifier, Collection<Identifier>> listChildren(Collection<Identifier> paths) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
+	public IResult<Map<Identifier, Collection<Identifier>>> listChildren(final Collection<Identifier> paths) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
 
-		HashMap<Identifier, IResult<Collection<Identifier>>> fetched= new HashMap<Identifier, IResult<Collection<Identifier>>>();
-		for (Identifier path:paths) {
-			IResult<Collection<Identifier>> result= _storageSession.listChildren(path);
-			fetched.put(path, result);
-		}
-		HashMap<Identifier, Collection<Identifier>> items= new HashMap<Identifier, Collection<Identifier>>();
-		for (Identifier path:paths) {
-			IResult<Collection<Identifier>> result= fetched.get(path);
-			items.put(path, result.get());
-		}
-		
-		return items;
+				final HashMap<Identifier, IResult<Collection<Identifier>>> fetched= new HashMap<Identifier, IResult<Collection<Identifier>>>();
+				for (Identifier path:paths) {
+					IResult<Collection<Identifier>> result= _storageSession.listChildren(path);
+					fetched.put(path, result);
+				}
+				
+				return new Handler(combineResults(fetched.values())) {
+					protected IResult onSuccess() throws Exception {
+						HashMap<Identifier, Collection<Identifier>> items= new HashMap<Identifier, Collection<Identifier>>();
+						for (Identifier path:paths) {
+							IResult<Collection<Identifier>> result= fetched.get(path);
+							items.put(path, result.get());
+						}
+						
+						return asResult(items);
+					}
+				}.toResult();
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> IResult<Void> store(Iterable<T> entities) throws IOException {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
+	public <T extends Item> IResult<Void> store(final Iterable<T> entities) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
 
-		for (T t:entities)
-			_storageSession.store(t);
-		
-		_searcher.index(entities);
+				ArrayList<IResult> stores= new ArrayList<IResult>();
+				for (T t:entities)
+					stores.add(_storageSession.store(t));
+				return new Handler(combineResults(stores)) {
+					protected IResult onSuccess() throws Exception {
+						return _searcher.index(entities);
+					}
+				}.toResult();
+			}
+		}.toResult();
 	}
 
 	@Override
-	public void delete(Identifier... paths) throws IOException {
-		delete(fetch(paths));
+	public IResult<Void> delete(Identifier... paths) {
+		return new Handler(fetch(paths)) {
+			protected IResult onSuccess() throws Exception {
+				return delete(incoming().getResult());
+			}	
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> void delete(T... entities) throws IOException {
+	public <T extends Item> IResult<Void> delete(T... entities) {
 		ArrayList<T> list= new ArrayList<T>();
 		for (T entity: entities)
 			list.add(entity);
-		delete(list);
+		return delete(list);
 	}
 
 	@Override
-	public void deleteAllChildren(Identifier... paths) throws IOException {
-		deleteAllChildren(Arrays.asList(paths));
+	public IResult<Void> deleteAllChildren(Identifier... paths) {
+		return deleteAllChildren(Arrays.asList(paths));
 	}
 
 	@Override
-	public <T extends Item> void deleteAllChildren(T... entities) throws IOException {
+	public <T extends Item> IResult<Void> deleteAllChildren(T... entities) {
 		ArrayList<Identifier> ids= new ArrayList<Identifier>();
 		for (Item entity: entities)
 			ids.add(entity.getId());
-		deleteAllChildren(ids);
+		return deleteAllChildren(ids);
 	}
 
 	@Override
-	public <T extends Item> T fetch(Identifier path) throws IOException {
-		Collection<T> set= fetch(Arrays.asList(new Identifier[] { path }));
-		if (set.isEmpty())
-			return null;
-		return set.iterator().next();
+	public <T extends Item> IResult<T> fetch(Identifier path) {
+		final IResult<Collection<T>> fetch= fetch(Arrays.asList(new Identifier[] { path }));
+		return new Handler(fetch) {
+			protected IResult onSuccess() throws Exception {
+				Collection<T> set= fetch.getResult();
+				if (set.isEmpty())
+					return TaskUtils.NULL;
+				return asResult(set.iterator().next());
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> Collection<T> fetch(Identifier... paths) throws IOException {
+	public <T extends Item> IResult<Collection<T>> fetch(Identifier... paths) {
 		return fetch(Arrays.asList(paths));
 	}
 
 	@Override
-	public <T extends Item> Collection<T> fetchChildren(Identifier path) throws IOException {
-		Map<Identifier, Collection<T>> set= fetchChildren(Arrays.asList(new Identifier[] { path }));
-		return set.get(path);
+	public <T extends Item> IResult<Collection<T>> fetchChildren(final Identifier path) {
+		final IResult<Map<Identifier, Collection<T>>> fetch= fetchChildren(Arrays.asList(new Identifier[] { path }));
+		return new Handler(fetch) {
+			protected IResult onSuccess() throws Exception {
+				Map<Identifier, Collection<T>> set= fetch.getResult();
+				return asResult(set.get(path));
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> Map<Identifier, Collection<T>> fetchChildren(Identifier... paths)
-	throws IOException {
+	public <T extends Item> IResult<Map<Identifier, Collection<T>>> fetchChildren(Identifier... paths) {
 		return fetchChildren(Arrays.asList(paths));
 	}
 
 	@Override
-	public <T extends Item, C extends Item> Map<Identifier, Collection<C>> fetchChildren(T... entities)
-			throws IOException {
+	public <T extends Item, C extends Item> IResult<Map<Identifier, Collection<C>>> fetchChildren(T... entities) {
 		ArrayList<Identifier> ids= new ArrayList<Identifier>();
 		for (Item entity: entities)
 			ids.add(entity.getId());
@@ -309,25 +367,28 @@ implements IContrailSession
 	}
 
 	@Override
-	public <T extends Item> void store(T... entities) throws IOException {
-		store(Arrays.asList(entities));
+	public <T extends Item> IResult<Void> store(T... entities) {
+		return store(Arrays.asList(entities));
 	}
 
 	@Override
-	public Collection<Identifier> listChildren(Identifier path) throws IOException {
-		Map<Identifier, Collection<Identifier>> set= listChildren(Arrays.asList(new Identifier[] { path }));
-		return set.get(path);
+	public IResult<Collection<Identifier>> listChildren(final Identifier path) {
+		final IResult<Map<Identifier, Collection<Identifier>>> fetch= listChildren(Arrays.asList(new Identifier[] { path }));
+		return new Handler(fetch) {
+			protected IResult onSuccess() throws Exception {
+				Map<Identifier, Collection<Identifier>> set= fetch.getResult();
+				return asResult(set.get(path));
+			}
+		}.toResult();
 	}
 
 	@Override
-	public Map<Identifier, Collection<Identifier>> listChildren(Identifier... paths)
-			throws IOException {
+	public IResult<Map<Identifier, Collection<Identifier>>> listChildren(Identifier... paths) {
 		return listChildren(Arrays.asList(paths));
 	}
 
 	@Override
-	public <T extends Item> Map<Identifier, Collection<Identifier>> listChildren(T... entities)
-			throws IOException {
+	public <T extends Item> IResult<Map<Identifier, Collection<Identifier>>> listChildren(T... entities) {
 		ArrayList<Identifier> ids= new ArrayList<Identifier>();
 		for (Item entity: entities)
 			ids.add(entity.getId());
@@ -335,55 +396,68 @@ implements IContrailSession
 	}
 	
 	@Override
-	public <T extends Item, C extends Item> Collection<C> fetchChildren(T entity) throws IOException {
-		Identifier i= entity.getId();
-		Map<Identifier, Collection<C>> map= fetchChildren(Arrays.asList(new Identifier[] { i }));
-		Collection<C> set= map.get(i);
-		if (set == null)
-			return Collections.emptySet();
-		return set;
+	public <T extends Item, C extends Item> IResult<Collection<C>> fetchChildren(T entity) {
+		final Identifier i= entity.getId();
+		final IResult<Map<Identifier, Collection<C>>> fetch= fetchChildren(Arrays.asList(new Identifier[] { i }));
+		return new Handler(fetch) {
+			protected IResult onSuccess() throws Exception {
+				Map<Identifier, Collection<C>> map= fetch.getResult();
+				Collection<C> set= map.get(i);
+				if (set == null)
+					return asResult(Collections.emptySet());
+				return asResult(set);
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> void delete(Iterable<T> entities)
-	throws IOException 
+	public <T extends Item> IResult<Void> delete(Iterable<T> entities)
 	{
+		ArrayList<IResult> deletes= new ArrayList<IResult>();
 		for (T t:entities)
-			_storageSession.delete(t.getId());
-		_searcher.unindex(entities);
-		
+			deletes.add(_storageSession.delete(t.getId()));
+		return new Handler(TaskUtils.combineResults(deletes)) {
+			protected IResult onSuccess() throws Exception {
+				return _searcher.unindex(entities); 
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <T extends Item> void deleteAllChildren(Iterable<T> paths)
-	throws IOException 
-	{
+	public <T extends Item> IResult<Void> deleteAllChildren(Iterable<T> paths) {
 		ArrayList<Identifier> list= new ArrayList<Identifier>();
 		for (T t: paths)
 			list.add(t.getId());
-		deleteAllChildren(list);
+		return deleteAllChildren(list);
 	}
 
 	@Override
-	public <T extends Item> Collection<Identifier> listChildren(T path)
-	throws IOException 
+	public <T extends Item> IResult<Collection<Identifier>> listChildren(T path)
 	{
-		Identifier i= path.getId();
-		Map<Identifier, Collection<Identifier>> map= listChildren(Arrays.asList(new Identifier[] { i }));
-		Collection<Identifier> set= map.get(i);
-		if (set == null)
-			return Collections.emptySet();
-		return set;
+		final Identifier i= path.getId();
+		final IResult<Map<Identifier, Collection<Identifier>>> fetch= listChildren(Arrays.asList(new Identifier[] { i }));
+		return new Handler(fetch) {
+			protected IResult onSuccess() throws Exception {
+				Map<Identifier, Collection<Identifier>> map= fetch.getResult();
+				Collection<Identifier> set= map.get(i);
+				if (set == null)
+					return asResult(Collections.emptySet());
+				return asResult(set);
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <E extends Item> boolean create(E entity) throws IOException {
-		throw new UnsupportedOperationException();
+	public <E extends Item> IResult<Boolean> create(E entity) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				throw new UnsupportedOperationException();
+			}
+		}.toResult();
 	}
 
 	@Override
-	public <E extends Item, C extends Item> Map<Identifier, Collection<C>> fetchChildren(Iterable<E> entities) 
-	throws IOException 
+	public <E extends Item, C extends Item> IResult<Map<Identifier, Collection<C>>> fetchChildren(Iterable<E> entities) 
 	{
 		ArrayList<Identifier> list= new ArrayList<Identifier>();
 		for (IEntity t: entities)
@@ -392,8 +466,7 @@ implements IContrailSession
 	}
 
 	@Override
-	public <E extends Item> Map<Identifier, Collection<Identifier>> listChildren(Iterable<E> entities) 
-	throws IOException 
+	public <E extends Item> IResult<Map<Identifier, Collection<Identifier>>> listChildren(Iterable<E> entities) 
 	{
 		ArrayList<Identifier> list= new ArrayList<Identifier>();
 		for (IEntity t: entities)
@@ -402,19 +475,23 @@ implements IContrailSession
 	}
 
 	@Override
-	public <E extends Item> void update(E... entities) throws IOException {
-		store(entities);
+	public <E extends Item> IResult<Void> update(E... entities) {
+		return store(entities);
 	}
 
 	@Override
-	public <E extends Item> void update(Iterable<E> entities) throws IOException {
-		store(entities);
+	public <E extends Item> IResult<Void> update(Iterable<E> entities) {
+		return store(entities);
 	}
 
-	public void process(ContrailQuery query, IProcessor processor) {
-		if (_storageSession == null)
-			throw new SessionAlreadyClosedException();
-		_searcher.fetchIdentifiers(query, processor);
+	public IResult<Void> process(final ContrailQuery query, final IProcessor processor) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
+				return _searcher.fetchIdentifiers(query, processor);
+			}
+		}.toResult();
 		
 	}
 

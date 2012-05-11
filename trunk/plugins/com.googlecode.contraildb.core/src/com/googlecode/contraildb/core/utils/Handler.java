@@ -1,6 +1,7 @@
 package com.googlecode.contraildb.core.utils;
 
 import java.util.ArrayList;
+import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.IResultHandler;
@@ -20,6 +21,13 @@ public class Handler<I,O> implements IResultHandler<I> {
 	}
 	public Handler(I value) {
 		this(TaskUtils.asResult(value));
+	}
+	
+	final static public <X, Y extends X> IResult<X> asResult( final Y bs) {
+		return TaskUtils.asResult(bs);
+	}
+	public static final <T extends IResult<?>> IResult<Void> combineResults(Collection<T> tasks) {
+		return TaskUtils.combineResults(tasks);
 	}
 
 	@Override
