@@ -22,7 +22,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
  * 
  * @param T The type of objects stored in the BTree
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
+@SuppressWarnings({ "rawtypes" })
 public class BTree<T extends Comparable> 
 extends BPlusTree<T, Serializable>
 {

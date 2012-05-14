@@ -347,8 +347,11 @@ public class StorageSystem {
 	}
 
 
-	void commitRevision(StorageSession storageSession) 
-	throws IOException, ConflictingCommitException 
+	/**
+	 * @throws IOException
+	 * @throws ConflictingCommitException
+	 */
+	IResult<Void> commitRevision(StorageSession storageSession) 
 	{
 		String sessionId= storageSession.getSessionId();
 		long revisionNumber= storageSession.getRevisionNumber();

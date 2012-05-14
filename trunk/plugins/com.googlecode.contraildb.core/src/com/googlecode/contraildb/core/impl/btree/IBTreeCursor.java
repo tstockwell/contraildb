@@ -2,6 +2,10 @@ package com.googlecode.contraildb.core.impl.btree;
 
 import java.io.IOException;
 
+import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.utils.Immediate;
+import com.googlecode.contraildb.core.utils.TaskUtils;
+
 /**
  * Simple API for navigating through the elements in a BTree.
  * A cursor can only navigate in one direction and cannot go back to a previous element.
@@ -29,39 +33,39 @@ public interface IBTreeCursor<K> {
 		public boolean after(K e) { return false; }
 		public boolean before(K e) { return false; }
 		public K keyValue() { return null; }
-		public boolean first() { return false; }
+		public IResult<Boolean> first() { return TaskUtils.FALSE; }
 		public Direction getDirection() { return _direction; }
-		public boolean hasNext() { return false; }
+		public IResult<Boolean> hasNext() { return TaskUtils.FALSE; }
 		public boolean last() { return false; }
-		public boolean next() { return false; }
-		public boolean to(K e) { return false; }
+		public IResult<Boolean> next() { return TaskUtils.FALSE; }
+		public IResult<Boolean> to(K e) { return TaskUtils.FALSE; }
 	}
 	public class SingleValueCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 		private T _t;
 		private int _state= 0;
 		public SingleValueCursor(T t) { _t= t;  }
 		public T keyValue() { return _t; }
-		public boolean first() { if (1 < _state) return false; _state= 1; return true; }
+		public IResult<Boolean> first() { if (1 < _state) return TaskUtils.FALSE; _state= 1; return TaskUtils.TRUE; }
 		public Direction getDirection() { return Direction.FORWARD; }
-		public boolean hasNext() { return (_state == 0); }
-		public boolean next() { if (1 <= _state) return false; _state= 1; return true; }
-		public boolean to(T e) {
+		public IResult<Boolean> hasNext() { return TaskUtils.asResult(_state == 0); }
+		public IResult<Boolean> next() { if (1 <= _state) return TaskUtils.FALSE; _state= 1; return TaskUtils.TRUE; }
+		public IResult<Boolean> to(T e) {
 			if (1 < _state)
-				return false;
+				return TaskUtils.FALSE;
 			int i= BPlusTree.compare(e, _t);
 			if (i == 0) {
 				_state= 1;
-				return true;
+				return TaskUtils.TRUE;
 			}
 			else if (i < 0) {
 				if (_state == 1) { 
 					_state= 2;
-					return false;
+					return TaskUtils.FALSE;
 				}
 				_state= 1;
-				return true; 
+				return TaskUtils.TRUE; 
 			}
-			return false;
+			return TaskUtils.FALSE;
 		}
 	}
 
@@ -73,15 +77,15 @@ public interface IBTreeCursor<K> {
 		public EmptyReverseCursor() { super(Direction.REVERSE); }
 	}
 	
-	Direction getDirection();
+	@Immediate Direction getDirection();
 	
-	boolean hasNext() throws IOException;
+	IResult<Boolean> hasNext();
 	
 	/**
 	 * @return 
 	 * 	the value of the key associated with the current cursor position.
 	 */
-	K keyValue() throws IOException;
+	 @Immediate K keyValue();
 	
     /**
      * Moves the cursor to the next element.
@@ -89,7 +93,7 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean next() throws IOException;
+    IResult<Boolean> next();
 	
     /**
      * Moves the cursor to the given element or, if the element does not exist, the next element..
@@ -97,7 +101,7 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean to(K e) throws IOException;
+    IResult<Boolean> to(K e);
 
     /**
      * Moves the cursor to the first element.
@@ -105,6 +109,6 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean first() throws IOException;
+    IResult<Boolean> first();
 
 }

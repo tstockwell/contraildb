@@ -3,9 +3,14 @@
  */
 package com.googlecode.contraildb.core.impl.btree;
 
-import java.io.IOException;
-
-import com.googlecode.contraildb.core.storage.StorageUtils;
+import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.storage.IEntity;
+import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.Immediate;
+import com.googlecode.contraildb.core.utils.InvocationAction;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
+import com.googlecode.contraildb.core.utils.WhileHandler;
 
 
 @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -22,150 +27,249 @@ implements IBTreePlusCursor<T,V> {
 	int _index;
 
 	@Override
-	public V elementValue() throws IOException {
+	@Immediate public V elementValue() {
 		return (V) _page._values[_index];
 	}
 	
-	private void initFirst() throws IOException {
+	private IResult<Void> initFirst()  {
 		_index= -1;
 		if ((_page= _tree.getRoot()) != null) {
-			while (!_page.isLeaf()) 
-				_page= _page.getChildNode(0);
+			return new WhileHandler() {
+				protected IResult<Boolean> While() throws Exception {
+					return asResult(!_page.isLeaf());
+				}
+				protected IResult<Void> Do() throws Exception {
+					return new InvocationHandler<Node<T>>(_page.getChildNode(0)) {
+						protected IResult onSuccess(Node<T> child) throws Exception {
+							_page= child;
+							return TaskUtils.DONE;
+						}
+					}; 
+				}
+			};
 		}
+		return TaskUtils.DONE;
 	}
-	protected void initLast() throws IOException {
+	
+	protected IResult<Void> initLast() {
 		if ((_page= _tree.getRoot()) != null) {
-			while (!_page.isLeaf()) 
-				_page= _page.getChildNode(_page._size-1);
-			_index= _page._size;
+			IResult dowhile= new WhileHandler() {
+				protected IResult<Boolean> While() throws Exception {
+					return asResult(!_page.isLeaf());
+				}
+				protected IResult<Void> Do() throws Exception {
+					return new InvocationHandler<Node<T>>(_page.getChildNode(_page._size-1)) {
+						protected IResult onSuccess(Node<T> child) throws Exception {
+							_page= child;
+							return TaskUtils.DONE;
+						}
+					}; 
+				}
+			};
+			return new InvocationAction(dowhile) {
+				protected void onSuccess(Object results) throws Exception {
+					_index= _page._size;
+				}
+			};
 		}
+		return TaskUtils.DONE;
 	}
 
 	@Override 
-	public T keyValue() throws IOException {
+	@Immediate public T keyValue() {
 		return _page._keys[_index];
 	}
-	protected boolean previous() throws IOException {
+	protected IResult<Boolean> previous() {
+		IResult<Void> init= TaskUtils.DONE;
 		if (_page == null)
-			initLast();
-		if (_page == null)
-			return false;
-		
-		if (_index <= 0) {
-			if (_page._previous == null) 
-				return false;
-			_page = StorageUtils.syncFetch(_page.getStorage(), _page._previous);
-			_index = _page._size;
-		}
-		
-		_index--;
-		return true;
+			init= initLast();
+		return new Handler(init) {
+			protected IResult onSuccess() throws Exception {
+				if (_page == null)
+					return TaskUtils.FALSE;
+				
+				IResult<Void > fetch= TaskUtils.DONE;
+				if (_index <= 0) {
+					if (_page._previous == null) 
+						return TaskUtils.FALSE;
+					fetch= new InvocationHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
+						protected IResult onSuccess(IEntity previousPage) throws Exception {
+							_page = (Node<T>) previousPage;
+							_index = _page._size;
+							return TaskUtils.DONE;
+						}
+					};
+				}
+				
+				return new Handler(fetch) {
+					protected IResult onSuccess() throws Exception {
+						_index--;
+						return TaskUtils.TRUE;
+					}
+				};
+			}
+		};
 	}
 	
-	protected boolean ge(T e) throws IOException {
+	protected IResult<Boolean> ge(final T e) {
 		if ((_page= _tree.getRoot()) == null)
-			return false;
+			return TaskUtils.asResult(false);
+		IResult whileNotLeaf= new WhileHandler() {
+			protected IResult<Boolean> While() throws Exception {
+				return asResult(!_page.isLeaf());
+			}
+			protected IResult<Void> Do() throws Exception {
+				_index= _page.indexOf(e);
+				return new InvocationHandler<Node<T>>(_page.getChildNode(_index)) {
+					protected IResult onSuccess(Node<T> childNode) throws Exception {
+						_page = childNode;
+						return TaskUtils.DONE;
+					}
+				};
+			}
+		};
 		
-		while (!_page.isLeaf()) {
-			_index= _page.indexOf(e);
-			_page = _page.getChildNode(_index);
-		}
-		_index= _page.indexOf(e);
-		
-		return 0 <= _index && _index < _page._size && (BPlusTree.compare(e, _page._keys[_index]) == 0); 
+		return new Handler(whileNotLeaf) {
+			protected IResult onSuccess() throws Exception {
+				_index= _page.indexOf(e);
+				return asResult(0 <= _index && _index < _page._size && (BPlusTree.compare(e, _page._keys[_index]) == 0)); 
+			}
+		};
 	}
-	protected boolean le(T e) throws IOException {
-		
-		if (ge(e)) {
-			T t= keyValue();
-			if (BPlusTree.compare(t, e) == 0)
-				return true;
-			if (previous())
-				return true;
-			return false;
-		}
-		return last();
+	
+	protected IResult<Boolean> le(final T e) {
+		return new InvocationHandler<Boolean>(ge(e)) {
+			protected IResult onSuccess(Boolean ge) throws Exception {
+				if (ge) {
+					T t= keyValue();
+					if (BPlusTree.compare(t, e) == 0)
+						return TaskUtils.TRUE;
+					return previous();
+				}
+				return last();
+			}
+		};
 	}
 	
 	@Override
-	public boolean next() throws IOException {
+	public IResult<Boolean> next() {
 		if (Direction.REVERSE == _direction)
 			return previous();
 		
 		if (_page == null) 
 			return first();
-		
+	
+		IResult next= TaskUtils.DONE;
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
-				return false;
-			_page = StorageUtils.syncFetch(_page.getStorage(), _page._next);
-			_index = -1;
+				return TaskUtils.FALSE;
+			next= new InvocationAction<IEntity>(_page.getStorage().fetch(_page._next)) {
+				protected void onSuccess(IEntity next) throws Exception {
+					_page = (Node<T>) next;
+					_index = -1;
+				}
+			};
 		}
+		return new Handler(next) {
+			protected IResult onSuccess() throws Exception {
+				_index++;
+				return TaskUtils.TRUE;	
+			}
+		};
 		
-		_index++;
-		return true;
 	}
 
 	@Override
-	public boolean hasNext() throws IOException {
+	public IResult<Boolean> hasNext() {
 		if (Direction.REVERSE == _direction)
 			return hasPrevious();
 		
 		if (_page == null) 
 			initFirst();
 		if (_page == null)
-			return false;
+			return TaskUtils.FALSE;
 		
+		IResult next= TaskUtils.DONE;
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
-				return false;
-			_page = StorageUtils.syncFetch(_page.getStorage(), _page._next);
-			_index = -1;
+				return TaskUtils.FALSE;
+			next= new InvocationAction<IEntity>(_page.getStorage().fetch(_page._next)) {
+				protected void onSuccess(IEntity next) throws Exception {
+					_page = (Node<T>) next;
+					_index = -1;
+				}
+			};
 		}
-		return true;
+		return new Handler(next) {
+			protected IResult onSuccess() throws Exception {
+				return TaskUtils.TRUE;	
+			}
+		};
 	}
 
-	public boolean hasPrevious() throws IOException {
+	public IResult<Boolean> hasPrevious() {
+		IResult<Void> init= TaskUtils.DONE;
 		if (_page == null)
-			initLast();
-		if (_page == null)
-			return false;
-		
-		if (_index <= 0) {
-			if (_page._previous == null) 
-				return false;
-			_page = StorageUtils.syncFetch(_page.getStorage(), _page._previous);
-			_index = _page._size;
-		}
-		return true;
+			init= initLast();
+		return new Handler(init) {
+			protected IResult onSuccess() throws Exception {
+				if (_page == null)
+					return TaskUtils.FALSE;
+				
+				IResult<Void > fetch= TaskUtils.DONE;
+				if (_index <= 0) {
+					if (_page._previous == null) 
+						return TaskUtils.FALSE;
+					fetch= new InvocationHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
+						protected IResult onSuccess(IEntity previousPage) throws Exception {
+							_page = (Node<T>) previousPage;
+							_index = _page._size;
+							return TaskUtils.DONE;
+						}
+					};
+				}
+				
+				return new Handler(fetch) {
+					protected IResult onSuccess() throws Exception {
+						return TaskUtils.TRUE;
+					}
+				};
+			}
+		};
 	}
 
 	@Override
-	public boolean first() throws IOException {
+	public IResult<Boolean> first() {
 		if (Direction.REVERSE == _direction)
 			return last();
 		
-		initFirst();
-		if (_page == null)
-			return false;
-		return next();
+		return new Handler(initFirst()) {
+			protected IResult onSuccess() throws Exception {
+				if (_page == null)
+					return TaskUtils.FALSE;
+				return next();
+			}
+		};
 	}
 
-	protected boolean last() throws IOException {
+	protected IResult<Boolean> last() {
 		if (Direction.REVERSE == _direction)
 			return first();
 		
-		initLast();
-		if (_page == null)
-			return false;
-		return previous();
+		return new Handler(initLast()) {
+			protected IResult onSuccess() throws Exception {
+				if (_page == null)
+					return TaskUtils.FALSE;
+				return previous();
+			}
+		};
 	}
 	@Override
 	public IBTreePlusCursor.Direction getDirection() {
 		return _direction;
 	}
 	@Override
-	public boolean to(T e) throws IOException {
+	public IResult<Boolean> to(T e) {
 		if (Direction.REVERSE == _direction)
 			return le(e);
 		return ge(e);
@@ -176,18 +280,27 @@ implements IBTreePlusCursor<T,V> {
 	 * Always starts the search from the beginning 
 	 */
 	@Override
-	public synchronized V find(T key) throws IOException {
+	public synchronized IResult<V> find(final T key) {
+		IResult init;
 		if (Direction.REVERSE == _direction) {
-			initLast();
+			init= initLast();
 		}
 		else
-			initFirst();
-		if (!to(key))
-			return null;
-		T k= keyValue();
-		if (BPlusTree.compare(key, k) != 0)
-			return null;
-		return elementValue();
+			init= initFirst();
+		return new Handler(init) {
+			protected IResult onSuccess() throws Exception {
+				return new InvocationHandler<Boolean>(to(key)) {
+					protected IResult onSuccess(Boolean to) throws Exception {
+						if (!to)
+							return TaskUtils.NULL;
+						T k= keyValue();
+						if (BPlusTree.compare(key, k) != 0)
+							return TaskUtils.NULL;
+						return asResult(elementValue());
+					}
+				};
+			}
+		};
 	}
 	
 }
