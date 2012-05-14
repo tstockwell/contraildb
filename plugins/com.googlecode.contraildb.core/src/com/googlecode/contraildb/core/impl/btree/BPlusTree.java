@@ -4,8 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.lang.reflect.Method;
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import com.googlecode.contraildb.core.ContrailException;
@@ -14,15 +12,13 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
-import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ConditionalHandler;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
+import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.InvocationAction;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
+import com.googlecode.contraildb.core.utils.ResultIterator;
 import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
 //TODO This class must be extended to support NULL values
@@ -41,7 +37,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class BPlusTree<T extends Comparable, V> 
 extends Entity
-implements Iterable<T>
+//implements Iterable<T>
 {
 	private static final long serialVersionUID = 1L;
 	private static final String NO_VALUE= "__no_value"; 
@@ -244,29 +240,40 @@ implements Iterable<T>
 		};
 	}
 
-	@Override
-	public java.util.Iterator<T> iterator() {
+	public ResultIterator<T> iterator() {
 		final IBTreeCursor<T> navigator= cursor(Direction.FORWARD);
-		return new Iterator<T>() {
-			public boolean hasNext() {
-				try {
-					return navigator.hasNext();
-				} catch (IOException e) {
-					throw new ContrailException("Error navigating index", e);
-				}
+		return new ResultIterator<T>() {
+			public IResult<Boolean> hasNext() {
+				return new Handler(navigator.hasNext()) {
+					protected void onComplete() throws Exception {
+						if (incoming().getError() != null)
+							throw new ContrailException("Error navigating index", incoming().getError());
+					}
+					protected IResult onSuccess() throws Exception {
+						return incoming();
+					}
+				};
 			}
-			public T next() {
-				try {
-					if (!navigator.next())
-						throw new NoSuchElementException();
-					return navigator.keyValue();
-				} catch (IOException e) {
-					throw new ContrailException("Error navigating index", e);
-				}
+			public IResult<T> next() {
+				return new Handler(navigator.next()) {
+					protected void onComplete() throws Exception {
+						if (incoming().getError() != null)
+							throw new ContrailException("Error navigating index", incoming().getError());
+					}
+					protected IResult onSuccess() throws Exception {
+						if (!(Boolean)incoming().getResult())
+							throw new NoSuchElementException();
+						return asResult(navigator.keyValue());
+					}
+				};
 			}
 			@Override
-			public void remove() {
-				throw new UnsupportedOperationException();
+			public IResult<Void> remove() {
+				return new Handler() {
+					protected IResult onSuccess() throws Exception {
+						throw new UnsupportedOperationException();
+					}
+				};
 			}
 		};
 	}

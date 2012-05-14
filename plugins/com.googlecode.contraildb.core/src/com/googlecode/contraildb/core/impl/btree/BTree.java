@@ -4,9 +4,11 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.io.Serializable;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
+import com.googlecode.contraildb.core.utils.Handler;
 
 
 //TODO This class must be extended to support NULL values
@@ -22,7 +24,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
  * 
  * @param T The type of objects stored in the BTree
  */
-@SuppressWarnings({ "rawtypes" })
+@SuppressWarnings({"unchecked","rawtypes" })
 public class BTree<T extends Comparable> 
 extends BPlusTree<T, Serializable>
 {
@@ -37,27 +39,33 @@ extends BPlusTree<T, Serializable>
 		}
 	}
 	
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, Identifier identifier, int pageSize) 
+	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession, Identifier identifier, int pageSize) 
 	throws IOException 
 	{
-		BTree<K> btree= new BTree<K>(identifier, pageSize);
-		storageSession.store(btree);
-		return btree;
+		final BTree<K> btree= new BTree<K>(identifier, pageSize);
+		return new Handler(storageSession.store(btree)) {
+			protected IResult onSuccess() throws Exception {
+				return asResult(btree);
+			}
+		};
 	}
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, Identifier identifier) 
+	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession, Identifier identifier) 
 	throws IOException 
 	{
-		BTree<K> btree= new BTree<K>(identifier, DEFAULT_SIZE);
-		storageSession.store(btree);
-		return btree;
+		final BTree<K> btree= new BTree<K>(identifier, DEFAULT_SIZE);
+		return new Handler(storageSession.store(btree)) {
+			protected IResult onSuccess() throws Exception {
+				return asResult(btree);
+			}
+		};
 	}
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, int pageSize) 
+	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession, int pageSize) 
 	throws IOException 
 	{
 		return createInstance(storageSession, Identifier.create(), pageSize);
 	}
 	
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession) 
+	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession) 
 	throws IOException 
 	{
 		return createInstance(storageSession, Identifier.create(), DEFAULT_SIZE);

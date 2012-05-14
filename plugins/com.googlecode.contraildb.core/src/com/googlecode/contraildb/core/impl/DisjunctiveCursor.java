@@ -1,13 +1,17 @@
 package com.googlecode.contraildb.core.impl;
 
-import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
+import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
+import com.googlecode.contraildb.core.utils.TaskUtils;
+import com.googlecode.contraildb.core.utils.WhileHandler;
 
 
 /**
@@ -36,69 +40,133 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 	}
 
 	@Override
-	public T keyValue() throws IOException {
+	public T keyValue() {
 		if (_queue.isEmpty())
 			return null;
 		return _queue.first();
 	}
 
 	@Override
-	public boolean first() throws IOException {
+	public IResult<Boolean> first() {
 		_queue.clear();
-		for (int i= 0; i < _cursors.length; i++) {
-			IForwardCursor<T> cursor= _cursors[i];
-			if (cursor.first()) 
-				_queue.add(cursor.keyValue());
-		}
+
+		final int[] index= new int[] { 0 }; 
+		IResult first= new WhileHandler() {
+			protected IResult<Boolean> While() {
+				return asResult(index[0] < _cursors.length);
+			}
+			protected IResult<Void> Do() {
+				final IForwardCursor<T> cursor= _cursors[index[0]++];
+				return new InvocationHandler<Boolean>(cursor.first()) {
+					protected IResult onSuccess(Boolean first) {
+						if (first) 
+							_queue.add(cursor.keyValue());
+						return TaskUtils.DONE;
+					}
+				};
+			}
+		};
 		
-		return !_queue.isEmpty();
+		return new Handler(first) {
+			protected IResult onSuccess() throws Exception {
+				return asResult(!_queue.isEmpty());
+			}
+		};
 	}
 
 	@Override
-	public boolean to(T e) throws IOException {
+	public IResult<Boolean> to(final T e) {
+		final int[] index= new int[] { 0 }; 
+		IResult first= new WhileHandler() {
+			protected IResult<Boolean> While() {
+				return asResult(index[0] < _cursors.length);
+			}
+			protected IResult<Void> Do() {
+				final IForwardCursor<T> cursor= _cursors[index[0]++];
+				return new InvocationHandler<Boolean>(cursor.to(e)) {
+					protected IResult onSuccess(Boolean to) {
+						if (to) 
+							_queue.add(cursor.keyValue());
+						return TaskUtils.DONE;
+					}
+				};
+			}
+		};
 		
-		for (int i= 0; i < _cursors.length; i++) {
-			IForwardCursor<T> cursor= _cursors[i];
-			if (cursor.to(e)) 
-				_queue.add(cursor.keyValue());
-		}
-		
-		T t= _queue.ceiling(e);
-		if (BPlusTree.compare(e, t) <= 0) {
-			T f;
-			while (!_queue.isEmpty() && BPlusTree.compare(f= _queue.first(), t) < 0)
-				_queue.remove(f);
-			return true;
-		}
-		return false;
+		return new Handler(first) {
+			protected IResult onSuccess() {
+				final T t= _queue.ceiling(e);
+				if (BPlusTree.compare(e, t) <= 0) {
+					T f;
+					while (!_queue.isEmpty() && BPlusTree.compare(f= _queue.first(), t) < 0)
+						_queue.remove(f);
+					return TaskUtils.TRUE;
+				}
+				return TaskUtils.FALSE;
+			}
+		};
 	}
 
 	@Override
-	public boolean hasNext() throws IOException {
+	public IResult<Boolean> hasNext() {
 		if (!_queue.isEmpty())
-			return true;
-		for (int i= 0; i < _cursors.length; i++) {
-			IForwardCursor<T> cursor= _cursors[i];
-			if (cursor.next()) 
-				_queue.add(cursor.keyValue());
-		}
-		return !_queue.isEmpty();
+			return TaskUtils.TRUE;
+		
+		final int[] index= new int[] { 0 }; 
+		IResult first= new WhileHandler() {
+			protected IResult<Boolean> While() {
+				return asResult(index[0] < _cursors.length);
+			}
+			protected IResult<Void> Do() {
+				final IForwardCursor<T> cursor= _cursors[index[0]++];
+				return new InvocationHandler<Boolean>(cursor.next()) {
+					protected IResult onSuccess(Boolean next) {
+						if (next) 
+							_queue.add(cursor.keyValue());
+						return TaskUtils.DONE;
+					}
+				};
+			}
+		};
+		
+		return new Handler(first) {
+			protected IResult onSuccess() throws Exception {
+				return asResult(!_queue.isEmpty());
+			}
+		};
 	}
 
 
 	@Override
-	public boolean next() throws IOException {
+	public IResult<Boolean> next() {
 		if (!_queue.isEmpty()) {
 			_queue.remove(_queue.first());
 			if (!_queue.isEmpty()) 
-				return true;
+				return TaskUtils.TRUE;
 		}
-		for (int i= 0; i < _cursors.length; i++) {
-			IForwardCursor<T> cursor= _cursors[i];
-			if (cursor.next()) 
-				_queue.add(cursor.keyValue());
-		}
-		return !_queue.isEmpty();
+		
+		final int[] index= new int[] { 0 }; 
+		IResult first= new WhileHandler() {
+			protected IResult<Boolean> While() {
+				return asResult(index[0] < _cursors.length);
+			}
+			protected IResult<Void> Do() {
+				final IForwardCursor<T> cursor= _cursors[index[0]++];
+				return new InvocationHandler<Boolean>(cursor.next()) {
+					protected IResult onSuccess(Boolean next) {
+						if (next) 
+							_queue.add(cursor.keyValue());
+						return TaskUtils.DONE;
+					}
+				};
+			}
+		};
+		
+		return new Handler(first) {
+			protected IResult onSuccess() throws Exception {
+				return asResult(!_queue.isEmpty());
+			}
+		};
 	}
 
 	@Override

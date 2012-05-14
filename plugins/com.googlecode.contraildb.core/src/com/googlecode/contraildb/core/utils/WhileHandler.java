@@ -8,6 +8,9 @@ abstract public class WhileHandler extends Handler {
 	public WhileHandler() {
 		super();
 	}
+	public WhileHandler(IResult result) {
+		super(result);
+	}
 	
 	abstract protected IResult<Boolean> While() throws Exception;
 	abstract protected IResult<Void> Do() throws Exception;
@@ -20,7 +23,7 @@ abstract public class WhileHandler extends Handler {
 					return TaskUtils.DONE;
 				return new Handler(Do()) {
 					protected IResult onSuccess() throws Exception {
-						return onSuccess();
+						return WhileHandler.this.onSuccess();
 					}
 				};
 			}

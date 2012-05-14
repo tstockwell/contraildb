@@ -27,8 +27,8 @@ implements IBTreePlusCursor<T,V> {
 	int _index;
 
 	@Override
-	@Immediate public V elementValue() {
-		return (V) _page._values[_index];
+	public IResult<V> elementValue() {
+		return TaskUtils.asResult((V) _page._values[_index]);
 	}
 	
 	private IResult<Void> initFirst()  {

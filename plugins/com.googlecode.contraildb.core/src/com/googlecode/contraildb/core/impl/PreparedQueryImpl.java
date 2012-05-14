@@ -53,9 +53,9 @@ implements IPreparedQuery<T>
 					tracker.submit(new ContrailAction() {
 						protected void action() throws Exception {
 							try {
-								results.add(_session.fetch(identifier).getResult());
+								results.add((T) _session.fetch(identifier).get());
 							}
-							catch (IOException x) {
+							catch (Exception x) {
 								if (error[0] == null)
 									error[0]= x;
 							}
