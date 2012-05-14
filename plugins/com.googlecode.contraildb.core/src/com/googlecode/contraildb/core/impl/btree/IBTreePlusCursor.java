@@ -1,6 +1,7 @@
 package com.googlecode.contraildb.core.impl.btree;
 
-import java.io.IOException;
+import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.utils.Immediate;
 
 /**
  * Adds method for getting values associated with key elements.
@@ -12,8 +13,8 @@ public interface IBTreePlusCursor<K, V> extends IBTreeCursor<K> {
 	/**
 	 * Returns the value associated with the current key value, if any.
 	 */
-	V elementValue() throws IOException;
+	@Immediate V elementValue();
 
-	V find(K key) throws IOException;
+	IResult<V> find(K key);
 	
 }

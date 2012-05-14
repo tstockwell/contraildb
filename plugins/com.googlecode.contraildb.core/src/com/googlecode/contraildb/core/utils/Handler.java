@@ -42,8 +42,15 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 		if (result.isSuccess()) {
 			try {
 				final IResult<O> retval= onSuccess();
-				IResult finalResult= TaskUtils.combineResults( retval, TaskUtils.combineResults(_pending));
-				finalResult.addHandler(new Handler() {
+				IResult pending= TaskUtils.combineResults( retval, TaskUtils.combineResults(_pending));
+				final IResult lastly= lastly();
+				if (lastly != TaskUtils.DONE) // an optimization
+					pending= new Handler(pending) {
+						protected IResult onSuccess() throws Exception {
+							return lastly;
+						}
+					};
+				pending.addHandler(new Handler() {
 					public void onComplete() {
 						IResult result= incoming();
 						if (result.isSuccess()) {
@@ -86,6 +93,13 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	protected IResult<O> onSuccess() throws Exception { return TaskUtils.NULL; }
 	protected void onError() { }
 	protected void onCancelled() { }
+	
+	/**
+	 * The doFinally method is invoked after everything else is completed,
+	 * including the result returned from the onSuccess method.
+	 * The doFinally method only invoked if all tasks executed before it are successful 
+	 */
+	protected IResult lastly() throws Exception { return TaskUtils.DONE; }
 	
 	protected void error(Throwable t) {
 		_outgoing.error(t);

@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -14,8 +15,12 @@ import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.StorageUtils;
+import com.googlecode.contraildb.core.utils.ConditionalHandler;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.Immediate;
+import com.googlecode.contraildb.core.utils.InvocationAction;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
@@ -80,34 +85,37 @@ implements Iterable<T>
 	/**
 	 * Create a new persistent index.
 	 */
-	private static final <K extends Comparable, V> BPlusTree<K,V> createInstance(
+	private static final <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
 	IEntityStorage.Session storageSession, Identifier id, int pageSize, boolean hasLeafValues) 
 	throws IOException 
 	{
-		BPlusTree<K,V> btree= new BPlusTree<K,V>(id, pageSize, hasLeafValues);
-		storageSession.store(btree);
-		return btree;
+		final BPlusTree<K,V> btree= new BPlusTree<K,V>(id, pageSize, hasLeafValues);
+		return new Handler(storageSession.store(btree)) {
+			protected IResult onSuccess() throws Exception {
+				return asResult(btree);
+			}
+		};
 	}
-	public static <K extends Comparable, V> BPlusTree<K,V> createInstance(
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
 	IEntityStorage.Session storageSession, int pageSize) 
 	throws IOException 
 	{
 		return createInstance(storageSession, Identifier.create(), pageSize, true);
 	}
-	public static <K extends Comparable, V> BPlusTree<K,V> createBPlusTree(
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createBPlusTree(
 	IEntityStorage.Session storageSession, Identifier identifier) 
 	throws IOException 
 	{
 		return createInstance(storageSession, identifier, DEFAULT_SIZE, true);
 	}
-	public static <K extends Comparable, V> BPlusTree<K,V> createInstance(
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
 	IEntityStorage.Session storageSession) 
 	throws IOException 
 	{
 		return createInstance(storageSession, Identifier.create(), DEFAULT_SIZE, true);
 	}
 
-	protected BPlusTree(Identifier identifier, int pageSize, boolean hasLeafValues) throws IOException {
+	@Immediate protected BPlusTree(Identifier identifier, int pageSize, boolean hasLeafValues) throws IOException {
 		super(identifier);
 		if ((pageSize & 1) != 0)
 			throw new IllegalArgumentException( "Page size' must be even");
@@ -154,14 +162,14 @@ implements Iterable<T>
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public synchronized void insert(T key) throws IOException {
-		insert(key, (V) NO_VALUE);
+	public synchronized IResult<Void> insert(T key) throws IOException {
+		return insert(key, (V) NO_VALUE);
 	}
 	
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public synchronized void insert(T key, V value) throws IOException {
+	public synchronized IResult<Void> insert(final T key, final V value) throws IOException {
 		if (key == null) 
 			throw new IllegalArgumentException("Argument 'key' is null");
 
@@ -169,45 +177,71 @@ implements Iterable<T>
 		if (_root == null) {
 			_root = new Node<T>(this);
 			_rootId = _root.getId();
-			getStorage().store(_root);
-			_root.insert(key, value);
-			update();
-			return;
+			return new Handler(getStorage().store(_root)) {
+				protected IResult onSuccess() throws Exception {
+					_root.insert(key, value);
+					update();
+					return TaskUtils.DONE;
+				}
+			};
 		}
 
-		Node<T> overflow = _root.insert(key, value);
-		if (overflow != null) {
-			InnerNode<T> newRoot= new InnerNode<T>(this);
-			getStorage().store(newRoot);
-			if (_root.isLeaf()) {
-				newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
+		final IResult<Node<T>> insert= _root.insert(key, value);
+		return new Handler(insert) {
+			protected IResult onSuccess() throws Exception {
+				final Node<T> overflow= insert.getResult();
+				if (overflow == null) 
+					return TaskUtils.DONE;
+
+				final InnerNode<T> newRoot= new InnerNode<T>(BPlusTree.this);
+				return new Handler(getStorage().store(newRoot)) {
+					protected IResult onSuccess() throws Exception {
+						if (_root.isLeaf()) {
+							newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
+						}
+						else {
+							newRoot.insertEntry(0, _root.getLargestKey(), _root.getId());
+						}
+						newRoot.insertEntry(1, overflow.getLargestKey(), overflow.getId());
+						_root= newRoot;
+						_rootId = newRoot.getId();
+						return update();
+					}
+				};
 			}
-			else {
-				newRoot.insertEntry(0, _root.getLargestKey(), _root.getId());
-			}
-			newRoot.insertEntry(1, overflow.getLargestKey(), overflow.getId());
-			_root= newRoot;
-			_rootId = newRoot.getId();
-			update();
-		}
+		};
 	}
 
 	/**
 	 * Remove an entry with the given key from the BTree.
 	 */
-	public synchronized void remove(T key) throws IOException {
-		if (key == null) 
-			throw new IllegalArgumentException("Argument 'key' is null");
+	public synchronized IResult<Void> remove(final T key) throws IOException {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (key == null) 
+					throw new IllegalArgumentException("Argument 'key' is null");
 
-		if (_root == null)
-			return;
+				if (_root == null)
+					return TaskUtils.DONE;
 
-		boolean underflow= _root.remove(key);
-		if (underflow && _root.isEmpty()) {
-			_root.delete();
-			_root = null;
-		}
-		update();
+				return new ConditionalHandler(_root.remove(key)) {
+					// underflow
+					protected IResult onTrue() throws Exception {
+						return new ConditionalHandler(_root.isEmpty()) {
+							protected IResult onTrue() throws Exception {
+								IResult delete= _root.delete();
+								_root = null;
+								return delete;
+							}
+						};
+					}
+
+					protected IResult lastly() throws Exception {
+						return update();
+					}
+				};
+			}
+		};
 	}
 
 	@Override
@@ -242,37 +276,39 @@ implements Iterable<T>
 	 * manager
 	 */
 	public synchronized IResult<Void> delete() {
-		final IResult delete= _root != null ? _root.delete() : TaskUtils.DONE;
 		return new Handler(super.onDelete()) {
 			protected IResult onSuccess() throws Exception {
-				return new Handler(delete) {
-					protected IResult onSuccess() throws Exception {
-						_root= null;
-						return TaskUtils.DONE;
+				return new ConditionalHandler(_root != null) {
+					protected IResult onTrue() throws Exception {
+						return _root.delete();
 					}
-				}.toResult();
+				};
 			}
-		}.toResult();
+			protected IResult lastly() throws Exception {
+				_root= null;
+				return TaskUtils.DONE;
+			}
+		};
 	}
 
 	/**
 	 * Return the size of a node in the btree.
 	 */
-	public int getPageSize() {
+	@Immediate public int getPageSize() {
 		return _pageSize;
 	}
 
-	protected Node<T> getRoot() throws IOException {
+	@Immediate protected Node<T> getRoot() {
 		return _root;
 	}
 
-	public void dump(PrintStream out) throws IOException {
+	@Immediate public void dump(PrintStream out) throws IOException {
 		Node<T> root = getRoot();
 		if (root != null) 
 			root.dump(out, 0);
 	}
 
-	public boolean isEmpty() throws IOException {
+	@Immediate public boolean isEmpty() throws IOException {
 		if (_root == null)
 			return true;
 		return _root.isEmpty();

@@ -125,9 +125,10 @@ public class StorageSession implements IEntityStorage.Session {
 						_isActive= false;
 						_deletes= _reads= _inserts= _updates= null;
 					}
-				}.toResult());
+				});
+				return TaskUtils.DONE;
 			};
-		}.toResult();
+		};
 	}
 
 	/**

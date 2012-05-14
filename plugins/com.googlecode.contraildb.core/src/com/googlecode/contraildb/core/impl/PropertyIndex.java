@@ -3,6 +3,7 @@ package com.googlecode.contraildb.core.impl;
 import java.io.IOException;
 import java.io.Serializable;
 
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.BTree;
@@ -12,6 +13,7 @@ import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.StorageUtils;
+import com.googlecode.contraildb.core.utils.Immediate;
 
 
 /**
@@ -36,12 +38,12 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 	
 	static final Identifier __indexRoot= Identifier.create("net/sf/contrail/core/indexes/sets");
 	
-	public PropertyIndex(BPlusTree<K, Identifier> btree) throws IOException {
+	@Immediate public PropertyIndex(BPlusTree<K, Identifier> btree) throws IOException {
 		_btree= btree;
 	}
 
 
-	synchronized public void insert(K key, Identifier document) throws IOException {
+	synchronized public IResult<Void> insert(K key, Identifier document) throws IOException {
 		Identifier value= _btree.cursor(Direction.FORWARD).find(key);
 		if (value == null) { 
 			// the key has no value currently associated with it, just store the identifier

@@ -23,11 +23,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.ContrailQuery;
+import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.IProcessor;
@@ -35,12 +36,12 @@ import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.SessionAlreadyClosedException;
-import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -65,23 +66,21 @@ implements IContrailSession
 	}
 	public static IResult<ContrailSessionImpl> create(final ContrailServiceImpl service, final long revisionNumber) 
 	{
-		final IResult<StorageSession> beginSession= service._storageSystem.beginSession(revisionNumber);
-		return new Handler(beginSession) {
-			protected IResult onSuccess() throws Exception {
-				ContrailSessionImpl impl= new ContrailSessionImpl(service, revisionNumber, beginSession.get());
-				return TaskUtils.asResult(impl);
+		return new InvocationHandler<StorageSession>(service._storageSystem.beginSession(revisionNumber)) {
+			protected IResult onSuccess(StorageSession session) throws Exception {
+				ContrailSessionImpl impl= new ContrailSessionImpl(service, revisionNumber, session);
+				return asResult(impl);
 			}
-		}.toResult();
+		};
 	}
 	public static IResult<ContrailSessionImpl> create(final ContrailServiceImpl service, final Mode mode) 
 	{
-		final IResult<StorageSession> beginSession= service._storageSystem.beginSession(mode);
-		return new Handler(beginSession) {
-			protected IResult onSuccess() throws Exception {
-				ContrailSessionImpl impl= new ContrailSessionImpl(service, mode, beginSession.get());
-				return TaskUtils.asResult(impl);
+		return new InvocationHandler<StorageSession>(service._storageSystem.beginSession(mode)) {
+			protected IResult onSuccess(StorageSession session) throws Exception {
+				ContrailSessionImpl impl= new ContrailSessionImpl(service, mode, session);
+				return asResult(impl);
 			}
-		}.toResult();
+		};
 	}
 
 	private ContrailSessionImpl(ContrailServiceImpl service, long revisionNumber, StorageSession storageSession) 
@@ -114,7 +113,7 @@ implements IContrailSession
 			protected void onComplete() throws Exception {
 				spawn(_service.onClose(ContrailSessionImpl.this));
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -126,7 +125,7 @@ implements IContrailSession
 			protected void onComplete() throws Exception {
 				spawn(_service.onClose(ContrailSessionImpl.this));
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -143,9 +142,9 @@ implements IContrailSession
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
 				
-				return TaskUtils.asResult(new PreparedQueryImpl<T>(_service, ContrailSessionImpl.this, query));
+				return asResult(new PreparedQueryImpl<T>(_service, ContrailSessionImpl.this, query));
 			}
-		}.toResult();
+		};
 	}
 
 //	public <T extends Item> Iterable<T> search(ContrailQuery query) throws IOException {
@@ -161,25 +160,22 @@ implements IContrailSession
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
-				final IResult<Collection<Item>> fetch= fetch(paths);
-				return new Handler() {
-					protected IResult onSuccess() throws Exception {
-						return delete(fetch.getResult());
+				return new InvocationHandler<Collection<Item>>(fetch(paths)) {
+					protected IResult onSuccess(Collection<Item> items) throws Exception {
+						return delete(items);
 					}
-				}.toResult();
+				};
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
 	public IResult<Void> deleteAllChildren(final Collection<Identifier> paths) {
-		final IResult<Map<Identifier, Collection<Item>>> fetchChildren= fetchChildren(paths);
-		return new Handler(fetchChildren) {
-			protected IResult onSuccess() throws Exception {
+		return new InvocationHandler<Map<Identifier, Collection<Item>>>(fetchChildren(paths)) {
+			protected IResult onSuccess(final Map<Identifier, Collection<Item>> allChildren) throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
 				
-				final Map<Identifier, Collection<Item>> allChildren= fetchChildren.getResult();
 				return new Handler(_storageSession.deleteAllChildren(paths)) {
 					protected IResult onSuccess() throws Exception {
 						
@@ -189,9 +185,9 @@ implements IContrailSession
 								
 						return _searcher.unindex(all);
 					}
-				}.toResult();
+				};
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -202,7 +198,7 @@ implements IContrailSession
 					throw new SessionAlreadyClosedException();
 				return StorageUtils.fetchAll(_storageSession, paths);
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -217,7 +213,7 @@ implements IContrailSession
 					IResult<Collection<T>> result= _storageSession.fetchChildren(path);
 					fetched.put(path, result);
 				}
-				return new Handler(TaskUtils.combineResults(fetched.values())) {
+				return new Handler(combineResults(fetched.values())) {
 					protected IResult onSuccess() throws Exception {
 						HashMap<Identifier, Collection<T>> items= new HashMap<Identifier, Collection<T>>();
 						for (Identifier path:paths) {
@@ -225,11 +221,11 @@ implements IContrailSession
 							items.put(path, result.getResult());
 						}
 						
-						return TaskUtils.asResult(items);
+						return asResult(items);
 					}
-				}.toResult();
+				};
 			}
-		}.toResult();
+		};
 	}
 
 	public IResult<Void> flush() {
@@ -240,7 +236,7 @@ implements IContrailSession
 				
 				return _storageSession.flush();
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -274,9 +270,9 @@ implements IContrailSession
 						
 						return asResult(items);
 					}
-				}.toResult();
+				};
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -293,18 +289,18 @@ implements IContrailSession
 					protected IResult onSuccess() throws Exception {
 						return _searcher.index(entities);
 					}
-				}.toResult();
+				};
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
 	public IResult<Void> delete(Identifier... paths) {
-		return new Handler(fetch(paths)) {
-			protected IResult onSuccess() throws Exception {
-				return delete(incoming().getResult());
+		return new InvocationHandler<Collection<Item>>(fetch(paths)) {
+			protected IResult onSuccess(Collection<Item> items) throws Exception {
+				return delete(items);
 			}	
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -338,7 +334,7 @@ implements IContrailSession
 					return TaskUtils.NULL;
 				return asResult(set.iterator().next());
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -354,7 +350,7 @@ implements IContrailSession
 				Map<Identifier, Collection<T>> set= fetch.getResult();
 				return asResult(set.get(path));
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -377,13 +373,12 @@ implements IContrailSession
 
 	@Override
 	public IResult<Collection<Identifier>> listChildren(final Identifier path) {
-		final IResult<Map<Identifier, Collection<Identifier>>> fetch= listChildren(Arrays.asList(new Identifier[] { path }));
-		return new Handler(fetch) {
-			protected IResult onSuccess() throws Exception {
-				Map<Identifier, Collection<Identifier>> set= fetch.getResult();
-				return asResult(set.get(path));
+		List<Identifier> ids= Arrays.asList(new Identifier[] { path });
+		return new InvocationHandler<Map<Identifier, Collection<Identifier>>>(listChildren(ids)) {
+			protected IResult onSuccess(Map<Identifier, Collection<Identifier>> children) throws Exception {
+				return asResult(children.get(path));
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -402,20 +397,19 @@ implements IContrailSession
 	@Override
 	public <T extends Item, C extends Item> IResult<Collection<C>> fetchChildren(T entity) {
 		final Identifier i= entity.getId();
-		final IResult<Map<Identifier, Collection<C>>> fetch= fetchChildren(Arrays.asList(new Identifier[] { i }));
-		return new Handler(fetch) {
-			protected IResult onSuccess() throws Exception {
-				Map<Identifier, Collection<C>> map= fetch.getResult();
-				Collection<C> set= map.get(i);
+		final List<Identifier> ids= Arrays.asList(new Identifier[] { i });
+		return new InvocationHandler<Map<Identifier, Collection<Item>>>(fetchChildren(ids)) {
+			protected IResult onSuccess(Map<Identifier, Collection<Item>> map) throws Exception {
+				Collection<Item> set= map.get(i);
 				if (set == null)
 					return asResult(Collections.emptySet());
 				return asResult(set);
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
-	public <T extends Item> IResult<Void> delete(Iterable<T> entities)
+	public <T extends Item> IResult<Void> delete(final Iterable<T> entities)
 	{
 		ArrayList<IResult> deletes= new ArrayList<IResult>();
 		for (T t:entities)
@@ -424,7 +418,7 @@ implements IContrailSession
 			protected IResult onSuccess() throws Exception {
 				return _searcher.unindex(entities); 
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -448,7 +442,7 @@ implements IContrailSession
 					return asResult(Collections.emptySet());
 				return asResult(set);
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -457,7 +451,7 @@ implements IContrailSession
 			protected IResult onSuccess() throws Exception {
 				throw new UnsupportedOperationException();
 			}
-		}.toResult();
+		};
 	}
 
 	@Override
@@ -495,8 +489,7 @@ implements IContrailSession
 					throw new SessionAlreadyClosedException();
 				return _searcher.fetchIdentifiers(query, processor);
 			}
-		}.toResult();
-		
+		};
 	}
 
 }

@@ -138,7 +138,7 @@ public class IndexSearcher {
 				BPlusTree tree= fetch.getResult();
 				if (tree == null)
 					return TaskUtils.NULL;
-				return PropertyIndex.create(tree);
+				return asResult(new PropertyIndex(tree));
 			}
 		};
 	}
@@ -146,11 +146,11 @@ public class IndexSearcher {
 	private IResult<PropertyIndex> createPropertyIndex(String propertyName) 
 	{
 		Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+propertyName);
-		final IResult<BPlusTree> createBPlusTree= BPlusTree.createBPlusTree(_storageSession, indexId);
+		final IResult<BPlusTree> fetchTree= _storageSession.fetch(indexId);
 		return new Handler() {
 			protected IResult onSuccess() throws Exception {
-				BPlusTree tree= createBPlusTree.getResult();
-				return PropertyIndex.create(tree);
+				BPlusTree tree= fetchTree.getResult();
+				return asResult(new PropertyIndex(tree));
 			}
 		};
 	}
@@ -277,7 +277,7 @@ public class IndexSearcher {
 		final Quantifier quantifier= quantifiedValues.getType();
 		Comparable<?>[] values= quantifiedValues.getValues(); 
 		if (values.length <= 0) 
-			return new IBTreeCursor.EmptyForwardCursor<Identifier>();
+			return TaskUtils.asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());
 		
 		if (op == LESS_THAN || op == LESS_THAN_OR_EQUAL) {
 			Comparable<?> value= values[0]; 
