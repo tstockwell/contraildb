@@ -19,6 +19,9 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	public Handler(IResult... tasks) {
 		this((IResult<I>)TaskUtils.combineResults(tasks));
 	}
+	public Handler(Collection<IResult> tasks) {
+		this((IResult<I>)TaskUtils.combineResults(tasks));
+	}
 	public Handler(I value) {
 		this(TaskUtils.asResult(value));
 	}
@@ -35,58 +38,58 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 		_incoming= result;
 		try {
 			onComplete();
+			
+			if (result.isSuccess()) {
+				try {
+					final IResult<O> retval= onSuccess();
+					IResult pending= TaskUtils.combineResults( retval, TaskUtils.combineResults(_pending));
+					final IResult lastly= lastly();
+					if (lastly != TaskUtils.DONE) // an optimization
+						pending= new Handler(pending) {
+							protected IResult onSuccess() throws Exception {
+								return lastly;
+							}
+						};
+					pending.addHandler(new Handler() {
+						public void onComplete() {
+							IResult result= incoming();
+							if (result.isSuccess()) {
+								_outgoing.success(retval.getResult());
+							}
+							else if (result.isCancelled()) {
+								_outgoing.cancel();
+							}
+							else
+								_outgoing.error(result.getError());
+						}
+					});
+				}
+				catch (Throwable t) {
+					_outgoing.error(t);
+				}
+			}
+			else if (result.isCancelled()) {
+				_outgoing.cancel();
+				try {
+					onCancelled();
+				}
+				catch (Throwable t) {
+					Logging.warning("Error while handling cancel", t);
+				}
+			}
+			else {
+				_outgoing.error(result.getError());
+				try {
+					onError();
+				}
+				catch (Throwable t) {
+					Logging.warning("Error while handling error", t);
+				}
+			}
 		}
 		catch (Throwable t) {
-			Logging.warning("Error while handling complete", t);
+			_outgoing.error(t);
 		}
-		if (result.isSuccess()) {
-			try {
-				final IResult<O> retval= onSuccess();
-				IResult pending= TaskUtils.combineResults( retval, TaskUtils.combineResults(_pending));
-				final IResult lastly= lastly();
-				if (lastly != TaskUtils.DONE) // an optimization
-					pending= new Handler(pending) {
-						protected IResult onSuccess() throws Exception {
-							return lastly;
-						}
-					};
-				pending.addHandler(new Handler() {
-					public void onComplete() {
-						IResult result= incoming();
-						if (result.isSuccess()) {
-							_outgoing.success(retval.getResult());
-						}
-						else if (result.isCancelled()) {
-							_outgoing.cancel();
-						}
-						else
-							_outgoing.error(result.getError());
-					}
-				});
-			}
-			catch (Throwable t) {
-				_outgoing.error(t);
-			}
-		}
-		else if (result.isCancelled()) {
-			_outgoing.cancel();
-			try {
-				onCancelled();
-			}
-			catch (Throwable t) {
-				Logging.warning("Error while handling cancel", t);
-			}
-		}
-		else {
-			_outgoing.error(result.getError());
-			try {
-				onError();
-			}
-			catch (Throwable t) {
-				Logging.warning("Error while handling error", t);
-			}
-		}
-		
 	}
 	
 	protected void onComplete() throws Exception { }

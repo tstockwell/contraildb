@@ -7,13 +7,12 @@ import java.util.ArrayList;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ConditionalHandler;
+import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.Immediate;
 import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
 
@@ -66,7 +65,6 @@ extends Node<K>
 	@Override public IResult<Node<K>> insert(final K key, final Object value) {
 		final int index = indexOf(key);
 		
-		IResult<Node<K>> getChild = getChildNode(index);
 		return new InvocationHandler<Node<K>>(getChildNode(index)) {
 			protected IResult onSuccess(final Node<K> child) throws Exception {
 				
@@ -124,39 +122,64 @@ extends Node<K>
 		};
 	}
 	
-	@Override IResult<Boolean> remove(K key) {
+	@Override IResult<Boolean> remove(final K key) {
 
-		int index = indexOf(key);
-		
-		Node<K> child = getChildNode(index);
-		boolean underflow= child.remove(key);
-		if (!underflow)
-			return false;
-
-		if (index < _size - 1) {
-			Node<K> rightSibling = getChildNode(index + 1);
-			if (rightSibling._size+child._size <= _index._pageSize) {
-				child.merge(rightSibling);
-				removeEntry(index);
-				_values[index]= child.getId();
-				update();
+		final int index = indexOf(key);
+		return new InvocationHandler<Node<K>>(getChildNode(index)) {
+			protected IResult onSuccess(final Node<K> child) throws Exception {
+				return new InvocationHandler<Boolean>(child.remove(key)) {
+					@Override
+					protected IResult onSuccess(Boolean underflow) throws Exception {
+						if (!underflow)
+							return TaskUtils.FALSE;
+						
+						IResult doRemove= TaskUtils.DONE;
+						if (index < _size - 1) {
+							doRemove= new InvocationHandler<Node<K>>(getChildNode(index + 1)) {
+								protected IResult onSuccess(Node<K> rightSibling) throws Exception {
+									if (rightSibling._size+child._size <= _index._pageSize) {
+										return new Handler(child.merge(rightSibling)) {
+											protected IResult onSuccess() throws Exception {
+												removeEntry(index);
+												_values[index]= child.getId();
+												return update();
+											}
+										};
+									}
+									return TaskUtils.DONE;
+								}
+							};
+						}
+						if (0 < index) {
+							doRemove= new InvocationHandler<Node<K>>(getChildNode(index - 1)) {
+								protected IResult onSuccess(final Node<K> leftSibling) throws Exception {
+									if (leftSibling._size+child._size <= _index._pageSize) {
+										return new Handler(leftSibling.merge(child)) {
+											protected IResult onSuccess() throws Exception {
+												removeEntry(index-1);
+												_values[index-1]= leftSibling.getId();
+												return update();
+											}
+										};
+									}
+									return TaskUtils.DONE;
+								}
+							};
+						}
+						if (index == 0 && child.isEmpty()) {
+							removeEntry(0);
+							doRemove= update();
+						}
+						
+						return new Handler(doRemove) {
+							protected IResult onSuccess() throws Exception {
+								return asResult(_size < _index._pageSize / 2);
+							}
+						};
+					}
+				};
 			}
-		}
-		if (0 < index) {
-			Node<K> leftSibling = getChildNode(index - 1);
-			if (leftSibling._size+child._size <= _index._pageSize) {
-				leftSibling.merge(child);
-				removeEntry(index-1);
-				_values[index-1]= leftSibling.getId();
-				update();
-			}
-		}
-		if (index == 0 && child.isEmpty()) {
-			removeEntry(0);
-			update();
-		}
-
-		return _size < _index._pageSize / 2;
+		};
 	}
 	
 	
@@ -172,13 +195,13 @@ extends Node<K>
 					Node<?> childBPage = (Node<?>) fetch.getResult();
 					return childBPage.delete();
 				}
-			}.toResult());
+			});
 		}
 		return new Handler(TaskUtils.combineResults(tasks)) {
 			protected IResult onSuccess() throws Exception {
 				return InnerNode.super.delete();
 			}
-		}.toResult();
+		};
 	}
 
 	/**

@@ -1,7 +1,5 @@
 package com.googlecode.contraildb.core.impl.btree;
 
-import java.io.IOException;
-
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.utils.Immediate;
 import com.googlecode.contraildb.core.utils.TaskUtils;

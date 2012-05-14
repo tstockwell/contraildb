@@ -19,16 +19,16 @@ package com.googlecode.contraildb.tests;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.Iterator;
+
+import junit.framework.TestCase;
 
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
-import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
+import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
-
-import junit.framework.TestCase;
+import com.googlecode.contraildb.core.utils.ResultIterator;
 
 
 /**
@@ -40,7 +40,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	public void testBasics() throws Exception {
 		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		BPlusTree<String, String> tree= BPlusTree.createInstance(storage);
+		BPlusTree<String, String> tree= BPlusTree.<String, String>createInstance(storage).get();
 		IBTreePlusCursor<String, String> cursor= tree.cursor(Direction.FORWARD);
 		
 		tree.insert("Churchill", "Good Guys");
@@ -56,16 +56,16 @@ public class ContrailBTreeTests extends TestCase {
 		assertEquals("value-1.1", cursor.find("key-1"));
 		assertEquals("value-2.0", cursor.find("key-2"));
 		
-		Iterator<String> iterator= tree.iterator();
-		assertTrue(iterator.hasNext());
+		ResultIterator<String> iterator= tree.iterator();
+		assertTrue(iterator.hasNext().get());
 		assertEquals("Churchill", iterator.next());
-		assertTrue(iterator.hasNext());
+		assertTrue(iterator.hasNext().get());
 		assertEquals("Ghandi", iterator.next());
-		assertTrue(iterator.hasNext());
+		assertTrue(iterator.hasNext().get());
 		assertEquals("key-1", iterator.next());
-		assertTrue(iterator.hasNext());
+		assertTrue(iterator.hasNext().get());
 		assertEquals("key-2", iterator.next());
-		assertFalse(iterator.hasNext());
+		assertFalse(iterator.hasNext().get());
 		
 		
 		tree.remove("Churchill");
@@ -81,7 +81,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	public void testIncreasingInserts() throws Exception {
 		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		BPlusTree<Integer, Integer> tree= BPlusTree.<Integer, Integer>createInstance(storage, 4).get();
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		String lastDump= "";
@@ -107,13 +107,13 @@ public class ContrailBTreeTests extends TestCase {
 			
 			IBTreePlusCursor<Integer, Integer> cursor= tree.cursor(Direction.FORWARD);
 			for (int j= 0; j <= i; j++) {
-				assertTrue(cursor.next());
+				assertTrue(cursor.next().get());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
 			cursor= tree.cursor(Direction.REVERSE);
 			for (int j= i; 0 <= j; j--) {
-				assertTrue(cursor.next());
+				assertTrue(cursor.next().get());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
@@ -123,7 +123,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	public void testDecreasingInserts() throws Exception {
 		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		BPlusTree<Integer, Integer> tree= BPlusTree.<Integer, Integer>createInstance(storage, 4).get();
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		String lastDump= "";
@@ -148,13 +148,13 @@ public class ContrailBTreeTests extends TestCase {
 
 			IBTreePlusCursor<Integer, Integer> cursor= tree.cursor(Direction.FORWARD);
 			for (int j= i; j < 100; j++) {
-				assertTrue(cursor.next());
+				assertTrue(cursor.next().get());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
 			cursor= tree.cursor(Direction.REVERSE);
 			for (int j= 100; i < j--; ) {
-				assertTrue(cursor.next());
+				assertTrue(cursor.next().get());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
@@ -164,7 +164,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	public void testIncreasingDeletes() throws Exception {
 		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		BPlusTree<Integer, Integer> tree= BPlusTree.<Integer, Integer>createInstance(storage, 4).get();
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		for (int i= 0; i < 100; i++) {
@@ -201,7 +201,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	public void testDecreasingDeletes() throws Exception {
 		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		BPlusTree<Integer, Integer> tree= BPlusTree.<Integer, Integer>createInstance(storage, 4).get();
 		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		String lastDump= "";
@@ -237,7 +237,7 @@ public class ContrailBTreeTests extends TestCase {
 	
 	public void testIterators() throws Exception {
 		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		BPlusTree<Integer, Integer> tree= BPlusTree.<Integer, Integer>createInstance(storage, 4).get();
 		
 		for (int i= 0; i < 100; i++) {
 			Integer I= new Integer(i);

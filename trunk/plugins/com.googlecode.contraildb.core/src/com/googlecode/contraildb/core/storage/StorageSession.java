@@ -7,17 +7,16 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
+import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.impl.PathUtils;
-import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
-import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.ForEachHandler;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
@@ -173,7 +172,7 @@ public class StorageSession implements IEntityStorage.Session {
 				
 				return TaskUtils.DONE;
 			}
-		}.toResult();
+		};
 	}
 	
 	public IResult<Void> update(final Identifier path, final IEntity item) throws IOException {
@@ -190,7 +189,7 @@ public class StorageSession implements IEntityStorage.Session {
 				
 				return TaskUtils.DONE;
 			}
-		}.toResult();
+		};
 	}
 	
 	public IResult<Void> deleteAllChildren(final Collection<Identifier> paths) throws IOException {
@@ -215,7 +214,7 @@ public class StorageSession implements IEntityStorage.Session {
 				
 				return TaskUtils.DONE;
 			}
-		}.toResult();
+		};
 	}
 
 	public IResult<Void> delete(final Identifier  path) {
@@ -229,107 +228,136 @@ public class StorageSession implements IEntityStorage.Session {
 				spawn(_storage.store(revisionPath, new Entity(revisionPath)));
 				return TaskUtils.SUCCESS;
 			};
-		}.toResult();
+		};
 	}
 
 
 	public <C extends IEntity> IResult<C> fetch(final Identifier path) {
-		return new ContrailTask<C>() {
-			@SuppressWarnings("unchecked")
-			protected C run() throws IOException {
-				Identifier contrailPath= Identifier.create(path, CONTRAIL_FOLDER);
-				IResult<Collection<Identifier>> childrenResult= _storage.listChildren(contrailPath);
-				Collection<Identifier> children= childrenResult.get();
-				Identifier mostRecentRevision= null;
-				long maxRevision= -1;
-				for (Identifier child: children) {
-					long revisionNumber= PathUtils.getRevisionNumber(child);
-					if (revisionNumber < 0)
-						continue;
-					if (_revisionNumber < revisionNumber)
-						continue;
-					if (revisionNumber != _revisionNumber)
-						if (!_storageSystem.isRevisionCommitted(revisionNumber))
-							continue;
-					if (maxRevision < revisionNumber) {
-						maxRevision= revisionNumber;
-						mostRecentRevision= child;
+		final Identifier contrailPath= Identifier.create(path, CONTRAIL_FOLDER);
+		return new Handler(_storage.listChildren(contrailPath)) {
+			protected IResult onSuccess() {
+				Collection<Identifier> children= (Collection<Identifier>) incoming().getResult();
+				final Identifier[] mostRecentRevision= new Identifier[] { null };
+				final long[] maxRevision= new long[] { -1 };
+				IResult findMostRecentRevision= new ForEachHandler<Identifier>(children) {
+					protected IResult<Void> Do(final Identifier child) throws Exception {
+						final long revisionNumber= PathUtils.getRevisionNumber(child);
+						if (revisionNumber < 0)
+							return TaskUtils.DONE;
+						if (_revisionNumber < revisionNumber)
+							return TaskUtils.DONE;
+						
+						IResult<Boolean> committed= TaskUtils.TRUE;
+						if (revisionNumber != _revisionNumber)
+							committed= _storageSystem.isRevisionCommitted(revisionNumber);
+						
+						return new Handler(committed) {
+							protected IResult onSuccess() throws Exception {
+								boolean revisionIsCommitted= (Boolean) incoming().getResult();
+								if (revisionIsCommitted) {
+									if (maxRevision[0] < revisionNumber) {
+										maxRevision[0]= revisionNumber;
+										mostRecentRevision[0]= child;
+									}
+								}
+								return TaskUtils.DONE;
+							}
+						};
 					}
-				}
-				C c= null;
-				if (mostRecentRevision != null)
-					if (!mostRecentRevision.getName().startsWith("delete-")) 
-						c= (C)_storage.fetch(mostRecentRevision).get();
-				return c;
+				};
+				return new Handler(findMostRecentRevision) {
+					protected IResult onSuccess() throws Exception {
+						if (mostRecentRevision[0] == null)
+							return TaskUtils.NULL;
+						if (mostRecentRevision[0].getName().startsWith("delete-")) 
+							return TaskUtils.NULL;
+						return _storage.fetch(mostRecentRevision[0]);
+					}
+				};
 			}
-		}.submit();
+		};
 	}
 
 
 	public IResult<Collection<Identifier>> listChildren(final Identifier path)
 	{
-		return new ContrailTask<Collection<Identifier>>() {
-			protected Collection<Identifier> run() throws IOException {
-				
-				ArrayList<Identifier> children= _listChildren(path);
+		return new Handler(_listChildren(path)) {
+			protected IResult onSuccess() throws Exception {
+				ArrayList<Identifier> children= (ArrayList<Identifier>) incoming().getResult();
 				ArrayList<Identifier> results = new ArrayList<Identifier>();
 				for (Identifier identifier:children)
 					results.add(identifier.getParent());
-				
-				return results;
+				return asResult(results);
 			}
-		}.submit();
+		};
 	}
 
-	private ArrayList<Identifier> _listChildren(final Identifier path) {
-		ArrayList<Identifier> results= new ArrayList<Identifier>();
-		Collection<Identifier> children= _storage.listChildren(path).get();
-		
-		Map<Identifier, IResult<Collection<Identifier>>> contrailChildrens= new HashMap<Identifier, IResult<Collection<Identifier>>>();
-		for (Identifier child:children) {
-			if (CONTRAIL_FOLDER.equals(child.getName())) 
-				continue;
-			Identifier contrailFolder= Identifier.create(child, CONTRAIL_FOLDER);
-			contrailChildrens.put(contrailFolder, _storage.listChildren(contrailFolder));
-		}
-		
-		for (Identifier contrailFolder: contrailChildrens.keySet()) {
-			Collection<Identifier> contrailChildren= contrailChildrens.get(contrailFolder).get();
-			ArrayList<Identifier> revisions= new ArrayList<Identifier>(contrailChildren);
-			Collections.sort(revisions, __revisionComparator);
-			Identifier revision= null;
-			for (Identifier child: revisions) {
-				long number= PathUtils.getRevisionNumber(child);
-				if (number < 0)
-					continue;
-				if (child.getName().startsWith("deleted-"))
-					break;
-				if (number <= _revisionNumber) {
-					revision= child;
-					break;
+	private IResult<ArrayList<Identifier>> _listChildren(final Identifier path) {
+		return new Handler(_storage.listChildren(path)) {
+			protected IResult onSuccess() throws Exception {
+				Collection<Identifier> children= (Collection<Identifier>) incoming().getResult();
+				final List<Identifier> results= Collections.synchronizedList(new ArrayList<Identifier>());
+				Map<Identifier, IResult<Collection<Identifier>>> contrailChildrens= new HashMap<Identifier, IResult<Collection<Identifier>>>();
+				for (Identifier child:children) {
+					if (CONTRAIL_FOLDER.equals(child.getName())) 
+						continue;
+					Identifier contrailFolder= Identifier.create(child, CONTRAIL_FOLDER);
+					contrailChildrens.put(contrailFolder, _storage.listChildren(contrailFolder));
 				}
+				
+				ArrayList<IResult> tasks= new ArrayList<IResult>();
+				for (final Identifier contrailFolder: contrailChildrens.keySet()) {
+					tasks.add(new Handler(contrailChildrens.get(contrailFolder)) {
+						protected IResult onSuccess() throws Exception {
+							Collection<Identifier> contrailChildren= (Collection<Identifier>) incoming().getResult();
+							ArrayList<Identifier> revisions= new ArrayList<Identifier>(contrailChildren);
+							Collections.sort(revisions, __revisionComparator);
+							Identifier revision= null;
+							for (Identifier child: revisions) {
+								long number= PathUtils.getRevisionNumber(child);
+								if (number < 0)
+									continue;
+								if (child.getName().startsWith("deleted-"))
+									break;
+								if (number <= _revisionNumber) {
+									revision= child;
+									break;
+								}
+							}
+							if (revision != null) 
+								results.add(contrailFolder);
+							return TaskUtils.DONE;
+						}
+					});
+				}
+				
+				return new Handler(tasks) {
+					protected IResult onSuccess() throws Exception {
+						return asResult(results);
+					}
+				};
 			}
-			if (revision != null) 
-				results.add(contrailFolder);
-		}
-		return results;
+		};
 	}
 
 
 	public <C extends IEntity> IResult<Collection<C>> fetchChildren(final Identifier path)
 	{
-		return new ContrailTask<Collection<C>>() {
-			@SuppressWarnings("unchecked")
-			protected Collection<C> run() throws IOException {
-				
-				ArrayList<Identifier> children= _listChildren(path);
-				ArrayList<C> results = new ArrayList<C>();
-				for (Identifier identifier:children) {
-					results.add((C)_storage.fetch(identifier));
+		return new Handler(_listChildren(path)) {
+			protected IResult onSuccess() throws Exception {
+				ArrayList<Identifier> children= (ArrayList<Identifier>) incoming().getResult();
+				final List<C> results = Collections.synchronizedList(new ArrayList<C>());
+				for (final Identifier identifier:children) {
+					spawn(new Handler(_storage.fetch(identifier)) {
+						protected IResult onSuccess() throws Exception {
+							results.add((C)_storage.fetch(identifier));
+							return TaskUtils.DONE;
+						}
+					});
 				}
-				return results;
+				return asResult(results);
 			}
-		}.submit();
+		};
 	}
 
 	public IResult<Void> flush()  {
@@ -338,7 +366,11 @@ public class StorageSession implements IEntityStorage.Session {
 
 	@Override
 	public <E extends IEntity> IResult<Boolean> create(E entity, long waitMillis) {
-		throw new UnsupportedOperationException();
+		return new Handler() {
+			protected IResult onSuccess() {
+				throw new UnsupportedOperationException();
+			}
+		};
 	}
 
 	@Override
@@ -355,9 +387,9 @@ public class StorageSession implements IEntityStorage.Session {
 							spawn(delete(child));
 						return TaskUtils.SUCCESS;
 					}
-				}.toResult());
+				});
 				return TaskUtils.SUCCESS;
 			};
-		}.toResult();
+		};
 	}
 }
