@@ -270,7 +270,7 @@ public class BasicContrailTests extends TestCase {
 
 			// test query
 			ContrailQuery query = new ContrailQuery().where(eq(TYPE, PERSON));
-			IPreparedQuery results= transaction.prepare(query).get();
+			IPreparedQuery<Item> results= transaction.prepare(query).get();
 			assertEquals(personCount, results.count());
 
 			// test filters
@@ -278,7 +278,7 @@ public class BasicContrailTests extends TestCase {
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.EQUAL, "lawyer");
 			results= transaction.prepare(query).get();
 			assertEquals(1, results.count());
-			assertEquals(Identifier.create("Gandhi"), results.item().getId());
+			assertEquals(Identifier.create("Gandhi"), results.item().get().getId());
 
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
 			query.addFilter(PROFESSION, ContrailQuery.FilterOperator.EQUAL, "politician");
@@ -374,7 +374,7 @@ public class BasicContrailTests extends TestCase {
 			query = new ContrailQuery().where(and(eq(TYPE, POSSE), all(MEMBERS, keyHitler, keyChurchill)));
 			results= transaction.prepare(query).get(); // find POSSES that contain Hitler and Churchill as members
 			assertEquals(1, results.count());
-			assertEquals(Identifier.create("Politicians"), results.item().getId());
+			assertEquals(Identifier.create("Politicians"), results.item().get().getId());
 			
 			query = new ContrailQuery().where(eq(TYPE, PERSON));
 			results= transaction.prepare(query).get(); // find POSSES that contain Hitler and Churchill as members
@@ -424,7 +424,7 @@ public class BasicContrailTests extends TestCase {
 					query.addSort(property, direction);
 					IPreparedQuery<Item> results= transaction.prepare(query).get();
 					Comparable last= null;
-					List<Item> items= results.list();
+					List<Item> items= results.list().get();
 					for (Item e : items) {
 						Object value= e.getProperty(property);
 						if (last != null) {

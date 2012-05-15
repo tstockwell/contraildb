@@ -20,11 +20,10 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
- * In Contrail an index is created for every unique property name. The index
- * maps property values to the identifiers of the entities that contain that
- * property. If there is more that one entity for a given property value then
- * instead the index instead contains the id of another index that lists all the
- * entities.
+ * Contrail creates an index for every unique property name. 
+ * The index maps property values to the identifiers of the entities that contain that property. 
+ * If there is more that one entity for a given property value then
+ * instead the index instead contains the id of another index that lists all the entities.
  * 
  * When iterating through an index, identifiers associated with the same
  * property value are always returned in order (the order defined by the
@@ -85,10 +84,9 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 	}
 
 
-	synchronized public IBTreePlusCursor<K, IForwardCursor<Identifier>> cursor(Direction direction) 
-	throws IOException 
+	synchronized public IPropertyCursor<K> cursor(Direction direction) 
 	{
-		return new CursorImpl(_btree, direction) {
+		return new PropertyCursorImpl(_btree, direction) {
 			private  IResult<IForwardCursor<Identifier>> toIterable(Identifier id)  {
 				if (id == null)
 					return TaskUtils.asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());

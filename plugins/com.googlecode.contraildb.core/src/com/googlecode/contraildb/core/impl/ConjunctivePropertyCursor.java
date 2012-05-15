@@ -1,5 +1,6 @@
 package com.googlecode.contraildb.core.impl;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -21,11 +22,13 @@ import com.googlecode.contraildb.core.utils.WhileHandler;
  * 
  */
 @SuppressWarnings({"unchecked","rawtypes"})
-public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCursor<T> {
+public class ConjunctivePropertyCursor<T extends Comparable<T> & Serializable> 
+implements IPropertyCursor<T> 
+{
 	
 	final IForwardCursor<T>[] _cursors;
 	
-	public ConjunctiveCursor(List<IForwardCursor<T>> filterCursors) {
+	public ConjunctivePropertyCursor(List<IPropertyCursor> filterCursors) {
 		_cursors= new IForwardCursor[filterCursors.size()];
 		filterCursors.toArray(_cursors);
 	}

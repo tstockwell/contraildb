@@ -8,8 +8,10 @@ import static com.googlecode.contraildb.core.ContrailQuery.FilterOperator.LESS_T
 import static com.googlecode.contraildb.core.ContrailQuery.FilterOperator.NOT_EQUAL;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,7 @@ import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.InvocationAction;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.NullHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.WhileHandler;
@@ -233,6 +236,9 @@ public class IndexSearcher {
 		};
 	}
 	
+	/**
+	 * Create a cursor that implements the semantics of a given query predicates.
+	 */
 	private IResult<List<IForwardCursor<Identifier>>> createFilterCursors(Iterable<FilterPredicate> clauses) 
 	{
 		ArrayList<IResult> tasks= new ArrayList<IResult>();
@@ -273,13 +279,16 @@ public class IndexSearcher {
 			}
 			filterCursors.add(filterCursor);
 		}
-		return new Handler(TaskUtils.combineResults(tasks)) {
+		return new Handler(tasks) {
 			protected IResult onSuccess() throws Exception {
 				return asResult(filterCursors);
 			}
 		};
 	}
 
+	/**
+	 * Create a cursor that implements the semantics of an individual query predicate.
+	 */
 	private IResult<IForwardCursor<Identifier>> createFilterCursor(PropertyIndex index, FilterPredicate filterPredicate) 
 	{
 		final QuantifiedValues quantifiedValues= filterPredicate.getQuantifiedValues();
@@ -290,86 +299,159 @@ public class IndexSearcher {
 			return TaskUtils.asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());
 		
 		if (op == LESS_THAN || op == LESS_THAN_OR_EQUAL) {
-			Comparable<?> value= values[0]; 
-			IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(Direction.REVERSE);
-			if (!propertyCursor.to(value)) 
-				return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-			ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
-			if (op == LESS_THAN && BPlusTree.compare(value, propertyCursor.keyValue()) == 0)
-				if (!propertyCursor.next())
-					return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-			cursors.add(propertyCursor.elementValue());
-			/**
-			 * Note - this loop is actually reading all results into memory.
-			 * This logic needs to be changed so that results are not fetched until the cursor is accessed. 
-			 */
-			while (propertyCursor.next())
-				cursors.add(0, propertyCursor.elementValue());
-			return new DisjunctiveCursor(cursors);
+			return createLessThanCursor(index, op, values);
 		}
 		
 		if (op == GREATER_THAN || op == GREATER_THAN_OR_EQUAL) {
-			Comparable<?> value= values[0]; 
-			IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(Direction.FORWARD);
-			if (!propertyCursor.to(value)) 
-				return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-			ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
-			if (op == GREATER_THAN && BPlusTree.compare(value, propertyCursor.keyValue()) == 0)
-				if (!propertyCursor.next())
-					return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-			cursors.add(propertyCursor.elementValue());
-			while (propertyCursor.next())
-				cursors.add(propertyCursor.elementValue());
-			return new DisjunctiveCursor(cursors);
+			return createGreaterThanCursor(index, op, values);
 		} 
 		
 		if (op == EQUAL) {
-			ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
-			for (Comparable member: values) {
-				IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(Direction.FORWARD);
-				if (propertyCursor.to(member) && BPlusTree.compare(member, propertyCursor.keyValue()) == 0) {
-					cursors.add(propertyCursor.elementValue());
-				}
-			}
-			if (cursors.isEmpty())
-				return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-			if (cursors.size() == 1)
-				return cursors.get(0);
-			if (Quantifier.ALL == quantifier)
-				return new ConjunctiveCursor<Identifier>(cursors);
-			return new DisjunctiveCursor<Identifier>(cursors);
+			return createEqualToCursor(index, quantifier, values);
 		}
 		
 		if (op == NOT_EQUAL) {
 			
 ////////////			
-			ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
-			for (Comparable member: values) {
-				ArrayList<IForwardCursor<Identifier>> crsrs= new ArrayList<IForwardCursor<Identifier>>();
-				for (Direction d: Direction.values()) {
-					IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(d);
-					if (propertyCursor.to(member)) {
-						if (BPlusTree.compare(propertyCursor.keyValue(), member) != 0 || propertyCursor.next()) {
-							do {
-								crsrs.add(propertyCursor.elementValue());
-							} while (propertyCursor.next());
-						}
-					}
-				}
-				if (!crsrs.isEmpty()) 
-					cursors.add((crsrs.size() == 1) ? crsrs.get(0) : new DisjunctiveCursor<Identifier>(crsrs));
-			}
-			if (cursors.isEmpty())
-				return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-			if (cursors.size() == 1)
-				return cursors.get(0);
-			if (Quantifier.ALL == quantifier)
-				return new ConjunctiveCursor<Identifier>(cursors);
-			return new DisjunctiveCursor<Identifier>(cursors);
+			return createNotEqualCursor(index, quantifier, values);
 		}
 		
 //		case IS_NULL: {
 
 		throw new ContrailException("Unsupported operator:"+op);
+	}
+
+	private IResult<IForwardCursor<Identifier>> 
+	createNotEqualCursor(PropertyIndex index, final Quantifier quantifier, Comparable<?>[] values) 
+	{
+		ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
+		ArrayList<IResult> tasks= new ArrayList<IResult>();
+		for (Comparable member: values) {
+			ArrayList<IForwardCursor<Identifier>> crsrs= new ArrayList<IForwardCursor<Identifier>>();
+			for (Direction d: Direction.values()) {
+				IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(d);
+				
+				if (propertyCursor.to(member)) {
+					if (BPlusTree.compare(propertyCursor.keyValue(), member) != 0 || propertyCursor.next()) {
+						do {
+							crsrs.add(propertyCursor.elementValue());
+						} while (propertyCursor.next());
+					}
+				}
+			}
+			if (!crsrs.isEmpty()) 
+				cursors.add((crsrs.size() == 1) ? crsrs.get(0) : new DisjunctiveCursor<Identifier>(crsrs));
+		}
+		if (cursors.isEmpty())
+			return new IBTreeCursor.EmptyForwardCursor<Identifier>();
+		if (cursors.size() == 1)
+			return cursors.get(0);
+		if (Quantifier.ALL == quantifier)
+			return new ConjunctiveCursor<Identifier>(cursors);
+		return new DisjunctiveCursor<Identifier>(cursors);
+	}
+
+	/**
+	 * Create a cursor that navigates the given property index and returns the identifiers 
+	 * that associated with entries that match the given values.
+	 * 
+	 * @param index  The property to navigate
+	 * @param quantifier  If ALL then match entries that contain all the given values (remember that properties may be multi-valued) 
+	 * 					If ANY then match entries that contain any of the given values 
+	 * @param values the values to match
+	 */
+	private IResult<IForwardCursor<Identifier>> 
+	createEqualToCursor(PropertyIndex index, final Quantifier quantifier, Comparable<?>[] values) 
+	{
+		final List<IForwardCursor<Identifier>> cursors= 
+				Collections.synchronizedList(new ArrayList<IForwardCursor<Identifier>>());
+		ArrayList<IResult> initTasks= new ArrayList<IResult>();
+		for (final Comparable member: values) {
+			final IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(Direction.FORWARD);
+			
+			// an optimization
+			// check to see if the cursor contains the value.
+			// if not then we can just not bother using this cursor
+			initTasks.add(new InvocationHandler<Boolean>(propertyCursor.to(member)) {
+				protected IResult onSuccess(Boolean found) throws Exception {
+					if (found && BPlusTree.compare(member, propertyCursor.keyValue()) == 0) 
+						return new InvocationHandler<IForwardCursor<Identifier>>(propertyCursor.elementValue()) {
+							protected IResult onSuccess(IForwardCursor<Identifier> elementValue) throws Exception {
+								cursors.add(elementValue);
+								return TaskUtils.DONE;
+							}
+						};
+					return TaskUtils.DONE;
+				}
+			});
+		}
+		return new Handler(initTasks) {
+			protected IResult onSuccess() throws Exception {
+				if (cursors.isEmpty())
+					return asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());
+				if (cursors.size() == 1)
+					return asResult(cursors.get(0));
+				if (Quantifier.ALL == quantifier)
+					return asResult(new ConjunctiveCursor<Identifier>(cursors));
+				return asResult(new DisjunctiveCursor<Identifier>(cursors));
+			}
+		};
+	}
+
+	/**
+	 * Create a cursor that navigates the given property index and returns the identifiers 
+	 * associated with entries that are greater than (or greater than or equal) to the given values.
+	 * 
+	 * @param index  The property to navigate
+	 * @param op  either GREATER_THAN or GREATER_THAN_OR_EQUAL
+	 * 
+	 * @param values the values to match
+	 */
+	private IResult<IForwardCursor<Identifier>> 
+	createGreaterThanCursor(PropertyIndex index, final FilterOperator op, Comparable<?>[] values) 
+	{
+		Comparable<?> value= values[0]; // only one value is considered when evaluating gt/ge
+		IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(Direction.FORWARD);
+		
+		return  new InvocationHandler<Boolean>(propertyCursor.to(value)) {
+			protected IResult onSuccess(Boolean found) throws Exception {
+				// an optimization
+				// check to see if the cursor contains the value or a greater value.
+				// if not then we can just not bother using this cursor
+				if (!found) 
+					return asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());
+				
+				
+				ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
+				if (op == GREATER_THAN && BPlusTree.compare(value, propertyCursor.keyValue()) == 0)
+					if (!propertyCursor.next())
+						return new IBTreeCursor.EmptyForwardCursor<Identifier>();
+				cursors.add(propertyCursor.elementValue());
+				while (propertyCursor.next())
+					cursors.add(propertyCursor.elementValue());
+				return new DisjunctiveCursor(cursors);
+			}
+		};
+	}
+
+	private IResult<IForwardCursor<Identifier>> 
+	createLessThanCursor(PropertyIndex index, final FilterOperator op, Comparable<?>[] values) 
+	{
+		Comparable<?> value= values[0]; 
+		IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(Direction.REVERSE);
+		if (!propertyCursor.to(value)) 
+			return new IBTreeCursor.EmptyForwardCursor<Identifier>();
+		ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
+		if (op == LESS_THAN && BPlusTree.compare(value, propertyCursor.keyValue()) == 0)
+			if (!propertyCursor.next())
+				return new IBTreeCursor.EmptyForwardCursor<Identifier>();
+		cursors.add(propertyCursor.elementValue());
+		/**
+		 * Note - this loop is actually reading all results into memory.
+		 * This logic needs to be changed so that results are not fetched until the cursor is accessed. 
+		 */
+		while (propertyCursor.next())
+			cursors.add(0, propertyCursor.elementValue());
+		return new DisjunctiveCursor(cursors);
 	}
 }

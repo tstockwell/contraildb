@@ -17,7 +17,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.ResultIterator;
+import com.googlecode.contraildb.core.utils.IAsyncerator;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -240,9 +240,9 @@ extends Entity
 		};
 	}
 
-	public ResultIterator<T> iterator() {
+	public IAsyncerator<T> iterator() {
 		final IBTreeCursor<T> navigator= cursor(Direction.FORWARD);
-		return new ResultIterator<T>() {
+		return new IAsyncerator<T>() {
 			public IResult<Boolean> hasNext() {
 				return new Handler(navigator.hasNext()) {
 					protected void onComplete() throws Exception {

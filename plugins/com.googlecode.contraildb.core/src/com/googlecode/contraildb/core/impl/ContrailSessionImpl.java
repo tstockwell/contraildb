@@ -41,6 +41,7 @@ import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.IAsyncerator;
 import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
@@ -483,6 +484,15 @@ implements IContrailSession
 	}
 
 	public IResult<Void> process(final ContrailQuery query, final IProcessor processor) {
+		return new Handler() {
+			protected IResult onSuccess() throws Exception {
+				if (_storageSession == null)
+					throw new SessionAlreadyClosedException();
+				return _searcher.fetchIdentifiers(query, processor);
+			}
+		};
+	}
+	public IResult<IAsyncerator<Identifier>> iterate(final ContrailQuery query, final IProcessor processor) {
 		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)
