@@ -35,6 +35,7 @@ import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.InvocationAction;
 import com.googlecode.contraildb.core.utils.NullHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
+import com.googlecode.contraildb.core.utils.WhileHandler;
 
 
 
@@ -123,7 +124,7 @@ public class IndexSearcher {
 			protected IResult onSuccess() throws Exception {
 				BTree tree= fetch.getResult();
 				if (tree == null)
-					tree= BTree.createInstance(_storageSession, indexId);
+					return BTree.createInstance(_storageSession, indexId);
 				return asResult(tree);
 			}
 		};
@@ -204,21 +205,30 @@ public class IndexSearcher {
 		final IResult<List<IForwardCursor<Identifier>>> createFilterCursors= createFilterCursors(query.getFilterPredicates());
 		return new Handler(createFilterCursors) {
 			protected IResult onSuccess() throws Exception {
-				try {
-					List<IForwardCursor<Identifier>> filterCursors= createFilterCursors.getResult();
-					final IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?
-							filterCursors.get(0) :
-								new ConjunctiveCursor<Identifier>(filterCursors);
-							while (queryCursor.next()) {
-								if (!processor.result(queryCursor.keyValue()))
-									break;
-							}
-							processor.complete(null);
-				}
-				catch (IOException x) {
-					processor.complete(x);
-				}
-				return TaskUtils.DONE;
+				List<IForwardCursor<Identifier>> filterCursors= createFilterCursors.getResult();
+				final IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?
+						filterCursors.get(0) :
+							new ConjunctiveCursor<Identifier>(filterCursors);
+
+				final boolean[] cancelled= new boolean[] { false };
+				IResult getResults= new WhileHandler() {
+					protected IResult<Boolean> While() throws Exception {
+						if (cancelled[0])
+							return TaskUtils.FALSE;
+						return queryCursor.next();
+					}
+					protected IResult<Void> Do() throws Exception {
+						if (!processor.result(queryCursor.keyValue()))
+							cancelled[0]= true;
+						return TaskUtils.DONE;
+					}
+				};
+				return new Handler(getResults) {
+					protected IResult onSuccess() throws Exception {
+						processor.complete(null);
+						return TaskUtils.DONE;
+					}
+				};
 			}
 		};
 	}

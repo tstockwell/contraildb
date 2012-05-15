@@ -1,6 +1,5 @@
 package com.googlecode.contraildb.core.impl;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -51,33 +50,66 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 
 	@Override
 	public IResult<Boolean> to(T e) {
-		return new InvocationHandler<Boolean>(_cursors[0].to(e)) {
+		return new InvocationHandler<Boolean>(_cursors[0].to(e)) { // move first cursor
 			protected IResult onSuccess(Boolean to) throws Exception {
 				if (!to)
-					return TaskUtils.FALSE;
+					return TaskUtils.FALSE; // if failed then done
 
-				final T value= _cursors[0].keyValue();
+				final Object[] value= new Object[] { _cursors[0].keyValue() };
 				final Boolean[] done= new Boolean[] { null };
 				IResult wile= new WhileHandler() {
 					protected IResult<Boolean> While() throws Exception {
 						return asResult(done[0] == null);
 					}
 					protected IResult<Void> Do() throws Exception {
-						T ge= value;
-						for (int i= 1; i < _cursors.length; i++) {
-							IForwardCursor<T> cursor= _cursors[i];
-							if (!cursor.to(value))
-								return false;
-							T t= cursor.keyValue();
-							if (BPlusTree.compare(value, t) < 0)
-								ge= t;
-						}
-						if (BPlusTree.compare(value, ge) == 0) 
-							return true;
+						final Object[] ge= new Object[] { value[0] }; // this value is ge to the value from the first cursor
 
-						if (!_cursors[0].to(ge))
-							return false;
-						value= _cursors[0].keyValue();
+						final int[] cursorIndex= new int[] { 1 };
+						IResult moveOtherCursors= new WhileHandler() {
+							protected IResult<Boolean> While() throws Exception {
+								return asResult(cursorIndex[0] < _cursors.length);
+							}
+							
+							protected IResult<Void> Do() throws Exception {
+								final IForwardCursor<T> cursor= _cursors[cursorIndex[0]];
+								return new InvocationHandler<Boolean>(cursor.to((T)value[0])) {
+									protected IResult onSuccess(Boolean to) {
+										if (!to) { // if there no ge value then fail 
+											done[0]= false;
+											return TaskUtils.DONE;
+										}
+										
+										// if found value is ge than current value then save it
+										T t= cursor.keyValue();
+										if (BPlusTree.compare((T)ge[0], t) < 0)
+											ge[0]= t;
+										return TaskUtils.DONE;
+									}
+								};
+							}
+						};
+						
+						return new Handler(moveOtherCursors) {
+							protected IResult onSuccess() throws Exception {
+								// if all cursors were moved to the first value then return success
+								if (BPlusTree.compare((T)value[0], (T)ge[0]) == 0) {
+									done[0]= true;
+									return TaskUtils.DONE;
+								}
+								
+								// try moving the first cursor to the new value before starting over
+								return new InvocationHandler<Boolean>(_cursors[0].to((T)ge[0])) {
+									protected IResult onSuccess(Boolean moveFirst) {
+										if (!moveFirst) {
+											done[0]= false;
+											return TaskUtils.DONE;
+										}
+										value[0]= _cursors[0].keyValue();
+										return TaskUtils.DONE;
+									}
+								};
+							}
+						};
 					}
 				};
 				return new Handler(wile) {
