@@ -1,5 +1,6 @@
 package com.googlecode.contraildb.core.impl;
 
+import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
@@ -22,7 +23,9 @@ import com.googlecode.contraildb.core.utils.WhileHandler;
  * 
  */
 @SuppressWarnings({ "unchecked", "rawtypes" })
-public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T> {
+public class DisjunctivePropertyCursor<T extends Comparable<T> & Serializable> 
+implements IPropertyCursor<T>  
+{
 	
 	private static Comparator<Comparable> __comparator= new Comparator<Comparable>() {
 		@Override public int compare(Comparable o1,Comparable o2) {
@@ -34,7 +37,7 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 	T _value;
 	TreeSet<T> _queue= new TreeSet<T>(__comparator);
 
-	public DisjunctiveCursor(List<IForwardCursor<Identifier>> cursors) {
+	public DisjunctivePropertyCursor(List<IPropertyCursor> cursors) {
 		_cursors= new IForwardCursor[cursors.size()];
 		cursors.toArray(_cursors);
 	}

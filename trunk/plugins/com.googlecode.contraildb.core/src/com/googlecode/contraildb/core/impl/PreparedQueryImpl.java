@@ -10,12 +10,16 @@ import com.googlecode.contraildb.core.FetchOptions;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.IProcessor;
+import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ConversionUtils;
 import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.IAsyncerator;
+import com.googlecode.contraildb.core.utils.InvocationAction;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -36,12 +40,7 @@ implements IPreparedQuery<T>
 
 
 	@Override
-	public List<T> list() throws IOException {
-		return list(FetchOptions.withPrefetchSize(0));
-	}
-
-	@Override
-	public List<T> list(FetchOptions fetchOptions) throws IOException {
+	public IResult<List<T>> list() {
 		final ContrailTaskTracker.Session tracker= new ContrailTaskTracker().beginSession();
 		try {
 			final boolean[] complete= new boolean[] { false };
@@ -105,17 +104,33 @@ implements IPreparedQuery<T>
 
 
 	@Override
-	public T item() throws IOException {
-		List<T> list= list(FetchOptions.withPrefetchSize(1));
-		if (list.isEmpty())
-			return null;
-		return list.get(0);
+	public IResult<T> item() {
+		return new InvocationHandler<IProcessor<T>>(iterate(FetchOptions.withPrefetchSize(1))) {
+			protected IResult onSuccess(final IProcessor<T> processor) {
+				return new InvocationHandler<Boolean>(processor.hasNext()) {
+					protected IResult onSuccess(Boolean hasNext) {
+						if (!hasNext)
+							return TaskUtils.NULL;
+						return new Handler(processor.next()) {
+							protected IResult onSuccess() {
+								spawn(processor.close());
+								return incoming();
+							}
+						};
+					}
+				};
+			}
+		};
 	}
 
 
 	@Override
-	public int count() throws IOException {
-		return ConversionUtils.toList(identifiers()).size();
+	public IResult<Integer> count() {
+		return new InvocationHandler<Iterable<Identifier>>(identifiers()) {
+			protected IResult onSuccess(Iterable<Identifier> identifiers) {
+				return asResult(ConversionUtils.toList(identifiers).size());
+			}
+		};
 	}
 
 
@@ -125,7 +140,7 @@ implements IPreparedQuery<T>
 	}
 
 	@Override
-	public Iterable<Identifier> identifiers() throws IOException {
+	public IResult<Iterable<Identifier>> identifiers() {
 		final boolean[] complete= new boolean[] { false };
 		final Throwable[] error= new Throwable[] { null }; 
 		final ArrayList<Identifier> results= new ArrayList<Identifier>();
@@ -164,6 +179,19 @@ implements IPreparedQuery<T>
 	@Override
 	public void process(IProcessor processor) throws IOException {
 		_session.process(_query, processor);
+	}
+
+
+	@Override
+	public IResult<IProcessor<T>> iterate(FetchOptions fetchOptions) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+
+	@Override
+	public IResult<IProcessor<Identifier>> identifiers(FetchOptions fetchOptions) {
+		_session.identifiers(_query, processor);
 	}
 	
 }

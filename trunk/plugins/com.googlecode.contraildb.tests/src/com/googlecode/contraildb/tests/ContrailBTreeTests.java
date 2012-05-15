@@ -28,7 +28,7 @@ import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
-import com.googlecode.contraildb.core.utils.ResultIterator;
+import com.googlecode.contraildb.core.utils.IAsyncerator;
 
 
 /**
@@ -56,7 +56,7 @@ public class ContrailBTreeTests extends TestCase {
 		assertEquals("value-1.1", cursor.find("key-1"));
 		assertEquals("value-2.0", cursor.find("key-2"));
 		
-		ResultIterator<String> iterator= tree.iterator();
+		IAsyncerator<String> iterator= tree.iterator();
 		assertTrue(iterator.hasNext().get());
 		assertEquals("Churchill", iterator.next());
 		assertTrue(iterator.hasNext().get());

@@ -1,6 +1,5 @@
 package com.googlecode.contraildb.core;
 
-import java.io.IOException;
 import java.util.List;
 
 public interface IPreparedQuery<T extends Item>  {
@@ -11,11 +10,17 @@ public interface IPreparedQuery<T extends Item>  {
 	public IContrailSession getSession();
 
 	/**
-	 * An asynchronous method for getting results.
+	 * An asynchronous method for getting identifiers.
 	 * This method is the fastest way to retrieve some results 
 	 * since you dont have to wait for all the results. 
 	 */
-	public void process(IProcessor processor) throws IOException;
+	public IResult<IProcessor<Identifier>> identifiers(FetchOptions fetchOptions);
+	/**
+	 * An asynchronous method for getting values.
+	 * This method is the fastest way to retrieve some results 
+	 * since you dont have to wait for all the results. 
+	 */
+	public IResult<IProcessor<T>> iterate(FetchOptions fetchOptions);
 
 	/**
 	 * A convenience method for getting results.
@@ -23,30 +28,22 @@ public interface IPreparedQuery<T extends Item>  {
 	 * This methods uses the iterate method
 	 * and just collects all the results before returning.
 	 */
-	public List<T> list(FetchOptions fetchOptions) throws IOException;
-
-	/**
-	 * A convenience method for getting results.
-	 * Returns all the results at once.  
-	 * This methods uses the iterate method
-	 * and just collects all the results before returning.
-	 */
-	public List<T> list() throws IOException;
+	public IResult<List<T>> list();
 
 	/**
 	 * A convenience method for getting results.
 	 * Returns only the first result, if any.  
 	 */
-	public T item() throws IOException;
+	public IResult<T> item();
 
 	/**
 	 * A convenience method for just getting the number of results 
 	 * that would be returned by a query.  
 	 */
-	public int count() throws IOException;
+	public IResult<Integer> count();
 
 	/**
 	 * A convenience method for just getting identifiers returned by a query.  
 	 */
-	public Iterable<Identifier> identifiers() throws IOException;
+	public IResult<Iterable<Identifier>> identifiers();
 }
