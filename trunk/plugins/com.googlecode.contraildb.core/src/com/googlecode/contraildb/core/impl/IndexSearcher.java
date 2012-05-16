@@ -34,6 +34,7 @@ import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.utils.Handler;
+import com.googlecode.contraildb.core.utils.IAsyncerator;
 import com.googlecode.contraildb.core.utils.InvocationAction;
 import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.NullHandler;
@@ -204,12 +205,12 @@ public class IndexSearcher {
 	}
 	
 
-	public IResult<Void> fetchIdentifiers(final ContrailQuery query, final IProcessor processor) {
+	public IResult<IAsyncerator<Identifier>> fetchIdentifiers(final ContrailQuery query) {
 		final IResult<List<IForwardCursor<Identifier>>> createFilterCursors= createFilterCursors(query.getFilterPredicates());
 		return new Handler(createFilterCursors) {
 			protected IResult onSuccess() throws Exception {
 				List<IForwardCursor<Identifier>> filterCursors= createFilterCursors.getResult();
-				final IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?
+				final IQueryCursor queryCursor= (filterCursors.size() == 1) ?
 						filterCursors.get(0) :
 							new ConjunctiveCursor<Identifier>(filterCursors);
 
@@ -449,6 +450,9 @@ public class IndexSearcher {
 		/**
 		 * Note - this loop is actually reading all results into memory.
 		 * This logic needs to be changed so that results are not fetched until the cursor is accessed. 
+		 * 
+		 * Not only that but DisjunctiveCursor is an inefficient way to implement the cursor.
+		 * It would be much faster to just read all the results into memory and just sort them.
 		 */
 		while (propertyCursor.next())
 			cursors.add(0, propertyCursor.elementValue());
