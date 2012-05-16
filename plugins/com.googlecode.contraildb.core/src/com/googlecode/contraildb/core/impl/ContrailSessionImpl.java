@@ -483,16 +483,7 @@ implements IContrailSession
 		return store(entities);
 	}
 
-	public IResult<Void> process(final ContrailQuery query, final IProcessor processor) {
-		return new Handler() {
-			protected IResult onSuccess() throws Exception {
-				if (_storageSession == null)
-					throw new SessionAlreadyClosedException();
-				return _searcher.fetchIdentifiers(query, processor);
-			}
-		};
-	}
-	public IResult<IAsyncerator<Identifier>> iterate(final ContrailQuery query, final IProcessor processor) {
+	public IResult<IAsyncerator<Identifier>> iterate(final ContrailQuery query) {
 		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)

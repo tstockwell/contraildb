@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.utils.Handler;
@@ -23,18 +24,18 @@ import com.googlecode.contraildb.core.utils.WhileHandler;
  */
 @SuppressWarnings({"unchecked","rawtypes"})
 public class ConjunctivePropertyCursor<T extends Comparable<T> & Serializable> 
-implements IPropertyCursor<T> 
+implements IQueryCursor 
 {
 	
-	final IForwardCursor<T>[] _cursors;
+	final IForwardCursor<IForwardCursor<Identifier>>[] _cursors;
 	
-	public ConjunctivePropertyCursor(List<IPropertyCursor> filterCursors) {
+	public ConjunctivePropertyCursor(List<IForwardCursor<IForwardCursor<Identifier>>> filterCursors) {
 		_cursors= new IForwardCursor[filterCursors.size()];
 		filterCursors.toArray(_cursors);
 	}
 
 	@Override
-	@Immediate public T keyValue() {
+	@Immediate public IForwardCursor<Identifier> keyValue() {
 		if (_cursors.length <= 0)
 			throw new NoSuchElementException();
 		return _cursors[0].keyValue();
