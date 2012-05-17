@@ -5,12 +5,12 @@ import java.io.Serializable;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.impl.btree.BPlusTree;
+import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.impl.btree.BTree;
 import com.googlecode.contraildb.core.impl.btree.CursorImpl;
-import com.googlecode.contraildb.core.impl.btree.IBTreeCursor;
-import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
-import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
+import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor;
+import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
+import com.googlecode.contraildb.core.impl.btree.IKeyValueCursor;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.utils.Handler;
@@ -36,11 +36,11 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
 public class PropertyIndex<K extends Comparable<K> & Serializable>
 {
 	
-	BPlusTree<K, Identifier> _btree;
+	KeyValueSet<K, Identifier> _btree;
 	
 	static final Identifier __indexRoot= Identifier.create("net/sf/contrail/core/indexes/sets");
 	
-	@Immediate public PropertyIndex(BPlusTree<K, Identifier> btree) throws IOException {
+	@Immediate public PropertyIndex(KeyValueSet<K, Identifier> btree) throws IOException {
 		_btree= btree;
 	}
 
@@ -89,7 +89,7 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 		return new PropertyCursorImpl(_btree, direction) {
 			private  IResult<IForwardCursor<Identifier>> toIterable(Identifier id)  {
 				if (id == null)
-					return TaskUtils.asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());
+					return TaskUtils.asResult(new IOrderedSetCursor.EmptyForwardCursor<Identifier>());
 				if (__indexRoot.isAncestorOf(id)) {
 					return new Handler(_btree.getStorage().fetch(id)) {
 						protected IResult onSuccess() throws Exception {
@@ -98,7 +98,7 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 						}
 					};
 				}
-				return TaskUtils.asResult(new IBTreeCursor.SingleValueCursor<Identifier>(id));
+				return TaskUtils.asResult(new IOrderedSetCursor.SingleValueCursor<Identifier>(id));
 			}
 			@Override
 			public IResult<IForwardCursor<Identifier>> elementValue() {

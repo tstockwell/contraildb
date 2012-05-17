@@ -26,80 +26,13 @@ import com.googlecode.contraildb.core.utils.Handler;
  */
 @SuppressWarnings({"unchecked","rawtypes" })
 public class BTree<T extends Comparable> 
-extends BPlusTree<T, Serializable>
+extends KeyValueSet<T, Serializable>
 {
 	private static final long serialVersionUID = 1L;
 	
-	static class ForwardCursor<K extends Comparable> 
-	extends CursorImpl<K, Object>
-	implements IForwardCursor<K>
-	{
-		public ForwardCursor(BPlusTree index) {
-			super(index, Direction.FORWARD);
-		}
-	}
-	
-	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession, Identifier identifier, int pageSize) 
-	throws IOException 
-	{
-		final BTree<K> btree= new BTree<K>(identifier, pageSize);
-		return new Handler(storageSession.store(btree)) {
-			protected IResult onSuccess() throws Exception {
-				return asResult(btree);
-			}
-		};
-	}
-	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession, Identifier identifier) 
-	throws IOException 
-	{
-		final BTree<K> btree= new BTree<K>(identifier, DEFAULT_SIZE);
-		return new Handler(storageSession.store(btree)) {
-			protected IResult onSuccess() throws Exception {
-				return asResult(btree);
-			}
-		};
-	}
-	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession, int pageSize) 
-	throws IOException 
-	{
-		return createInstance(storageSession, Identifier.create(), pageSize);
-	}
-	
-	public static <K extends Comparable> IResult<BTree<K>> createInstance(IEntityStorage.Session storageSession) 
-	throws IOException 
-	{
-		return createInstance(storageSession, Identifier.create(), DEFAULT_SIZE);
-	}
-
-	private BTree(Identifier identifier, int pageSize) throws IOException {
+	private BTree(Identifier identifier, int pageSize) {
 		super(identifier, pageSize, false);
 	}
-	public IForwardCursor<T> forwardCursor() {
-		return new ForwardCursor<T>(this);
-	}
-	
 	protected BTree() { }
-	
-
-	public static final Serializer<BTree> SERIALIZER= new Serializer<BTree>() {
-		private final int typeCode= BTree.class.getName().hashCode();
-		public BTree readExternal(java.io.DataInput in) 
-		throws IOException {
-			BTree journal= new BTree();
-			readExternal(in, journal);
-			return journal;
-		};
-		public void writeExternal(java.io.DataOutput out, BTree journal) 
-		throws IOException {
-			BPlusTree.SERIALIZER.writeExternal(out, journal);
-		};
-		public void readExternal(DataInput in, BTree journal)
-		throws IOException {
-			BPlusTree.SERIALIZER.readExternal(in, journal);
-		}
-		public int typeCode() {
-			return typeCode;
-		}
-	};
 	
 }

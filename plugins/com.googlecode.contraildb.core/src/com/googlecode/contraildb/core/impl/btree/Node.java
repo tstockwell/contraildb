@@ -30,7 +30,7 @@ implements Cloneable
 {
 	final static long serialVersionUID = 1L;
 
-	transient BPlusTree<K,?> _index;
+	transient KeyValueSet<K,?> _index;
 	protected Identifier _indexId;
 	protected K[] _keys;
 	protected Object[] _values;
@@ -38,7 +38,7 @@ implements Cloneable
 	protected Identifier _previous;
 	protected Identifier _next;
 	
-	@Immediate Node(BPlusTree<K,?> btree)  
+	@Immediate Node(KeyValueSet<K,?> btree)  
 	{
 		super(Identifier.create(btree.getId(), UUID.randomUUID().toString()));
 		_index = btree;
@@ -52,7 +52,7 @@ implements Cloneable
 	
 	@Immediate Node<K> clone(Node<K> node) { return  new Node<K>(node._index); }
 	@Immediate boolean isLeaf() { return true; }  
-	@Immediate public BPlusTree<K,?> getIndex() { return _index; }
+	@Immediate public KeyValueSet<K,?> getIndex() { return _index; }
 	
 	IResult<Node<K>> getNextSibling() { 
 		if (_next == null) 
@@ -74,7 +74,7 @@ implements Cloneable
 	{
 		return new InvocationAction<IEntity>(storage.fetch(_indexId)) {
 			protected void onSuccess(IEntity index) throws Exception {
-				_index= (BPlusTree<K, ?>) index;
+				_index= (KeyValueSet<K, ?>) index;
 			}
 		};
 	}
@@ -88,13 +88,13 @@ implements Cloneable
 	 * Insert the given key and value.
 	 * @return new right sibling node if the key was inserted and provoked an overflow.
 	 */
-	public IResult<Node<K>> insert(final K key, final Object value) throws IOException {
+	public IResult<Node<K>> insert(final K key, final Object value) {
 		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				final int index = indexOf(key);
 				IResult<Node<K>> overflow= TaskUtils.NULL;
 
-				if (index < _size && BPlusTree.compare(key, _keys[index]) == 0) { // key already exists
+				if (index < _size && KeyValueSet.compare(key, _keys[index]) == 0) { // key already exists
 					_values[index] = value;
 				}
 				else if (!isFull()) {
@@ -206,7 +206,7 @@ implements Cloneable
 		// binary search
 		while (left <= right) {
 			int middle = (left + right) / 2;
-			int i= BPlusTree.compare(_keys[middle], key);
+			int i= KeyValueSet.compare(_keys[middle], key);
 			if (i == 0)
 				return middle;
 			if (i < 0) {
@@ -250,7 +250,7 @@ implements Cloneable
 			protected IResult onSuccess() throws Exception {
 				int index = indexOf(key);
 				if (index < _size) {
-					if (BPlusTree.compare(_keys[index], key) == 0) {
+					if (KeyValueSet.compare(_keys[index], key) == 0) {
 						removeEntry(index);
 						return update();
 					}

@@ -9,15 +9,15 @@ import java.util.NoSuchElementException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
+import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.utils.ConditionalHandler;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.Immediate;
 import com.googlecode.contraildb.core.utils.IAsyncerator;
+import com.googlecode.contraildb.core.utils.Immediate;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -35,10 +35,21 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  * @param T The type of objects stored in the BTree
  */
 @SuppressWarnings({ "unchecked", "rawtypes" })
-public class BPlusTree<T extends Comparable, V> 
+public class KeyValueSet<T extends Comparable, V> 
 extends Entity
+implements IKeyValueSet<T,V>
 //implements Iterable<T>
 {
+	static class ForwardCursor<K extends Comparable> 
+	extends CursorImpl<K, Object>
+	implements IForwardCursor<K>
+	{
+		public ForwardCursor(KeyValueSet index) {
+			super(index, Direction.FORWARD);
+		}
+	}
+
+
 	private static final long serialVersionUID = 1L;
 	private static final String NO_VALUE= "__no_value"; 
 
@@ -81,37 +92,33 @@ extends Entity
 	/**
 	 * Create a new persistent index.
 	 */
-	private static final <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
-	IEntityStorage.Session storageSession, Identifier id, int pageSize, boolean hasLeafValues) 
-	throws IOException 
+	private static final <K extends Comparable, V> IResult<KeyValueSet<K,V>> 
+	createInstance(IEntityStorage.Session storageSession, Identifier id, int pageSize, boolean hasLeafValues) 
 	{
-		final BPlusTree<K,V> btree= new BPlusTree<K,V>(id, pageSize, hasLeafValues);
+		final KeyValueSet<K,V> btree= new KeyValueSet<K,V>(id, pageSize, hasLeafValues);
 		return new Handler(storageSession.store(btree)) {
 			protected IResult onSuccess() throws Exception {
 				return asResult(btree);
 			}
 		};
 	}
-	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
-	IEntityStorage.Session storageSession, int pageSize) 
-	throws IOException 
+	public static <K extends Comparable, V> IResult<KeyValueSet<K,V>> 
+	createInstance( IEntityStorage.Session storageSession, int pageSize) 
 	{
 		return createInstance(storageSession, Identifier.create(), pageSize, true);
 	}
-	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createBPlusTree(
-	IEntityStorage.Session storageSession, Identifier identifier) 
-	throws IOException 
+	public static <K extends Comparable, V> IResult<KeyValueSet<K,V>> 
+	createBPlusTree(IEntityStorage.Session storageSession, Identifier identifier) 
 	{
 		return createInstance(storageSession, identifier, DEFAULT_SIZE, true);
 	}
-	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
+	public static <K extends Comparable, V> IResult<KeyValueSet<K,V>> createInstance(
 	IEntityStorage.Session storageSession) 
-	throws IOException 
 	{
 		return createInstance(storageSession, Identifier.create(), DEFAULT_SIZE, true);
 	}
 
-	@Immediate protected BPlusTree(Identifier identifier, int pageSize, boolean hasLeafValues) throws IOException {
+	@Immediate protected KeyValueSet(Identifier identifier, int pageSize, boolean hasLeafValues) {
 		super(identifier);
 		if ((pageSize & 1) != 0)
 			throw new IllegalArgumentException( "Page size' must be even");
@@ -119,7 +126,7 @@ extends Entity
 		_hasLeafValues= hasLeafValues;
 	}
 	
-	protected BPlusTree() { }
+	protected KeyValueSet() { }
 
 	@Override
 	public IResult<Void> onLoad(Identifier identifier)
@@ -152,20 +159,27 @@ extends Entity
 			protected IResult onSuccess() throws Exception {
 				return delete;
 			}
-		}.toResult();
+		};
 	}
 
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public synchronized IResult<Void> insert(T key) throws IOException {
+	public synchronized IResult<Void> insert(T key) {
 		return insert(key, (V) NO_VALUE);
+	}
+	public synchronized IResult<Void> insert(final IResult<T> key) {
+		return new Handler(key) {
+			protected IResult onSuccess() throws Exception {
+				return insert(key.getResult());
+			}
+		};
 	}
 	
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public synchronized IResult<Void> insert(final T key, final V value) throws IOException {
+	public synchronized IResult<Void> insert(final T key, final V value) {
 		if (key == null) 
 			throw new IllegalArgumentException("Argument 'key' is null");
 
@@ -189,7 +203,7 @@ extends Entity
 				if (overflow == null) 
 					return TaskUtils.DONE;
 
-				final InnerNode<T> newRoot= new InnerNode<T>(BPlusTree.this);
+				final InnerNode<T> newRoot= new InnerNode<T>(KeyValueSet.this);
 				return new Handler(getStorage().store(newRoot)) {
 					protected IResult onSuccess() throws Exception {
 						if (_root.isLeaf()) {
@@ -207,11 +221,18 @@ extends Entity
 			}
 		};
 	}
+	public synchronized IResult<Void> insert(final IResult<T> key, final IResult<V> value) {
+		return new Handler(key, value) {
+			protected IResult onSuccess() throws Exception {
+				return insert(key.getResult(), value.getResult());
+			}
+		};
+	}
 
 	/**
 	 * Remove an entry with the given key from the BTree.
 	 */
-	public synchronized IResult<Void> remove(final T key) throws IOException {
+	public synchronized IResult<Void> remove(final T key) {
 		return new Handler() {
 			protected IResult onSuccess() throws Exception {
 				if (key == null) 
@@ -239,9 +260,16 @@ extends Entity
 			}
 		};
 	}
+	public IResult<Void> remove(final IResult<T> key) {
+		return new Handler(key) {
+			protected IResult onSuccess() throws Exception {
+				return remove(key.getResult());
+			}
+		};
+	}
 
 	public IAsyncerator<T> iterator() {
-		final IBTreeCursor<T> navigator= cursor(Direction.FORWARD);
+		final IOrderedSetCursor<T> navigator= cursor(Direction.FORWARD);
 		return new IAsyncerator<T>() {
 			public IResult<Boolean> hasNext() {
 				return new Handler(navigator.hasNext()) {
@@ -315,13 +343,13 @@ extends Entity
 			root.dump(out, 0);
 	}
 
-	@Immediate public boolean isEmpty() throws IOException {
+	@Immediate public boolean isEmpty() {
 		if (_root == null)
 			return true;
 		return _root.isEmpty();
 	}
 	
-	public IBTreePlusCursor<T, V> cursor(Direction direction) {
+	public IKeyValueCursor<T, V> cursor(Direction direction) {
 		return new CursorImpl(this, direction);
 	}
 	
@@ -340,27 +368,32 @@ extends Entity
 	}
 
 
-	public static final Serializer<BPlusTree> SERIALIZER= new Serializer<BPlusTree>() {
-		private final int typeCode= BPlusTree.class.getName().hashCode();
-		public BPlusTree readExternal(java.io.DataInput in) 
+	public IForwardCursor<T> forwardCursor() {
+		return new ForwardCursor<T>(this);
+	}
+
+
+	public static final Serializer<KeyValueSet> SERIALIZER= new Serializer<KeyValueSet>() {
+		private final int typeCode= KeyValueSet.class.getName().hashCode();
+		@Override public KeyValueSet readExternal(java.io.DataInput in) 
 		throws IOException {
-			BPlusTree journal= new BPlusTree();
+			KeyValueSet journal= new KeyValueSet();
 			readExternal(in, journal);
 			return journal;
 		};
-		public void writeExternal(java.io.DataOutput out, BPlusTree journal) 
+		@Override public void writeExternal(java.io.DataOutput out, KeyValueSet journal) 
 		throws IOException {
 			Entity.SERIALIZER.writeExternal(out, journal);
 			ExternalizationManager.writeExternal(out, journal._rootId, Identifier.SERIALIZER);
 			out.writeInt(journal._pageSize);
 		};
-		public void readExternal(DataInput in, BPlusTree journal)
+		@Override public void readExternal(DataInput in, KeyValueSet journal)
 		throws IOException {
 			Entity.SERIALIZER.readExternal(in, journal);
 			journal._rootId= ExternalizationManager.readExternal(in, Identifier.SERIALIZER);
 			journal._pageSize= in.readInt();
 		}
-		public int typeCode() {
+		@Override public int typeCode() {
 			return typeCode;
 		}
 	};
