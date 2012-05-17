@@ -1,12 +1,10 @@
 package com.googlecode.contraildb.core.impl;
 
-import java.io.Serializable;
 import java.util.List;
 import java.util.NoSuchElementException;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.impl.btree.BPlusTree;
+import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.Immediate;
@@ -23,19 +21,17 @@ import com.googlecode.contraildb.core.utils.WhileHandler;
  * 
  */
 @SuppressWarnings({"unchecked","rawtypes"})
-public class ConjunctivePropertyCursor<T extends Comparable<T> & Serializable> 
-implements IQueryCursor 
-{
+public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 	
-	final IForwardCursor<IForwardCursor<Identifier>>[] _cursors;
+	final IForwardCursor<T>[] _cursors;
 	
-	public ConjunctivePropertyCursor(List<IForwardCursor<IForwardCursor<Identifier>>> filterCursors) {
+	public ConjunctiveCursor(List<IForwardCursor<T>> filterCursors) {
 		_cursors= new IForwardCursor[filterCursors.size()];
 		filterCursors.toArray(_cursors);
 	}
 
 	@Override
-	@Immediate public IForwardCursor<Identifier> keyValue() {
+	@Immediate public T keyValue() {
 		if (_cursors.length <= 0)
 			throw new NoSuchElementException();
 		return _cursors[0].keyValue();
@@ -85,7 +81,7 @@ implements IQueryCursor
 										
 										// if found value is ge than current value then save it
 										T t= cursor.keyValue();
-										if (BPlusTree.compare((T)ge[0], t) < 0)
+										if (KeyValueSet.compare((T)ge[0], t) < 0)
 											ge[0]= t;
 										return TaskUtils.DONE;
 									}
@@ -96,7 +92,7 @@ implements IQueryCursor
 						return new Handler(moveOtherCursors) {
 							protected IResult onSuccess() throws Exception {
 								// if all cursors were moved to the first value then return success
-								if (BPlusTree.compare((T)value[0], (T)ge[0]) == 0) {
+								if (KeyValueSet.compare((T)value[0], (T)ge[0]) == 0) {
 									done[0]= true;
 									return TaskUtils.DONE;
 								}

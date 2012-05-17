@@ -26,7 +26,7 @@ extends Node<K>
 {
 	final static long serialVersionUID = 1L;
 	
-	public InnerNode(BPlusTree<K,?> btree) {
+	public InnerNode(KeyValueSet<K,?> btree) {
 		super(btree);
 	}
 	
@@ -41,7 +41,7 @@ extends Node<K>
 
 		while (left <= right) {
 			int middle = (left + right) / 2;
-			int i= BPlusTree.compare(_keys[middle], key);
+			int i= KeyValueSet.compare(_keys[middle], key);
 			if (i == 0) {
 				left= middle+1;
 				break;

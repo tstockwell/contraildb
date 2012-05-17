@@ -8,6 +8,7 @@ import static com.googlecode.contraildb.core.ContrailQuery.FilterOperator.LESS_T
 import static com.googlecode.contraildb.core.ContrailQuery.FilterOperator.NOT_EQUAL;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,12 +28,18 @@ import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
-import com.googlecode.contraildb.core.impl.btree.BTree;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
+import com.googlecode.contraildb.core.impl.btree.IOrderedSet;
+import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
+import com.googlecode.contraildb.core.storage.EntityStorage;
+import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.StorageSession;
+import com.googlecode.contraildb.core.storage.IEntityStorage.Session;
+import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
+import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.IAsyncerator;
 import com.googlecode.contraildb.core.utils.InvocationAction;
@@ -66,8 +73,8 @@ public class IndexSearcher {
 		}
 		final shared shared= new shared();
 		
-		IResult<Void> getEntitiesByProperty= new InvocationAction<BTree<Identifier>>(getIdIndex()) {
-			protected void onSuccess(BTree<Identifier> idIndex) throws Exception {
+		IResult<Void> getEntitiesByProperty= new InvocationAction<BPlusTree<Identifier,Identifier>>(getIdIndex()) {
+			protected void onSuccess(BPlusTree<Identifier,Identifier> idIndex) throws Exception {
 				for (T t: entities) {
 					for (String property: t.getIndexedProperties().keySet()) {
 						Collection<T> c= shared.entitiesByProperty.get(property);
@@ -121,14 +128,14 @@ public class IndexSearcher {
 		
 	}
 	
-	private IResult<BTree<Identifier>> getIdIndex() {
+	private IResult<BPlusTree<Identifier,Identifier>> getIdIndex() {
 		final Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+Item.KEY_ID);
-		final IResult<BTree> fetch= _storageSession.fetch(indexId);
+		final IResult<BPlusTree> fetch= _storageSession.fetch(indexId);
 		return new Handler(fetch) {
 			protected IResult onSuccess() throws Exception {
-				BTree tree= fetch.getResult();
+				BPlusTree tree= fetch.getResult();
 				if (tree == null)
-					return BTree.createInstance(_storageSession, indexId);
+					return BPlusTree.createBPlusTree(_storageSession, indexId);
 				return asResult(tree);
 			}
 		};
@@ -210,7 +217,7 @@ public class IndexSearcher {
 		return new Handler(createFilterCursors) {
 			protected IResult onSuccess() throws Exception {
 				List<IForwardCursor<Identifier>> filterCursors= createFilterCursors.getResult();
-				final IQueryCursor queryCursor= (filterCursors.size() == 1) ?
+				final IForwardCursor<Identifier> queryCursor= (filterCursors.size() == 1) ?
 						filterCursors.get(0) :
 							new ConjunctiveCursor<Identifier>(filterCursors);
 
@@ -436,26 +443,76 @@ public class IndexSearcher {
 	}
 
 	private IResult<IForwardCursor<Identifier>> 
-	createLessThanCursor(PropertyIndex index, final FilterOperator op, Comparable<?>[] values) 
+	createLessThanCursor(PropertyIndex index, final FilterOperator op, K[] values) 
 	{
-		Comparable<?> value= values[0]; 
-		IBTreePlusCursor<Comparable, IForwardCursor<Identifier>> propertyCursor= index.cursor(Direction.REVERSE);
-		if (!propertyCursor.to(value)) 
-			return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-		ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();
-		if (op == LESS_THAN && BPlusTree.compare(value, propertyCursor.keyValue()) == 0)
-			if (!propertyCursor.next())
-				return new IBTreeCursor.EmptyForwardCursor<Identifier>();
-		cursors.add(propertyCursor.elementValue());
-		/**
-		 * Note - this loop is actually reading all results into memory.
-		 * This logic needs to be changed so that results are not fetched until the cursor is accessed. 
-		 * 
-		 * Not only that but DisjunctiveCursor is an inefficient way to implement the cursor.
-		 * It would be much faster to just read all the results into memory and just sort them.
-		 */
-		while (propertyCursor.next())
-			cursors.add(0, propertyCursor.elementValue());
-		return new DisjunctiveCursor(cursors);
+		final K value= values[0]; 
+		final IPropertyCursor propertyCursor= index.cursor(Direction.REVERSE);
+		
+		// check to see if there are actually any results.
+		// if not then return an empty cursor
+		IResult noResults= new InvocationHandler<Boolean>(propertyCursor.to(value)) {
+			protected IResult onSuccess(Boolean found) throws Exception {
+				if (!found) {
+					return asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());
+				}
+				if (op == LESS_THAN && BPlusTree.compare(value, propertyCursor.keyValue()) == 0) { 
+					return new InvocationHandler<Boolean>(propertyCursor.next()) {
+						protected IResult onSuccess(Boolean found) throws Exception {
+							if (!found)
+								return asResult(new IBTreeCursor.EmptyForwardCursor<Identifier>());
+							return TaskUtils.NULL;
+						}
+					};
+				}
+				return TaskUtils.NULL;
+			}
+		};
+		
+		return new Handler(noResults) {
+			protected IResult onSuccess() throws Exception {
+				if (incoming().getResult() != null) 
+					return incoming(); // return cursor created in previous step
+				
+				return buildCursor(propertyCursor);
+				ArrayList<IForwardCursor<Identifier>> cursors= new ArrayList<IForwardCursor<Identifier>>();				
+				cursors.add(propertyCursor.elementValue());
+				/**
+				 * Note - this loop is actually reading all results into memory.
+				 * This logic needs to be changed so that results are not fetched until the cursor is accessed. 
+				 * 
+				 * Not only that but DisjunctiveCursor is an inefficient way to implement the cursor.
+				 * It would be much faster to just read all the results into memory and just sort them.
+				 */
+				while (propertyCursor.next())
+					cursors.add(0, propertyCursor.elementValue());
+				return new DisjunctiveCursor(cursors);
+				
+			}
+		};
+	}
+	
+	/**
+	 * @return a cursor that iterates through a property cursor and returns 
+	 * all the Identifiers. 
+	 */
+	IResult<IForwardCursor<Identifier>> buildCursor(final IPropertyCursor propertyCursor) {
+		RamStorageProvider ramStorageProvider= new RamStorageProvider();
+		EntityStorage entityStorage= new EntityStorage(ramStorageProvider);
+		return new InvocationHandler<IEntityStorage.Session>(entityStorage.connect()) {
+			protected IResult onSuccess(IEntityStorage.Session session) throws Exception {
+				IOrderedSet set= KeyValueSet.createBPlusTree(session, Identifier.create()).get();
+				set.insert(propertyCursor.elementValue());
+				/**
+				 * Note - this loop is actually reading all results into memory.
+				 * This logic needs to be changed so that results are not fetched until the cursor is accessed. 
+				 * 
+				 * Not only that but DisjunctiveCursor is an inefficient way to implement the cursor.
+				 * It would be much faster to just read all the results into memory and just sort them.
+				 */
+				while (propertyCursor.next())
+					cursors.add(0, propertyCursor.elementValue());
+				return new DisjunctiveCursor(cursors);
+			}
+		};
 	}
 }

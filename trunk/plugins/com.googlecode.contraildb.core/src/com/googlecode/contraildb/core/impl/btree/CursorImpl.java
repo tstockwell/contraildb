@@ -15,11 +15,11 @@ import com.googlecode.contraildb.core.utils.WhileHandler;
 
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class CursorImpl<T extends Comparable, V> 
-implements IBTreePlusCursor<T,V> {
-	BPlusTree _tree;
+implements IKeyValueCursor<T,V> {
+	KeyValueSet _tree;
 	Direction _direction;
 	
-	public CursorImpl(BPlusTree index, Direction direction) {
+	public CursorImpl(KeyValueSet index, Direction direction) {
 		_direction= direction;
 		_tree= index;
 	}
@@ -132,7 +132,7 @@ implements IBTreePlusCursor<T,V> {
 		return new Handler(whileNotLeaf) {
 			protected IResult onSuccess() throws Exception {
 				_index= _page.indexOf(e);
-				return asResult(0 <= _index && _index < _page._size && (BPlusTree.compare(e, _page._keys[_index]) == 0)); 
+				return asResult(0 <= _index && _index < _page._size && (KeyValueSet.compare(e, _page._keys[_index]) == 0)); 
 			}
 		};
 	}
@@ -142,7 +142,7 @@ implements IBTreePlusCursor<T,V> {
 			protected IResult onSuccess(Boolean ge) throws Exception {
 				if (ge) {
 					T t= keyValue();
-					if (BPlusTree.compare(t, e) == 0)
+					if (KeyValueSet.compare(t, e) == 0)
 						return TaskUtils.TRUE;
 					return previous();
 				}
@@ -265,7 +265,7 @@ implements IBTreePlusCursor<T,V> {
 		};
 	}
 	@Override
-	public IBTreePlusCursor.Direction getDirection() {
+	public IKeyValueCursor.Direction getDirection() {
 		return _direction;
 	}
 	@Override
@@ -294,7 +294,7 @@ implements IBTreePlusCursor<T,V> {
 						if (!to)
 							return TaskUtils.NULL;
 						T k= keyValue();
-						if (BPlusTree.compare(key, k) != 0)
+						if (KeyValueSet.compare(key, k) != 0)
 							return TaskUtils.NULL;
 						return asResult(elementValue());
 					}

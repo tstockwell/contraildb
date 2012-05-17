@@ -14,7 +14,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  * @param <K> The types of elements in the tree, the keys.
  * @param <V> The types of values stored in the leaves of the tree
  */
-public interface IBTreeCursor<K> {
+public interface IOrderedSetCursor<K> {
 
 
 	/**
@@ -25,7 +25,7 @@ public interface IBTreeCursor<K> {
 		REVERSE
 	}
 
-	public static class EmptyCursor<K> implements IBTreeCursor<K> {
+	public static class EmptyCursor<K> implements IOrderedSetCursor<K> {
 		private final Direction _direction;
 		public EmptyCursor(Direction d) { _direction= d; } 
 		public boolean after(K e) { return false; }
@@ -50,7 +50,7 @@ public interface IBTreeCursor<K> {
 		public IResult<Boolean> to(T e) {
 			if (1 < _state)
 				return TaskUtils.FALSE;
-			int i= BPlusTree.compare(e, _t);
+			int i= KeyValueSet.compare(e, _t);
 			if (i == 0) {
 				_state= 1;
 				return TaskUtils.TRUE;

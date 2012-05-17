@@ -7,7 +7,7 @@ import com.googlecode.contraildb.core.IResult;
  * 
  * @author Ted Stockwell
  */
-public interface IBTreePlusCursor<K, V> extends IBTreeCursor<K> {
+public interface IKeyValueCursor<K, V> extends IOrderedSetCursor<K> {
 	
 	/**
 	 * Returns the value associated with the current key value, if any.

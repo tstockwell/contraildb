@@ -4,12 +4,10 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
-import com.googlecode.contraildb.core.impl.btree.BPlusTree;
-import com.googlecode.contraildb.core.impl.btree.BTree;
+import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.impl.btree.InnerNode;
 import com.googlecode.contraildb.core.impl.btree.Node;
 import com.googlecode.contraildb.core.storage.CommitMarker;
@@ -165,8 +163,7 @@ public class ExternalizationManager {
 		registerSerializer(Node.SERIALIZER);
 		registerSerializer(InnerNode.SERIALIZER);
 		registerSerializer(CommitMarker.SERIALIZER);
-		registerSerializer(BPlusTree.SERIALIZER);
-		registerSerializer(BTree.SERIALIZER);
+		registerSerializer(KeyValueSet.SERIALIZER);
 		registerSerializer(Item.SERIALIZER);
 	}
 
