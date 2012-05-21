@@ -10,18 +10,20 @@ import java.util.UUID;
 
 import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
+import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.async.Block;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.ResultAction;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.Series;
+import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.async.TryFinally;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
-import com.googlecode.contraildb.core.utils.InvocationAction;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
 
 /**
@@ -251,7 +253,7 @@ public class StorageSystem {
 	
 	private IResult<RevisionFolder> createNewRevision(final String sessionId) throws IOException {
 
-		return new InvocationHandler<List<RevisionFolder>>(_root.getRevisionFolders()) {
+		return new ResultHandler<List<RevisionFolder>>(_root.getRevisionFolders()) {
 			protected IResult onSuccess(final List<RevisionFolder> revisions) {
 				final HashMap<RevisionFolder, Long> commitNumbers= new HashMap<RevisionFolder, Long>();
 				final HashMap<RevisionFolder, Boolean> isComitted= new HashMap<RevisionFolder, Boolean>();
@@ -259,13 +261,13 @@ public class StorageSystem {
 				// get commit numbers and commit status
 				ArrayList<IResult> tasks= new ArrayList<IResult>();
 				for (final RevisionFolder revision: revisions) {
-					tasks.add(new InvocationHandler<Long>(revision.getFinalCommitNumber()) {
+					tasks.add(new ResultHandler<Long>(revision.getFinalCommitNumber()) {
 						protected IResult onSuccess(Long commitNumber) {
 							commitNumbers.put(revision, commitNumber);
 							return TaskUtils.DONE;
 						}
 					});
-					tasks.add(new InvocationHandler<Boolean>(revision.isCommitted()) {
+					tasks.add(new ResultHandler<Boolean>(revision.isCommitted()) {
 						protected IResult onSuccess(Boolean isCommitted) {
 							isComitted.put(revision, isCommitted);
 							return TaskUtils.DONE;
@@ -326,7 +328,7 @@ public class StorageSystem {
 		
 		return new Handler(removeStartSession) {
 			protected IResult onSuccess() throws Exception {
-				return new InvocationHandler<RevisionFolder>(_root.getRevisionFolder(revisionNumber)) {
+				return new ResultHandler<RevisionFolder>(_root.getRevisionFolder(revisionNumber)) {
 					protected IResult onSuccess(RevisionFolder revisionFolder) {
 						return revisionFolder.removeSession(storageSession.getSessionId());
 					}
@@ -350,27 +352,54 @@ public class StorageSystem {
 			RevisionFolder startRevision;
 			RevisionJournal journal;
 			
-			@OnSuccess("WriteJournal")
-			protected IResult Start() {
-				final IResult getRevisionFolder= _root.getRevisionFolder(revisionNumber);
-				final IResult getStartRevision= _root.getRevisionFolder(startingCommit);
-				return new Handler(getRevisionFolder, getStartRevision) {
-					protected IResult onSuccess() throws Exception {
-						revision= (RevisionFolder) getRevisionFolder.getResult();
-						startRevision= (RevisionFolder) getStartRevision.getResult();
+			protected IResult onSuccess() {
+				return new Series(
+					new Block() { // init
+						protected IResult onSuccess() {
+							final IResult getRevisionFolder= _root.getRevisionFolder(revisionNumber);
+							final IResult getStartRevision= _root.getRevisionFolder(startingCommit);
+							return new Handler(getRevisionFolder, getStartRevision) {
+								protected IResult onSuccess() throws Exception {
+									revision= (RevisionFolder) getRevisionFolder.getResult();
+									startRevision= (RevisionFolder) getStartRevision.getResult();
+								}
+							};
+						}
+					},
+					new Block() { // write journal
+						protected IResult onSuccess() {
+							journal= new RevisionJournal(revision, storageSession);
+							return _entitySession.store(journal);
+						}
+					},
+					new Handler() { // lock root
+						protected IResult onSuccess() {
+							return _root.lock(sessionId, true);
+						}
+					},
+					new TryFinally() {
+						protected IResult doTry() {
+							return _root.lock(sessionId, true);
+						}
+						
+						protected IResult doFinally() {
+							return new Series(
+								new Block() {
+									protected IResult onSuccess() {
+										_activeSessions.remove(storageSession);
+										return _root.unlock(sessionId);
+									}
+								},
+								new Block() {
+									protected IResult onSuccess() {
+										try { Logging.info("Committed session "+storageSession); } catch (Throwable t) { }
+										fork(new StorageCleanupAction(this));
+									}
+								}
+							);
+						}
 					}
-				};
-			}
-			
-			@OnSuccess("LockRoot")
-			protected IResult WriteJournal() {
-				journal= new RevisionJournal(revision, storageSession);
-				return _entitySession.store(journal);
-			}
-			
-			@OnSuccess("DoCommit")
-			protected IResult LockRoot() {
-				return _root.lock(sessionId, true);
+				);
 			}
 			
 			@OnComplete("UnlockRoot")
@@ -381,10 +410,10 @@ public class StorageSystem {
 					
 					@OnSuccess("CheckCommitNumber") 
 					protected IResult Start() {
-						return new InvocationHandler<List<RevisionFolder>>(_root.getRevisionFolders()) {
+						return new ResultHandler<List<RevisionFolder>>(_root.getRevisionFolders()) {
 							protected IResult onSuccess(List<RevisionFolder> results) {
 								revisions= results;
-								return new InvocationAction<Long>(revisions.get(0).getFinalCommitNumber()) {
+								return new ResultAction<Long>(revisions.get(0).getFinalCommitNumber()) {
 									protected void onSuccess(Long finalCommitNumber) {
 										lastCommitNumber= finalCommitNumber;
 									}
@@ -518,14 +547,14 @@ public class StorageSystem {
 		ArrayList<IResult<Void>> validateActions= new ArrayList<IResult<Void>>(revisions.size());
 		final List<RevisionFolder> conflictingRevisions= Collections.synchronizedList(new ArrayList<RevisionFolder>(1));  
 		for (final RevisionFolder r: revisions) {
-			validateActions.add(new InvocationHandler<Long>(r.getFinalCommitNumber()) {
+			validateActions.add(new ResultHandler<Long>(r.getFinalCommitNumber()) {
 				protected IResult onSuccess(Long finalCommitNumber) {
 					if (finalCommitNumber <= startingCommit)
 						return TaskUtils.DONE; // we're done
 					if (!conflictingRevisions.isEmpty())
 						return TaskUtils.DONE;
 					
-					return new InvocationHandler<RevisionJournal>(r.getRevisionJournal()) {
+					return new ResultHandler<RevisionJournal>(r.getRevisionJournal()) {
 						protected IResult onSuccess(RevisionJournal revisionJournal) {
 							if (revisionJournal.confictsWith(journal))
 								conflictingRevisions.add(r);
@@ -642,7 +671,7 @@ public class StorageSystem {
 			return TaskUtils.TRUE;
 		if (_knownUncommittedRevisions.contains(revisionNumber))
 			return TaskUtils.FALSE;
-		return new InvocationHandler<RevisionFolder>(_root.getRevisionFolder(revisionNumber)) {
+		return new ResultHandler<RevisionFolder>(_root.getRevisionFolder(revisionNumber)) {
 			protected IResult onSuccess(RevisionFolder folder) {
 				if (folder == null) { 
 					/*

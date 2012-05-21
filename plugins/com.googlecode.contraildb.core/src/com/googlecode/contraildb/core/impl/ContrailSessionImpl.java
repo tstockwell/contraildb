@@ -35,14 +35,14 @@ import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.SessionAlreadyClosedException;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.IAsyncerator;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.IAsyncerator;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 
@@ -66,7 +66,7 @@ implements IContrailSession
 	}
 	public static IResult<ContrailSessionImpl> create(final ContrailServiceImpl service, final long revisionNumber) 
 	{
-		return new InvocationHandler<StorageSession>(service._storageSystem.beginSession(revisionNumber)) {
+		return new ResultHandler<StorageSession>(service._storageSystem.beginSession(revisionNumber)) {
 			protected IResult onSuccess(StorageSession session) throws Exception {
 				ContrailSessionImpl impl= new ContrailSessionImpl(service, revisionNumber, session);
 				return asResult(impl);
@@ -75,7 +75,7 @@ implements IContrailSession
 	}
 	public static IResult<ContrailSessionImpl> create(final ContrailServiceImpl service, final Mode mode) 
 	{
-		return new InvocationHandler<StorageSession>(service._storageSystem.beginSession(mode)) {
+		return new ResultHandler<StorageSession>(service._storageSystem.beginSession(mode)) {
 			protected IResult onSuccess(StorageSession session) throws Exception {
 				ContrailSessionImpl impl= new ContrailSessionImpl(service, mode, session);
 				return asResult(impl);
@@ -160,7 +160,7 @@ implements IContrailSession
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
-				return new InvocationHandler<Collection<Item>>(fetch(paths)) {
+				return new ResultHandler<Collection<Item>>(fetch(paths)) {
 					protected IResult onSuccess(Collection<Item> items) throws Exception {
 						return delete(items);
 					}
@@ -171,7 +171,7 @@ implements IContrailSession
 
 	@Override
 	public IResult<Void> deleteAllChildren(final Collection<Identifier> paths) {
-		return new InvocationHandler<Map<Identifier, Collection<Item>>>(fetchChildren(paths)) {
+		return new ResultHandler<Map<Identifier, Collection<Item>>>(fetchChildren(paths)) {
 			protected IResult onSuccess(final Map<Identifier, Collection<Item>> allChildren) throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
@@ -296,7 +296,7 @@ implements IContrailSession
 
 	@Override
 	public IResult<Void> delete(Identifier... paths) {
-		return new InvocationHandler<Collection<Item>>(fetch(paths)) {
+		return new ResultHandler<Collection<Item>>(fetch(paths)) {
 			protected IResult onSuccess(Collection<Item> items) throws Exception {
 				return delete(items);
 			}	
@@ -374,7 +374,7 @@ implements IContrailSession
 	@Override
 	public IResult<Collection<Identifier>> listChildren(final Identifier path) {
 		List<Identifier> ids= Arrays.asList(new Identifier[] { path });
-		return new InvocationHandler<Map<Identifier, Collection<Identifier>>>(listChildren(ids)) {
+		return new ResultHandler<Map<Identifier, Collection<Identifier>>>(listChildren(ids)) {
 			protected IResult onSuccess(Map<Identifier, Collection<Identifier>> children) throws Exception {
 				return asResult(children.get(path));
 			}
@@ -398,7 +398,7 @@ implements IContrailSession
 	public <T extends Item, C extends Item> IResult<Collection<C>> fetchChildren(T entity) {
 		final Identifier i= entity.getId();
 		final List<Identifier> ids= Arrays.asList(new Identifier[] { i });
-		return new InvocationHandler<Map<Identifier, Collection<Item>>>(fetchChildren(ids)) {
+		return new ResultHandler<Map<Identifier, Collection<Item>>>(fetchChildren(ids)) {
 			protected IResult onSuccess(Map<Identifier, Collection<Item>> map) throws Exception {
 				Collection<Item> set= map.get(i);
 				if (set == null)
@@ -493,7 +493,7 @@ implements IContrailSession
 	}
 
 	public <E extends Item> IResult<E> fetch(IResult<Identifier> result) {
-		return new InvocationHandler<Identifier>(result) {
+		return new ResultHandler<Identifier>(result) {
 			protected IResult onSuccess(Identifier path) {
 				return fetch(path);
 			}

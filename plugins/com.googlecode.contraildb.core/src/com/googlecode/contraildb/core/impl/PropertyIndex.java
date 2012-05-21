@@ -5,16 +5,16 @@ import java.io.Serializable;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.Immediate;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.btree.BTree;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
 import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.storage.IEntity;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -44,7 +44,7 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 
 
 	synchronized public IResult<Void> insert(final K key, final Identifier document) throws IOException {
-		return new InvocationHandler<Identifier>(_btree.cursor(Direction.FORWARD).find(key)) {
+		return new ResultHandler<Identifier>(_btree.cursor(Direction.FORWARD).find(key)) {
 			protected IResult onSuccess(Identifier found) throws Exception {
 				final Identifier value= found;
 				if (value == null) { 
@@ -56,7 +56,7 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 				if (__indexRoot.isAncestorOf(value)) {
 					// the key has more than one value currently associated with it, 
 					// add the identifier to the list
-					return new InvocationHandler<IEntity>(_btree.getStorage().fetch(value)) {
+					return new ResultHandler<IEntity>(_btree.getStorage().fetch(value)) {
 						protected IResult onSuccess(IEntity item) throws Exception {
 							BTree<Identifier> set= (BTree<Identifier>) item;
 							spawn(set.insert(document));

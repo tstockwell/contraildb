@@ -10,6 +10,8 @@ import java.util.Set;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
 

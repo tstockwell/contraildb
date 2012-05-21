@@ -10,6 +10,8 @@ import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.Result;
 
 
 /**

@@ -1,9 +1,9 @@
 package com.googlecode.contraildb.core.impl.btree;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
+import com.googlecode.contraildb.core.async.Immediate;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 
 /**
  * Simple API for navigating through the elements in a BTree.
@@ -69,7 +69,7 @@ public interface IOrderedSetCursor<K> {
 			return TaskUtils.FALSE;
 		}
 		public IResult<Boolean> to(IResult<T> result) {
-			return new InvocationHandler<T>(result) {
+			return new ResultHandler<T>(result) {
 				protected IResult<Boolean> onSuccess(T t) {
 					return to(t);
 				}

@@ -34,6 +34,7 @@ import com.google.apphosting.api.ApiProxy;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
@@ -44,7 +45,6 @@ import com.googlecode.contraildb.core.storage.StorageSystem;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**

@@ -1,11 +1,16 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import java.util.ArrayList;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.IResultHandler;
+import com.googlecode.contraildb.core.utils.Logging;
 
+/**
+ * Handles one and only one result.
+ * @author ted.stockwell
+ */
 @SuppressWarnings({"rawtypes","unchecked"})
 public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 
@@ -14,7 +19,12 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	ArrayList<IResult> _pending= new ArrayList<IResult>(); 
 	
 	public Handler(IResult<I> task) {
+		_incoming= task;
 		task.addHandler(this);
+	}
+	public Handler() {
+		// do nothing
+		// incoming task needs to be set with handleResult method
 	}
 	public Handler(IResult... tasks) {
 		this((IResult<I>)TaskUtils.combineResults(tasks));
@@ -31,6 +41,13 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	}
 	public static final <T extends IResult<?>> IResult<Void> combineResults(Collection<T> tasks) {
 		return TaskUtils.combineResults(tasks);
+	}
+	
+	public void handleResult(IResult result) {
+		if (_incoming != null)
+			throw new IllegalStateException("This handler is already associated with a result");
+		_incoming= result;
+		result.addHandler(this);
 	}
 
 	@Override

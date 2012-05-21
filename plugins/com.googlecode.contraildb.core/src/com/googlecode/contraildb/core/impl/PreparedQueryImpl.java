@@ -11,11 +11,11 @@ import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.IAsyncerator;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ConversionUtils;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.IAsyncerator;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 
@@ -39,7 +39,7 @@ implements IPreparedQuery<T>
 
 		final List<T> results= Collections.synchronizedList(new ArrayList<T>());
 		final ArrayList<IResult> tasks= new ArrayList<IResult>();
-		tasks.add(new InvocationHandler<IAsyncerator<Identifier>>(_session.iterate(_query)) {
+		tasks.add(new ResultHandler<IAsyncerator<Identifier>>(_session.iterate(_query)) {
 			protected IResult onSuccess(final IAsyncerator<Identifier> iterator) {
 				class DoNext extends Handler {
 					DoNext() {
@@ -49,7 +49,7 @@ implements IPreparedQuery<T>
 					protected IResult onSuccess() {
 						if (!(Boolean)incoming().getResult())
 							return TaskUtils.DONE;
-						return new InvocationHandler<Item>(_session.fetch(iterator.next())) {
+						return new ResultHandler<Item>(_session.fetch(iterator.next())) {
 							protected IResult onSuccess(Item item) {
 								results.add((T)item);
 								return new DoNext();
@@ -71,9 +71,9 @@ implements IPreparedQuery<T>
 
 	@Override
 	public IResult<T> item() {
-		return new InvocationHandler<IAsyncerator<T>>(iterate(FetchOptions.withPrefetchSize(1))) {
+		return new ResultHandler<IAsyncerator<T>>(iterate(FetchOptions.withPrefetchSize(1))) {
 			protected IResult onSuccess(final IAsyncerator<T> iterator) {
-				return new InvocationHandler<Boolean>(iterator.hasNext()) {
+				return new ResultHandler<Boolean>(iterator.hasNext()) {
 					protected IResult onSuccess(Boolean hasNext) {
 						if (!hasNext)
 							return TaskUtils.NULL;
@@ -87,7 +87,7 @@ implements IPreparedQuery<T>
 
 	@Override
 	public IResult<Integer> count() {
-		return new InvocationHandler<Iterable<Identifier>>(identifiers()) {
+		return new ResultHandler<Iterable<Identifier>>(identifiers()) {
 			protected IResult onSuccess(Iterable<Identifier> identifiers) {
 				return asResult(ConversionUtils.toList(identifiers).size());
 			}
@@ -106,7 +106,7 @@ implements IPreparedQuery<T>
 
 		final List<T> results= Collections.synchronizedList(new ArrayList<T>());
 		final ArrayList<IResult> tasks= new ArrayList<IResult>();
-		tasks.add(new InvocationHandler<IAsyncerator<Identifier>>(_session.iterate(_query)) {
+		tasks.add(new ResultHandler<IAsyncerator<Identifier>>(_session.iterate(_query)) {
 			protected IResult onSuccess(final IAsyncerator<Identifier> iterator) {
 				class DoNext extends Handler {
 					DoNext() {
@@ -116,7 +116,7 @@ implements IPreparedQuery<T>
 					protected IResult onSuccess() {
 						if (!(Boolean)incoming().getResult())
 							return TaskUtils.DONE;
-						return new InvocationHandler<Item>(_session.fetch(iterator.next())) {
+						return new ResultHandler<Item>(_session.fetch(iterator.next())) {
 							protected IResult onSuccess(Item item) {
 								results.add((T)item);
 								return new DoNext();
@@ -138,7 +138,7 @@ implements IPreparedQuery<T>
 
 	@Override
 	public IResult<IAsyncerator<T>> iterate(FetchOptions fetchOptions) {
-		return new InvocationHandler<IAsyncerator<Identifier>>(identifiers(fetchOptions)) {
+		return new ResultHandler<IAsyncerator<Identifier>>(identifiers(fetchOptions)) {
 			protected IResult onSuccess(final IAsyncerator<Identifier> identifiers) {
 				IAsyncerator<T> items= new IAsyncerator<T>() {
 					public IResult<Boolean> hasNext() {

@@ -9,16 +9,16 @@ import java.util.NoSuchElementException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ConditionalHandler;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.IAsyncerator;
+import com.googlecode.contraildb.core.async.Immediate;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
-import com.googlecode.contraildb.core.utils.ConditionalHandler;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.IAsyncerator;
-import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 //TODO This class must be extended to support NULL values

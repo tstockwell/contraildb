@@ -1,10 +1,11 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import java.util.Arrays;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.IResultHandler;
+import com.googlecode.contraildb.core.utils.Logging;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class TaskUtils {

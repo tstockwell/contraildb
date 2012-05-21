@@ -3,6 +3,8 @@ package com.googlecode.contraildb.core.utils;
 import java.util.ArrayList;
 
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.async.Result;
+import com.googlecode.contraildb.core.async.TaskUtils;
 
 /**
  * A utility class for coordinating the invocation of ResultHandlers.

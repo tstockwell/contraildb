@@ -6,9 +6,9 @@ import java.io.Serializable;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.Handler;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.Handler;
 
 
 //TODO This class must be extended to support NULL values

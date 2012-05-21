@@ -1,8 +1,8 @@
 package com.googlecode.contraildb.core.impl.btree;
 
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.async.Immediate;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
-import com.googlecode.contraildb.core.utils.Immediate;
 
 
 

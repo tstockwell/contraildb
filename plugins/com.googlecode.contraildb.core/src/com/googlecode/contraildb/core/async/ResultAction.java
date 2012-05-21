@@ -1,10 +1,10 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import com.googlecode.contraildb.core.IResult;
 
 @SuppressWarnings({"rawtypes","unchecked"})
-abstract public class InvocationHandler<I> extends Handler {
-	public InvocationHandler(IResult<I> results) {
+abstract public class ResultAction<I> extends Handler<I, Void> {
+	public ResultAction(IResult<I> results) {
 		super(results);
 	}
 	
@@ -12,5 +12,5 @@ abstract public class InvocationHandler<I> extends Handler {
 		onSuccess((I)incoming().getResult());
 		return TaskUtils.DONE;
 	}
-	abstract protected IResult onSuccess(I results) throws Exception;
+	abstract protected void onSuccess(I results) throws Exception;
 }

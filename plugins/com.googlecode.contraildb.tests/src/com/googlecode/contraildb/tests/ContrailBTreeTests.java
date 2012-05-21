@@ -22,13 +22,13 @@ import java.io.PrintStream;
 
 import junit.framework.TestCase;
 
+import com.googlecode.contraildb.core.async.IAsyncerator;
 import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
 import com.googlecode.contraildb.core.impl.btree.IKeyValueCursor;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
-import com.googlecode.contraildb.core.utils.IAsyncerator;
 
 
 /**

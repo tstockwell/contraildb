@@ -1,9 +1,11 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import com.googlecode.contraildb.core.IResult;
 
 /**
- * A convenience handler that invokes the onNull method if the incoming result returns null.
+ * A convenience handler that invokes the onNull method if the incoming result 
+ * returns null.  Otherwise the incoming result is returned.
+ * 
  * @author ted.stockwell
  */
 @SuppressWarnings({"rawtypes","unchecked"})
