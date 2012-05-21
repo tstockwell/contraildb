@@ -12,12 +12,12 @@ import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.Result;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.Result;
 import com.googlecode.contraildb.core.utils.OrderedResults;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.Handler;
 
 
 /**

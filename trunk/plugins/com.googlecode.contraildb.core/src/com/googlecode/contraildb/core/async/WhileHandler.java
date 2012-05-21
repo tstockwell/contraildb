@@ -1,4 +1,4 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import com.googlecode.contraildb.core.IResult;
 

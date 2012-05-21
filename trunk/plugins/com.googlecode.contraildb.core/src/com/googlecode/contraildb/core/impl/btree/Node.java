@@ -7,16 +7,16 @@ import java.util.UUID;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ConditionalHandler;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.Immediate;
+import com.googlecode.contraildb.core.async.ResultAction;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntity;
-import com.googlecode.contraildb.core.utils.ConditionalHandler;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.InvocationAction;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 
@@ -63,7 +63,7 @@ implements Cloneable
 	IResult<K> getLookupKey() { 
 		if (_next == null) 
 			return TaskUtils.asResult(getLargestKey()); 
-		return new InvocationHandler<Node<K>>(getNextSibling()) {
+		return new ResultHandler<Node<K>>(getNextSibling()) {
 			protected IResult onSuccess(Node<K> node) throws Exception {
 				return asResult(node.getSmallestKey());
 			}
@@ -72,7 +72,7 @@ implements Cloneable
 
 	public IResult<Void> onLoad(Identifier identifier)
 	{
-		return new InvocationAction<IEntity>(storage.fetch(_indexId)) {
+		return new ResultAction<IEntity>(storage.fetch(_indexId)) {
 			protected void onSuccess(IEntity index) throws Exception {
 				_index= (KeyValueSet<K, ?>) index;
 			}
@@ -101,7 +101,7 @@ implements Cloneable
 					insertEntry(index, key, value);
 				}
 				else { // page is full, we must divide the page
-					overflow= new InvocationHandler<Node<K>>(split()) {
+					overflow= new ResultHandler<Node<K>>(split()) {
 						protected IResult onSuccess(Node<K> overflow) throws Exception {
 							if (index <= _size) {
 								insertEntry(index, key, value);
@@ -147,7 +147,7 @@ implements Cloneable
 				overflow._previous = getId();
 				IResult checkNext= new ConditionalHandler(_next != null) {
 					protected IResult onTrue() throws Exception {
-						return new InvocationHandler<IEntity>(getStorage().fetch(_next)) {
+						return new ResultHandler<IEntity>(getStorage().fetch(_next)) {
 							protected IResult onSuccess(IEntity results) throws Exception {
 								Node<?> next = (Node<?>) results;
 								next._previous = overflow.getId();
@@ -182,7 +182,7 @@ implements Cloneable
 		
 		// link newly created node
 		if ((_next = rightSibling._next) != null) {
-			return new InvocationHandler<IEntity>(getStorage().fetch(_next)) {
+			return new ResultHandler<IEntity>(getStorage().fetch(_next)) {
 				protected IResult onSuccess(IEntity entity) throws Exception {
 					Node<?> next = (Node<?>) entity;
 					next._previous = getId();

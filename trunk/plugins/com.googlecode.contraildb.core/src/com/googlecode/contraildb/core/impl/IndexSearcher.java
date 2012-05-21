@@ -24,18 +24,18 @@ import com.googlecode.contraildb.core.ContrailQuery.Quantifier;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.IAsyncerator;
+import com.googlecode.contraildb.core.async.ResultAction;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.NullHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.impl.btree.IKeyValueCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
 import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.storage.StorageSession;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.IAsyncerator;
-import com.googlecode.contraildb.core.utils.InvocationAction;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.NullHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 
@@ -62,7 +62,7 @@ public class IndexSearcher {
 		}
 		final shared shared= new shared();
 		
-		IResult<Void> getEntitiesByProperty= new InvocationAction<KeyValueSet<Identifier,Identifier>>(getIdIndex()) {
+		IResult<Void> getEntitiesByProperty= new ResultAction<KeyValueSet<Identifier,Identifier>>(getIdIndex()) {
 			protected void onSuccess(KeyValueSet<Identifier,Identifier> idIndex) throws Exception {
 				for (T t: entities) {
 					for (String property: t.getIndexedProperties().keySet()) {
@@ -212,7 +212,7 @@ public class IndexSearcher {
 					}
 					
 					public IResult<Identifier> next() {
-						return new InvocationHandler<Boolean>(queryCursor.next()) {
+						return new ResultHandler<Boolean>(queryCursor.next()) {
 							protected IResult onSuccess(Boolean next) {
 								if (!next)
 									throw new IllegalStateException("no element available");
@@ -243,14 +243,14 @@ public class IndexSearcher {
 			final String propertyName= filterPredicate.getPropertyName();
 			List<FilterPredicate> subClauses= filterPredicate.getClauses();
 			if (op == FilterOperator.AND) {
-				tasks.add(new InvocationAction<List<IForwardCursor<Identifier>>>(createFilterCursors(subClauses)){
+				tasks.add(new ResultAction<List<IForwardCursor<Identifier>>>(createFilterCursors(subClauses)){
 					protected void onSuccess(List<IForwardCursor<Identifier>> cursors) throws Exception {
 						filterCursors.add(new ConjunctiveCursor<Identifier>(cursors));
 					}
 				});
 			}
 			else if (op == FilterOperator.OR) {
-				tasks.add(new InvocationAction<List<IForwardCursor<Identifier>>>(createFilterCursors(subClauses)){
+				tasks.add(new ResultAction<List<IForwardCursor<Identifier>>>(createFilterCursors(subClauses)){
 					protected void onSuccess(List<IForwardCursor<Identifier>> cursors) throws Exception {
 						filterCursors.add(new DisjunctiveCursor<Identifier>(cursors));
 					}
@@ -263,7 +263,7 @@ public class IndexSearcher {
 						PropertyIndex index= getPropertyIndex.getResult();
 						if (index == null)
 							throw new ContrailException("No index found for property: "+propertyName);
-						return new InvocationAction<IForwardCursor<Identifier>>(createFilterCursor(index, filterPredicate)){
+						return new ResultAction<IForwardCursor<Identifier>>(createFilterCursor(index, filterPredicate)){
 							protected void onSuccess(IForwardCursor<Identifier> cursor) throws Exception {
 								filterCursors.add(cursor);
 							}
@@ -328,15 +328,15 @@ public class IndexSearcher {
 				
 				// check to see if the cursor contains the value.
 				// if not then we can just not bother using this cursor
-				innerTasks.add(new InvocationHandler<Boolean>(propertyCursor.to(member)) {
+				innerTasks.add(new ResultHandler<Boolean>(propertyCursor.to(member)) {
 					protected IResult onSuccess(Boolean found) throws Exception {
 						if (!found)
 							return TaskUtils.DONE;
-						return new InvocationHandler<Comparable>(propertyCursor.keyValue()) {
+						return new ResultHandler<Comparable>(propertyCursor.keyValue()) {
 							protected IResult onSuccess(Comparable keyValue) {
 								if (KeyValueSet.compare(member, keyValue) != 0) 
 									return TaskUtils.DONE;
-								return new InvocationHandler<IForwardCursor<Identifier>>(propertyCursor.elementValue()) {
+								return new ResultHandler<IForwardCursor<Identifier>>(propertyCursor.elementValue()) {
 									protected IResult onSuccess(IForwardCursor<Identifier> elementValue) {
 										crsrs.add(elementValue);
 										return TaskUtils.DONE;
@@ -393,15 +393,15 @@ public class IndexSearcher {
 			// an optimization
 			// check to see if the cursor contains the value.
 			// if not then we can just not bother using this cursor
-			createCursors.add(new InvocationHandler<Boolean>(propertyCursor.to(member)) {
+			createCursors.add(new ResultHandler<Boolean>(propertyCursor.to(member)) {
 				protected IResult onSuccess(Boolean found) throws Exception {
 					if (!found)
 						return TaskUtils.DONE;
-					return new InvocationHandler<Comparable>(propertyCursor.keyValue()) {
+					return new ResultHandler<Comparable>(propertyCursor.keyValue()) {
 						protected IResult onSuccess(Comparable keyValue) {
 							if (KeyValueSet.compare(member, keyValue) != 0) 
 								return TaskUtils.DONE;
-							return new InvocationHandler<IForwardCursor<Identifier>>(propertyCursor.elementValue()) {
+							return new ResultHandler<IForwardCursor<Identifier>>(propertyCursor.elementValue()) {
 								protected IResult onSuccess(IForwardCursor<Identifier> elementValue) {
 									cursors.add(elementValue);
 									return TaskUtils.DONE;
@@ -442,14 +442,14 @@ public class IndexSearcher {
 		
 		// check to see if there are actually any results.
 		// if not then return an empty cursor
-		IResult noResults= new InvocationHandler<Boolean>(propertyCursor.to(value)) {
+		IResult noResults= new ResultHandler<Boolean>(propertyCursor.to(value)) {
 			protected IResult onSuccess(Boolean found) {
 				if (!found) 
 					return asResult(new IKeyValueCursor.EmptyForwardCursor<Identifier>());
-				return new InvocationHandler<K>(propertyCursor.keyValue()) {
+				return new ResultHandler<K>(propertyCursor.keyValue()) {
 					protected IResult onSuccess(K keyValue) {
 						if (op == GREATER_THAN && KeyValueSet.compare(value, keyValue) == 0) { 
-							return new InvocationHandler<Boolean>(propertyCursor.next()) {
+							return new ResultHandler<Boolean>(propertyCursor.next()) {
 								protected IResult onSuccess(Boolean found) {
 									if (!found)
 										return asResult(new IKeyValueCursor.EmptyForwardCursor<Identifier>());
@@ -480,14 +480,14 @@ public class IndexSearcher {
 		
 		// check to see if there are actually any results.
 		// if not then return an empty cursor
-		IResult noResults= new InvocationHandler<Boolean>(propertyCursor.to(value)) {
+		IResult noResults= new ResultHandler<Boolean>(propertyCursor.to(value)) {
 			protected IResult onSuccess(Boolean found) {
 				if (!found) 
 					return asResult(new IKeyValueCursor.EmptyForwardCursor<Identifier>());
-				return new InvocationHandler<K>(propertyCursor.keyValue()) {
+				return new ResultHandler<K>(propertyCursor.keyValue()) {
 					protected IResult onSuccess(K keyValue) {
 						if (op == LESS_THAN && KeyValueSet.compare(value, keyValue) == 0) { 
-							return new InvocationHandler<Boolean>(propertyCursor.next()) {
+							return new ResultHandler<Boolean>(propertyCursor.next()) {
 								protected IResult onSuccess(Boolean found) {
 									if (!found)
 										return asResult(new IKeyValueCursor.EmptyForwardCursor<Identifier>());
@@ -517,7 +517,7 @@ public class IndexSearcher {
 //	IResult<IForwardCursor<Identifier>> createForwardCursorAdapter(final IPropertyCursor propertyCursor) {
 //		RamStorageProvider ramStorageProvider= new RamStorageProvider();
 //		EntityStorage entityStorage= new EntityStorage(ramStorageProvider);
-//		return new InvocationHandler<IEntityStorage.Session>(entityStorage.connect()) {
+//		return new ResultHandler<IEntityStorage.Session>(entityStorage.connect()) {
 //			protected IResult onSuccess(IEntityStorage.Session session) throws Exception {
 //				final IOrderedSet set= KeyValueSet.create(session, Identifier.create()).get();
 //				
@@ -528,7 +528,7 @@ public class IndexSearcher {
 //								return propertyCursor.next();
 //							}
 //							protected IResult<Void> Do() throws Exception {
-//								return new InvocationHandler<IForwardCursor<Identifier>>(propertyCursor.elementValue()) {
+//								return new ResultHandler<IForwardCursor<Identifier>>(propertyCursor.elementValue()) {
 //									protected IResult onSuccess(final IForwardCursor<Identifier> ids) {
 //										return new WhileHandler() {
 //											protected IResult<Boolean> While() throws Exception {

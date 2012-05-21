@@ -1,4 +1,4 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,6 +6,9 @@ import java.util.concurrent.CancellationException;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.IResultHandler;
+import com.googlecode.contraildb.core.utils.ContrailAction;
+import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.Logging;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class Result<V> implements IResult<V>{

@@ -27,10 +27,10 @@ import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.IContrailService;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.StorageSystem;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**

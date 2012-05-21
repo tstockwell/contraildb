@@ -7,12 +7,12 @@ import java.util.ArrayList;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.ConditionalHandler;
+import com.googlecode.contraildb.core.async.ConditionalHandler;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.Immediate;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 
@@ -65,10 +65,10 @@ extends Node<K>
 	@Override public IResult<Node<K>> insert(final K key, final Object value) {
 		final int index = indexOf(key);
 		
-		return new InvocationHandler<Node<K>>(getChildNode(index)) {
+		return new ResultHandler<Node<K>>(getChildNode(index)) {
 			protected IResult onSuccess(final Node<K> child) throws Exception {
 				
-				return new InvocationHandler<Node<K>>(child.insert(key, value)) {
+				return new ResultHandler<Node<K>>(child.insert(key, value)) {
 					protected IResult onSuccess(final Node<K> newSibling) throws Exception {
 						if (newSibling == null)  // no overflow means we're done with insertion
 							return TaskUtils.NULL;
@@ -93,7 +93,7 @@ extends Node<K>
 									}
 									protected IResult onTrue() throws Exception {
 										// page is full, we must divide the page
-										return new InvocationHandler<Node<K>>(split()) {
+										return new ResultHandler<Node<K>>(split()) {
 											protected IResult onSuccess(Node<K> overflow) throws Exception {
 												if (index < _size) { 
 													setEntry(index, keyForChildNode, childId);
@@ -125,9 +125,9 @@ extends Node<K>
 	@Override IResult<Boolean> remove(final K key) {
 
 		final int index = indexOf(key);
-		return new InvocationHandler<Node<K>>(getChildNode(index)) {
+		return new ResultHandler<Node<K>>(getChildNode(index)) {
 			protected IResult onSuccess(final Node<K> child) throws Exception {
-				return new InvocationHandler<Boolean>(child.remove(key)) {
+				return new ResultHandler<Boolean>(child.remove(key)) {
 					@Override
 					protected IResult onSuccess(Boolean underflow) throws Exception {
 						if (!underflow)
@@ -135,7 +135,7 @@ extends Node<K>
 						
 						IResult doRemove= TaskUtils.DONE;
 						if (index < _size - 1) {
-							doRemove= new InvocationHandler<Node<K>>(getChildNode(index + 1)) {
+							doRemove= new ResultHandler<Node<K>>(getChildNode(index + 1)) {
 								protected IResult onSuccess(Node<K> rightSibling) throws Exception {
 									if (rightSibling._size+child._size <= _index._pageSize) {
 										return new Handler(child.merge(rightSibling)) {
@@ -151,7 +151,7 @@ extends Node<K>
 							};
 						}
 						if (0 < index) {
-							doRemove= new InvocationHandler<Node<K>>(getChildNode(index - 1)) {
+							doRemove= new ResultHandler<Node<K>>(getChildNode(index - 1)) {
 								protected IResult onSuccess(final Node<K> leftSibling) throws Exception {
 									if (leftSibling._size+child._size <= _index._pageSize) {
 										return new Handler(leftSibling.merge(child)) {

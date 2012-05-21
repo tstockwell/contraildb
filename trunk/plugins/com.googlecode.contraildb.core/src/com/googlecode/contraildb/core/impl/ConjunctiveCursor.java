@@ -4,12 +4,12 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.async.WhileHandler;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.WhileHandler;
 
 
 /**
@@ -37,7 +37,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 
 	@Override
 	public IResult<Boolean> first() {
-		return new InvocationHandler<Boolean>(_cursors[0].first()) {
+		return new ResultHandler<Boolean>(_cursors[0].first()) {
 			protected IResult onSuccess(Boolean first) throws Exception {
 				if (!first)
 					return TaskUtils.FALSE;
@@ -48,7 +48,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 
 	@Override
 	public IResult<Boolean> to(T e) {
-		return new InvocationHandler<Boolean>(_cursors[0].to(e)) { // move first cursor
+		return new ResultHandler<Boolean>(_cursors[0].to(e)) { // move first cursor
 			protected IResult onSuccess(Boolean to) throws Exception {
 				if (!to)
 					return TaskUtils.FALSE; // if failed then done
@@ -70,7 +70,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 							
 							protected IResult<Void> Do() throws Exception {
 								final IForwardCursor<T> cursor= _cursors[cursorIndex[0]];
-								return new InvocationHandler<Boolean>(cursor.to((T)value[0])) {
+								return new ResultHandler<Boolean>(cursor.to((T)value[0])) {
 									protected IResult onSuccess(Boolean to) {
 										if (!to) { // if there no ge value then fail 
 											done[0]= false;
@@ -78,7 +78,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 										}
 										
 										// if found value is ge than current value then save it
-										return new InvocationHandler<T>(cursor.keyValue()) {
+										return new ResultHandler<T>(cursor.keyValue()) {
 											protected IResult onSuccess(T keyValue) {
 												if (KeyValueSet.compare((T)ge[0], keyValue) < 0)
 													ge[0]= keyValue;
@@ -99,7 +99,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 								}
 								
 								// try moving the first cursor to the new value before starting over
-								return new InvocationHandler<Boolean>(_cursors[0].to((T)ge[0])) {
+								return new ResultHandler<Boolean>(_cursors[0].to((T)ge[0])) {
 									protected IResult onSuccess(Boolean moveFirst) {
 										if (!moveFirst) {
 											done[0]= false;
@@ -137,7 +137,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 				return _cursors[0].next();			
 			}
 			protected IResult<Void> Do() throws Exception {
-				return new InvocationHandler<Boolean>(to(_cursors[0].keyValue())) {
+				return new ResultHandler<Boolean>(to(_cursors[0].keyValue())) {
 					protected IResult onSuccess(Boolean to) throws Exception {
 						if (to)
 							result[0]= Boolean.TRUE; 
@@ -162,7 +162,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 
 	@Override
 	public IResult<Boolean> to(IResult<T> e) {
-		return new InvocationHandler<T>(e) {
+		return new ResultHandler<T>(e) {
 			protected IResult onSuccess(T results) {
 				return to(results);
 			}

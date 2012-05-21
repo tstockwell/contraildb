@@ -2,7 +2,7 @@ package com.googlecode.contraildb.core;
 
 import java.util.List;
 
-import com.googlecode.contraildb.core.utils.IAsyncerator;
+import com.googlecode.contraildb.core.async.IAsyncerator;
 
 public interface IPreparedQuery<T extends Item>  {
 	

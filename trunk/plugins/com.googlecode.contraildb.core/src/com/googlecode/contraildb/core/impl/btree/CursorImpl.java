@@ -4,13 +4,13 @@
 package com.googlecode.contraildb.core.impl.btree;
 
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.Immediate;
+import com.googlecode.contraildb.core.async.ResultAction;
+import com.googlecode.contraildb.core.async.ResultHandler;
+import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.async.WhileHandler;
 import com.googlecode.contraildb.core.storage.IEntity;
-import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.Immediate;
-import com.googlecode.contraildb.core.utils.InvocationAction;
-import com.googlecode.contraildb.core.utils.InvocationHandler;
-import com.googlecode.contraildb.core.utils.TaskUtils;
-import com.googlecode.contraildb.core.utils.WhileHandler;
 
 
 @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -39,7 +39,7 @@ implements IKeyValueCursor<T,V> {
 					return asResult(!_page.isLeaf());
 				}
 				protected IResult<Void> Do() throws Exception {
-					return new InvocationHandler<Node<T>>(_page.getChildNode(0)) {
+					return new ResultHandler<Node<T>>(_page.getChildNode(0)) {
 						protected IResult onSuccess(Node<T> child) throws Exception {
 							_page= child;
 							return TaskUtils.DONE;
@@ -58,7 +58,7 @@ implements IKeyValueCursor<T,V> {
 					return asResult(!_page.isLeaf());
 				}
 				protected IResult<Void> Do() throws Exception {
-					return new InvocationHandler<Node<T>>(_page.getChildNode(_page._size-1)) {
+					return new ResultHandler<Node<T>>(_page.getChildNode(_page._size-1)) {
 						protected IResult onSuccess(Node<T> child) throws Exception {
 							_page= child;
 							return TaskUtils.DONE;
@@ -66,7 +66,7 @@ implements IKeyValueCursor<T,V> {
 					}; 
 				}
 			};
-			return new InvocationAction(dowhile) {
+			return new ResultAction(dowhile) {
 				protected void onSuccess(Object results) throws Exception {
 					_index= _page._size;
 				}
@@ -92,7 +92,7 @@ implements IKeyValueCursor<T,V> {
 				if (_index <= 0) {
 					if (_page._previous == null) 
 						return TaskUtils.FALSE;
-					fetch= new InvocationHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
+					fetch= new ResultHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
 						protected IResult onSuccess(IEntity previousPage) throws Exception {
 							_page = (Node<T>) previousPage;
 							_index = _page._size;
@@ -120,7 +120,7 @@ implements IKeyValueCursor<T,V> {
 			}
 			protected IResult<Void> Do() throws Exception {
 				_index= _page.indexOf(e);
-				return new InvocationHandler<Node<T>>(_page.getChildNode(_index)) {
+				return new ResultHandler<Node<T>>(_page.getChildNode(_index)) {
 					protected IResult onSuccess(Node<T> childNode) throws Exception {
 						_page = childNode;
 						return TaskUtils.DONE;
@@ -138,10 +138,10 @@ implements IKeyValueCursor<T,V> {
 	}
 	
 	protected IResult<Boolean> le(final T e) {
-		return new InvocationHandler<Boolean>(ge(e)) {
+		return new ResultHandler<Boolean>(ge(e)) {
 			protected IResult onSuccess(Boolean ge) throws Exception {
 				if (ge) {
-					return new InvocationHandler<T>(keyValue()) {
+					return new ResultHandler<T>(keyValue()) {
 						protected IResult onSuccess(T keyValue) throws Exception {
 							if (KeyValueSet.compare(keyValue, e) == 0)
 								return TaskUtils.TRUE;
@@ -166,7 +166,7 @@ implements IKeyValueCursor<T,V> {
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
 				return TaskUtils.FALSE;
-			next= new InvocationAction<IEntity>(_page.getStorage().fetch(_page._next)) {
+			next= new ResultAction<IEntity>(_page.getStorage().fetch(_page._next)) {
 				protected void onSuccess(IEntity next) throws Exception {
 					_page = (Node<T>) next;
 					_index = -1;
@@ -196,7 +196,7 @@ implements IKeyValueCursor<T,V> {
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
 				return TaskUtils.FALSE;
-			next= new InvocationAction<IEntity>(_page.getStorage().fetch(_page._next)) {
+			next= new ResultAction<IEntity>(_page.getStorage().fetch(_page._next)) {
 				protected void onSuccess(IEntity next) throws Exception {
 					_page = (Node<T>) next;
 					_index = -1;
@@ -223,7 +223,7 @@ implements IKeyValueCursor<T,V> {
 				if (_index <= 0) {
 					if (_page._previous == null) 
 						return TaskUtils.FALSE;
-					fetch= new InvocationHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
+					fetch= new ResultHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
 						protected IResult onSuccess(IEntity previousPage) throws Exception {
 							_page = (Node<T>) previousPage;
 							_index = _page._size;
@@ -292,11 +292,11 @@ implements IKeyValueCursor<T,V> {
 			init= initFirst();
 		return new Handler(init) {
 			protected IResult onSuccess() throws Exception {
-				return new InvocationHandler<Boolean>(to(key)) {
+				return new ResultHandler<Boolean>(to(key)) {
 					protected IResult onSuccess(Boolean to) throws Exception {
 						if (!to)
 							return TaskUtils.NULL;
-						return new InvocationHandler<T>(keyValue()) {
+						return new ResultHandler<T>(keyValue()) {
 							protected IResult onSuccess(T keyValue) throws Exception {
 								if (KeyValueSet.compare(key, keyValue) != 0)
 									return TaskUtils.NULL;
@@ -311,7 +311,7 @@ implements IKeyValueCursor<T,V> {
 
 	@Override
 	public IResult<Boolean> to(IResult<T> e) {
-		return new InvocationHandler<T>(e) {
+		return new ResultHandler<T>(e) {
 			protected IResult onSuccess(T t) {
 				return to(t);
 			}

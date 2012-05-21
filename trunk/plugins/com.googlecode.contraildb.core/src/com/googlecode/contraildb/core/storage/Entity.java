@@ -12,7 +12,7 @@ import java.util.Collection;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.TaskUtils;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
