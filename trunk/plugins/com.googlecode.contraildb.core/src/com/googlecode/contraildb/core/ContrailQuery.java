@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+@SuppressWarnings("unchecked")
 public class ContrailQuery implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -39,8 +40,8 @@ public class ContrailQuery implements Serializable {
 		public Quantifier getType() {
 			return _type;
 		}
-		public Comparable<?>[] getValues() {
-			return _values;
+		public <K extends Comparable<K> & Serializable> K[] getValues() {
+			return (K[]) _values;
 		}
 		
 		@Override

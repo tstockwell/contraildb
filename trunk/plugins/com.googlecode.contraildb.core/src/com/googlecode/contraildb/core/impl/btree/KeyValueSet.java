@@ -93,7 +93,7 @@ implements IKeyValueSet<T,V>
 	 * Create a new persistent index.
 	 */
 	private static final <K extends Comparable, V> IResult<KeyValueSet<K,V>> 
-	createInstance(IEntityStorage.Session storageSession, Identifier id, int pageSize, boolean hasLeafValues) 
+	create(IEntityStorage.Session storageSession, Identifier id, int pageSize, boolean hasLeafValues) 
 	{
 		final KeyValueSet<K,V> btree= new KeyValueSet<K,V>(id, pageSize, hasLeafValues);
 		return new Handler(storageSession.store(btree)) {
@@ -103,19 +103,19 @@ implements IKeyValueSet<T,V>
 		};
 	}
 	public static <K extends Comparable, V> IResult<KeyValueSet<K,V>> 
-	createInstance( IEntityStorage.Session storageSession, int pageSize) 
+	create( IEntityStorage.Session storageSession, int pageSize) 
 	{
-		return createInstance(storageSession, Identifier.create(), pageSize, true);
+		return create(storageSession, Identifier.create(), pageSize, true);
 	}
 	public static <K extends Comparable, V> IResult<KeyValueSet<K,V>> 
-	createBPlusTree(IEntityStorage.Session storageSession, Identifier identifier) 
+	create(IEntityStorage.Session storageSession, Identifier identifier) 
 	{
-		return createInstance(storageSession, identifier, DEFAULT_SIZE, true);
+		return create(storageSession, identifier, DEFAULT_SIZE, true);
 	}
-	public static <K extends Comparable, V> IResult<KeyValueSet<K,V>> createInstance(
+	public static <K extends Comparable, V> IResult<KeyValueSet<K,V>> create(
 	IEntityStorage.Session storageSession) 
 	{
-		return createInstance(storageSession, Identifier.create(), DEFAULT_SIZE, true);
+		return create(storageSession, Identifier.create(), DEFAULT_SIZE, true);
 	}
 
 	@Immediate protected KeyValueSet(Identifier identifier, int pageSize, boolean hasLeafValues) {

@@ -12,10 +12,18 @@ abstract public class WhileHandler extends Handler {
 		super(result);
 	}
 	
+	protected IResult<Void> Init() throws Exception { return TaskUtils.DONE; }
 	abstract protected IResult<Boolean> While() throws Exception;
 	abstract protected IResult<Void> Do() throws Exception;
 	
 	final protected IResult onSuccess() throws Exception {
+		return new Handler(Init()) {
+			protected IResult onSuccess() throws Exception {
+				return handleWhile();
+			}
+		};
+	}
+	final private IResult handleWhile() throws Exception {
 		return new Handler(While()) {
 			protected IResult onSuccess() throws Exception {
 				Boolean x= (Boolean)incoming().getResult();
@@ -23,7 +31,7 @@ abstract public class WhileHandler extends Handler {
 					return TaskUtils.DONE;
 				return new Handler(Do()) {
 					protected IResult onSuccess() throws Exception {
-						return WhileHandler.this.onSuccess();
+						return WhileHandler.this.handleWhile();
 					}
 				};
 			}

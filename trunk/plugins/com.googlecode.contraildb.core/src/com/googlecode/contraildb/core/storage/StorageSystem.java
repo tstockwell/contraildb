@@ -3,6 +3,7 @@ package com.googlecode.contraildb.core.storage;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.InvocationAction;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -58,7 +60,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
  * Clients *must* call the close method when finished using an instance of ConcurrentStorage.
  * Any uncommitted changes are abandoned when the close method is called.
  * 
- * @see IStorageSPI
+ * @see IStorageProvider
  *  
  * @author Ted Stockwell
  */
@@ -117,7 +119,7 @@ public class StorageSystem {
 	/**
 	 * A session must be created in order to read or write.
 	 * Begin either a readonly or readwrite session.
-	 * A readonly session is only allowed to get Records, readwrite sessions may also insert, update, and delete Records. 
+	 * A readonly session is only allowed to get Items, readwrite sessions may also insert, update, and delete Items. 
 	 * When a readwrite session is started the session will be associated with a new revision of the database.
 	 * When a readonly session is started the session will be associated with the last committed database revision. 
 	 */
@@ -133,12 +135,14 @@ public class StorageSystem {
 					spawn(new Handler(getLastCommittedRevision) {
 						protected IResult onSuccess() throws Exception {
 							final RevisionFolder revision= getLastCommittedRevision.getResult();
-							final IResult<StorageSession> createStorageSession= StorageSession.create(this, sessionId, revision.revisionNumber, -1, mode);
-							spawn(new Handler(createStorageSession) {
+							final IResult<StorageSession> createStorageSession= 
+									StorageSession.create(StorageSystem.this, sessionId, revision.revisionNumber, -1, mode);
+							return new Handler(createStorageSession) {
 								protected IResult onSuccess() throws Exception {
-									return TaskUtils.asResult(storageSession[0]= createStorageSession.getResult());
+									storageSession[0]= createStorageSession.getResult();
+									return TaskUtils.DONE;
 								}
-							});
+							};
 						}
 					});
 				}
@@ -147,23 +151,28 @@ public class StorageSystem {
 					spawn(new Handler(createNewRevision) {
 						protected IResult onSuccess() throws Exception {
 							final RevisionFolder revision= createNewRevision.getResult();
-							final IResult<StorageSession> createStorageSession= StorageSession.create(this, sessionId, revision.revisionNumber, revision.startCommitNumber, mode);
-							spawn(new Handler(createStorageSession) {
+							final IResult<StorageSession> createStorageSession=
+									StorageSession.create(StorageSystem.this, sessionId, revision.revisionNumber, revision.startCommitNumber, mode);
+							return new Handler(createStorageSession) {
 								protected IResult onSuccess() throws Exception {
-									return TaskUtils.asResult(storageSession[0]= createStorageSession.getResult());
+									storageSession[0]= createStorageSession.getResult();
+									return TaskUtils.DONE;
 								}
-							});
+							};
 						}
 					});
 				}
 				return TaskUtils.asResult(storageSession[0]);
 			}
-		}.toResult();
+		};
 		
 		return new Handler(beginSession) {
 			protected void onComplete() throws Exception {
-				spawn(_root.unlock(sessionId));
-				spawn(_root.getStorage().flush());
+				spawn(new Handler(_root.unlock(sessionId)) {
+					protected void onComplete() throws Exception {
+						spawn(_root.getStorage().flush());
+					}
+				});
 			}
 			protected IResult onSuccess() throws Exception {
 				Logging.info("Created session "+sessionId);
@@ -171,7 +180,7 @@ public class StorageSystem {
 				_activeSessions.add(storageSession[0]);
 				return TaskUtils.asResult(storageSession[0]);
 			}
-		}.toResult();
+		};
 	}
 
 	/**
@@ -199,17 +208,18 @@ public class StorageSystem {
 			protected IResult onSuccess() throws Exception {
 				spawn(new Handler(local.revision.addSession(sessionId)) {
 					protected IResult onSuccess() throws Exception {
-						spawn(new Handler(StorageSession.create(this, sessionId, revisionNumber, -1, Mode.READONLY)) {
+						return new Handler(StorageSession.create(StorageSystem.this, sessionId, revisionNumber, -1, Mode.READONLY)) {
 							protected IResult onSuccess() throws Exception {
 								local.storageSession= (StorageSession) incoming().getResult();
+								return TaskUtils.DONE;
 							}
-						});
+						};
 					}
 				});
 				return TaskUtils.DONE;
 			}
 		};
-		return new Handler(addSession) {
+		return new Handler(addSession, revisionFolder) {
 			protected void onComplete() throws Exception {
 				RevisionFolder revision= revisionFolder.getResult();
 				spawn(new Handler(revision.unlock(sessionId)) {
@@ -241,58 +251,59 @@ public class StorageSystem {
 	
 	private IResult<RevisionFolder> createNewRevision(final String sessionId) throws IOException {
 
-		class state {
-			List<RevisionFolder> revisions;
-			RevisionFolder lastRevision;
-			RevisionFolder startRevision;
-		}
-		final state local= new state();
-		IResult getRevisionFolders= new Handler(_root.getRevisionFolders()) {
-			protected IResult onSuccess() throws Exception {
-				local.revisions= (List<RevisionFolder>) incoming().getResult();
-				local.lastRevision= local.revisions.get(0);
-				local.startRevision= null;
-				for (final RevisionFolder revision: local.revisions) {
-					spawn(new Handler(revision.isCommitted()) {
-						protected IResult onSuccess() throws Exception {
-							if ((Boolean) incoming().get()) {
-								synchronized (local) {
-									if (local.startRevision == null || local.startRevision.getFinalCommitNumber() < revision.getFinalCommitNumber())  
-										startRevision= revision;
-								}
-							}
+		return new InvocationHandler<List<RevisionFolder>>(_root.getRevisionFolders()) {
+			protected IResult onSuccess(final List<RevisionFolder> revisions) {
+				final HashMap<RevisionFolder, Long> commitNumbers= new HashMap<RevisionFolder, Long>();
+				final HashMap<RevisionFolder, Boolean> isComitted= new HashMap<RevisionFolder, Boolean>();
+
+				// get commit numbers and commit status
+				ArrayList<IResult> tasks= new ArrayList<IResult>();
+				for (final RevisionFolder revision: revisions) {
+					tasks.add(new InvocationHandler<Long>(revision.getFinalCommitNumber()) {
+						protected IResult onSuccess(Long commitNumber) {
+							commitNumbers.put(revision, commitNumber);
+							return TaskUtils.DONE;
 						}
 					});
-					if (revision.isCommitted()) 
-						if (startRevision == null || startRevision.getFinalCommitNumber() < revision.getFinalCommitNumber())  
-							startRevision= revision;
+					tasks.add(new InvocationHandler<Boolean>(revision.isCommitted()) {
+						protected IResult onSuccess(Boolean isCommitted) {
+							isComitted.put(revision, isCommitted);
+							return TaskUtils.DONE;
+						}
+					});
 				}
+				
+				return new Handler(tasks) {
+					protected IResult onSuccess() {
+						RevisionFolder lastRevision= revisions.get(0);
+						RevisionFolder start= null;
+						for (RevisionFolder revision: revisions) {
+							if (isComitted.get(revision)) 
+								if (start == null || commitNumbers.get(start) < commitNumbers.get(revision))  
+									start= revision;
+						}
+						final RevisionFolder startRevision= start;
+						final RevisionFolder revision= new RevisionFolder(_root, lastRevision.revisionNumber+1, startRevision.revisionNumber);
+						return new Handler(_entitySession.store(revision)) {
+							protected IResult onSuccess() {
+								/*
+								 * Mark the new revision AND the starting revision as in use by this session.
+								 * Adding this session to the starting revision prevents the starting revision 
+								 * from being cleaned up until we're done with it.  
+								 */ 
+								spawn(revision.addSession(sessionId));
+								spawn(startRevision.addSession(sessionId));
+
+								_knownUncommittedRevisions.add(revision.revisionNumber);
+
+								return asResult(revision);
+							}
+						};
+					}
+				};
 			}
 		};
-		
-		
-		List<RevisionFolder> revisions= _root.getRevisionFolders();
-		RevisionFolder lastRevision= revisions.get(0);
-		RevisionFolder startRevision= null;
-		for (RevisionFolder revision: revisions) {
-			if (revision.isCommitted()) 
-				if (startRevision == null || startRevision.getFinalCommitNumber() < revision.getFinalCommitNumber())  
-					startRevision= revision;
-		}
-		RevisionFolder revision= new RevisionFolder(_root, lastRevision.revisionNumber+1, startRevision.revisionNumber);
-		_entitySession.store(revision);
 
-		/*
-		 * Mark the new revision AND the starting revision as in use by this session.
-		 * Adding this session to the starting revision prevents the starting revision 
-		 * from being cleaned up until we're done with it.  
-		 */ 
-		revision.addSession(sessionId);
-		startRevision.addSession(sessionId);
-
-		_knownUncommittedRevisions.add(revision.revisionNumber);
-
-		return revision;
 	}
 	
 	IResult<Void> closeStorageSession(final StorageSession storageSession) 
@@ -308,16 +319,15 @@ public class StorageSystem {
 					RevisionFolder startRevision= getRevisionFolder.getResult();
 					assert startRevision != null : "Revision "+startingCommitNumber+" has apparently been deleted when it should have been leased by a session associated with revision "+storageSession.getRevisionNumber();
 					startRevision.removeSession(storageSession.getSessionId());
+					return TaskUtils.DONE;
 				}
 			};
 		}
 		
 		return new Handler(removeStartSession) {
 			protected IResult onSuccess() throws Exception {
-				final IResult<RevisionFolder> getRevisionFolder= _root.getRevisionFolder(revisionNumber);
-				return new Handler(getRevisionFolder) {
-					protected IResult onSuccess() throws Exception {
-						RevisionFolder revisionFolder= getRevisionFolder.getResult();
+				return new InvocationHandler<RevisionFolder>(_root.getRevisionFolder(revisionNumber)) {
+					protected IResult onSuccess(RevisionFolder revisionFolder) {
 						return revisionFolder.removeSession(storageSession.getSessionId());
 					}
 				};
@@ -325,39 +335,241 @@ public class StorageSystem {
 		};
 		
 
-		---------------
-		try {
-			// remove the session reference from the session's starting revision
-			long startingCommitNumber= storageSession.getStartingCommitNumber();
-			if (0 <= startingCommitNumber) {
-				RevisionFolder startRevision= _root.getRevisionFolder(startingCommitNumber);
-				assert startRevision != null : "Revision "+startingCommitNumber+" has apparently been deleted when it should have been leased by a session associated with revision "+storageSession.getRevisionNumber();
-				startRevision.removeSession(storageSession.getSessionId());
-			}
-			
-			long revisionNumber= storageSession.getRevisionNumber();
-			RevisionFolder revisionFolder= _root.getRevisionFolder(revisionNumber);
-			revisionFolder.removeSession(storageSession.getSessionId());
-		}
-		finally {
-			Logging.fine("Closed session "+storageSession);
-			_activeSessions.remove(storageSession);
-		}
 // TODO cleanup/release expired sessions that the application did not close 		
 	}
 
 
-	/**
-	 * @throws IOException
-	 * @throws ConflictingCommitException
-	 */
-	IResult<Void> commitRevision(StorageSession storageSession) 
+	IResult<Void> commitRevision(final StorageSession storageSession) 
+	throws IOException, ConflictingCommitException 
 	{
+		return new Handler() {
+			String sessionId= storageSession.getSessionId();
+			long revisionNumber= storageSession.getRevisionNumber();
+			final long startingCommit= storageSession.getStartingCommitNumber();
+			RevisionFolder revision;
+			RevisionFolder startRevision;
+			RevisionJournal journal;
+			
+			@OnSuccess("WriteJournal")
+			protected IResult Start() {
+				final IResult getRevisionFolder= _root.getRevisionFolder(revisionNumber);
+				final IResult getStartRevision= _root.getRevisionFolder(startingCommit);
+				return new Handler(getRevisionFolder, getStartRevision) {
+					protected IResult onSuccess() throws Exception {
+						revision= (RevisionFolder) getRevisionFolder.getResult();
+						startRevision= (RevisionFolder) getStartRevision.getResult();
+					}
+				};
+			}
+			
+			@OnSuccess("LockRoot")
+			protected IResult WriteJournal() {
+				journal= new RevisionJournal(revision, storageSession);
+				return _entitySession.store(journal);
+			}
+			
+			@OnSuccess("DoCommit")
+			protected IResult LockRoot() {
+				return _root.lock(sessionId, true);
+			}
+			
+			@OnComplete("UnlockRoot")
+			protected IResult DoCommit() {
+				return new Handler() {
+					List<RevisionFolder> revisions;
+					long lastCommitNumber;
+					
+					@OnSuccess("CheckCommitNumber") 
+					protected IResult Start() {
+						return new InvocationHandler<List<RevisionFolder>>(_root.getRevisionFolders()) {
+							protected IResult onSuccess(List<RevisionFolder> results) {
+								revisions= results;
+								return new InvocationAction<Long>(revisions.get(0).getFinalCommitNumber()) {
+									protected void onSuccess(Long finalCommitNumber) {
+										lastCommitNumber= finalCommitNumber;
+									}
+								};
+							}
+						};
+					}
+					@OnSuccess("ValidateTransaction")
+					protected IResult CheckCommitNumber() {
+						if (lastCommitNumber < 0) {
+							String msg= "Corrupted Storage: There do not appear to be any committed revisions.";
+							msg+= "\nAvailable revisions: {";
+							for (RevisionFolder folder: revisions)
+								msg+= "\n"+folder;
+							msg+= "\n}";
+							Logging.severe(msg);
+							throw new ContrailException(msg);
+						}
+					}
+					@OnSuccess("WriteCommitMarker")
+					protected IResult ValidateTransaction() {
+						return validateTransaction(startingCommit, journal, revisions);
+						
+						// write commit marker
+						_entitySession.store(new CommitMarker(revision, lastCommitNumber+1));
+
+						// unlock revision and remove session id from start revision
+						revision.removeSession(sessionId);
+						startRevision.removeSession(sessionId);
+						
+						_entitySession.flush();
+						
+						_knownUncommittedRevisions.remove(revisionNumber);
+					}
+					@OnSuccess("RemoveSession")
+					protected IResult WriteCommitMarker() {
+						return validateTransaction(startingCommit, journal, revisions);
+						
+						// write commit marker
+						_entitySession.store(new CommitMarker(revision, lastCommitNumber+1));
+
+						// unlock revision and remove session id from start revision
+						revision.removeSession(sessionId);
+						startRevision.removeSession(sessionId);
+						
+						_entitySession.flush();
+						
+						_knownUncommittedRevisions.remove(revisionNumber);
+					}
+					@OnSuccess("Flush")
+					protected IResult RemoveSession() {
+						return TaskUtils.combineResults(
+								// unlock revision and remove session id from start revision
+								revision.removeSession(sessionId),
+								startRevision.removeSession(sessionId));
+					}
+					protected IResult Flush() {
+						_knownUncommittedRevisions.remove(revisionNumber);
+						return _entitySession.flush();
+					}
+				};
+			}
+			
+			@OnComplete("Log")
+			protected IResult UnlockRoot() {
+				_activeSessions.remove(storageSession);
+				spawn(_root.unlock(sessionId));
+			}
+			protected IResult Log() {
+				try { Logging.info("Committed session "+storageSession); } catch (Throwable t) { }
+				fork(new StorageCleanupAction(this));
+			}
+		};
 		String sessionId= storageSession.getSessionId();
 		long revisionNumber= storageSession.getRevisionNumber();
 		final long startingCommit= storageSession.getStartingCommitNumber();
 		RevisionFolder revision= _root.getRevisionFolder(revisionNumber);
 		RevisionFolder startRevision= _root.getRevisionFolder(startingCommit);
+		
+		// write journal
+		final RevisionJournal journal= new RevisionJournal(revision, storageSession);
+		_entitySession.store(journal);
+		
+		// lock root, no other revisions may be committed while root is locked.
+		_root.lock(sessionId, true);
+		try {
+			
+			List<RevisionFolder> revisions= _root.getRevisionFolders();
+			RevisionFolder.sortByDescendingCommitNumber(revisions);
+			long lastCommitNumber= revisions.get(0).getFinalCommitNumber();
+			if (lastCommitNumber < 0) {
+				String msg= "Corrupted Storage: There do not appear to be any committed revisions.";
+				msg+= "\nAvailable revisions: {";
+				for (RevisionFolder folder: revisions)
+					msg+= "\n"+folder;
+				msg+= "\n}";
+				Logging.severe(msg);
+				throw new ContrailException(msg);
+			}
+			
+			// validate transaction
+			validateTransaction(startingCommit, journal, revisions);
+			
+			// write commit marker
+			_entitySession.store(new CommitMarker(revision, lastCommitNumber+1));
+
+			// unlock revision and remove session id from start revision
+			revision.removeSession(sessionId);
+			startRevision.removeSession(sessionId);
+			
+			_entitySession.flush();
+			
+			_knownUncommittedRevisions.remove(revisionNumber);
+			
+		}
+		finally {
+			
+			_activeSessions.remove(storageSession);
+			
+			try { _root.unlock(sessionId); } catch (Throwable t) { }
+			
+			try { Logging.info("Committed session "+storageSession); } catch (Throwable t) { }
+			
+			try { _trackerSession.submit(new StorageCleanupAction(this)); } catch (Throwable t) { }
+		}
+	}
+
+	private IResult<Void> 
+	validateTransaction(final long startingCommit,final RevisionJournal journal, List<RevisionFolder> revisions)
+	{
+		ArrayList<IResult<Void>> validateActions= new ArrayList<IResult<Void>>(revisions.size());
+		final List<RevisionFolder> conflictingRevisions= Collections.synchronizedList(new ArrayList<RevisionFolder>(1));  
+		for (final RevisionFolder r: revisions) {
+			validateActions.add(new InvocationHandler<Long>(r.getFinalCommitNumber()) {
+				protected IResult onSuccess(Long finalCommitNumber) {
+					if (finalCommitNumber <= startingCommit)
+						return TaskUtils.DONE; // we're done
+					if (!conflictingRevisions.isEmpty())
+						return TaskUtils.DONE;
+					
+					return new InvocationHandler<RevisionJournal>(r.getRevisionJournal()) {
+						protected IResult onSuccess(RevisionJournal revisionJournal) {
+							if (revisionJournal.confictsWith(journal))
+								conflictingRevisions.add(r);
+							return TaskUtils.DONE;
+						}
+					};
+				}
+				
+			});
+		}
+		
+		return new Handler(validateActions) {
+			protected IResult onSuccess() {
+				if (!conflictingRevisions.isEmpty())
+					throw new ConflictingCommitException();
+			}
+		};
+	}
+
+	/**
+	 * @throws IOException
+	 * @throws ConflictingCommitException
+	 */
+	IResult<Void> commitRevision(final StorageSession storageSession) 
+	{
+		String sessionId= storageSession.getSessionId();
+		long revisionNumber= storageSession.getRevisionNumber();
+		final long startingCommit= storageSession.getStartingCommitNumber();
+		final IResult<RevisionFolder> revisionResult= _root.getRevisionFolder(revisionNumber);
+		final IResult<RevisionFolder> startRevisionResult= _root.getRevisionFolder(startingCommit);
+		return new Handler(revisionResult, startRevisionResult) {
+			protected IResult onSuccess() throws Exception {
+				final RevisionFolder revision= revisionResult.getResult();
+				final RevisionFolder startRevision= startRevisionResult.getResult();
+				
+				// write journal
+				final RevisionJournal journal= new RevisionJournal(revision, storageSession);
+				return new Handler(_entitySession.store(journal)) {
+					protected IResult onSuccess() {
+						
+					}
+				};
+			}
+		};
 		
 		// write journal
 		final RevisionJournal journal= new RevisionJournal(revision, storageSession);
@@ -430,10 +642,8 @@ public class StorageSystem {
 			return TaskUtils.TRUE;
 		if (_knownUncommittedRevisions.contains(revisionNumber))
 			return TaskUtils.FALSE;
-		final IResult<RevisionFolder> getRevisionFolder= _root.getRevisionFolder(revisionNumber);
-		return new Handler(getRevisionFolder) {
-			protected IResult onSuccess() throws Exception {
-				RevisionFolder folder= getRevisionFolder.getResult();
+		return new InvocationHandler<RevisionFolder>(_root.getRevisionFolder(revisionNumber)) {
+			protected IResult onSuccess(RevisionFolder folder) {
 				if (folder == null) { 
 					/*
 					 * Revision was committed and revision info has already been cleaned up.
@@ -446,7 +656,7 @@ public class StorageSystem {
 				}
 				return folder.isCommitted();
 			}
-		}.toResult();
+		};
 	}
 
 	void updateLastKnownDeletedRevision(long revisionNumber) {

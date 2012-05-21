@@ -4,10 +4,9 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
+import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.utils.Handler;
-import com.googlecode.contraildb.core.utils.Immediate;
 import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.WhileHandler;
@@ -30,11 +29,10 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 		filterCursors.toArray(_cursors);
 	}
 
-	@Override
-	@Immediate public T keyValue() {
-		if (_cursors.length <= 0)
-			throw new NoSuchElementException();
-		return _cursors[0].keyValue();
+	@Override public IResult<T> keyValue() {
+		if (0 < _cursors.length)
+			return _cursors[0].keyValue();
+		throw new NoSuchElementException();
 	}
 
 	@Override
@@ -80,10 +78,13 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 										}
 										
 										// if found value is ge than current value then save it
-										T t= cursor.keyValue();
-										if (KeyValueSet.compare((T)ge[0], t) < 0)
-											ge[0]= t;
-										return TaskUtils.DONE;
+										return new InvocationHandler<T>(cursor.keyValue()) {
+											protected IResult onSuccess(T keyValue) {
+												if (KeyValueSet.compare((T)ge[0], keyValue) < 0)
+													ge[0]= keyValue;
+												return TaskUtils.DONE;
+											}
+										};
 									}
 								};
 							}
@@ -157,5 +158,14 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 	@Override
 	public Direction getDirection() {
 		return Direction.FORWARD;
+	}
+
+	@Override
+	public IResult<Boolean> to(IResult<T> e) {
+		return new InvocationHandler<T>(e) {
+			protected IResult onSuccess(T results) {
+				return to(results);
+			}
+		};
 	}
 }

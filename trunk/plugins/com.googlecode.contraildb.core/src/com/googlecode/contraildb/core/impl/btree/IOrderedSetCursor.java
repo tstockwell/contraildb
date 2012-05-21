@@ -2,6 +2,7 @@ package com.googlecode.contraildb.core.impl.btree;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.utils.Immediate;
+import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 /**
@@ -14,6 +15,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  * @param <K> The types of elements in the tree, the keys.
  * @param <V> The types of values stored in the leaves of the tree
  */
+@SuppressWarnings("unchecked")
 public interface IOrderedSetCursor<K> {
 
 
@@ -30,19 +32,20 @@ public interface IOrderedSetCursor<K> {
 		public EmptyCursor(Direction d) { _direction= d; } 
 		public boolean after(K e) { return false; }
 		public boolean before(K e) { return false; }
-		public K keyValue() { return null; }
+		public IResult<K> keyValue() { return TaskUtils.NULL; }
 		public IResult<Boolean> first() { return TaskUtils.FALSE; }
 		public Direction getDirection() { return _direction; }
 		public IResult<Boolean> hasNext() { return TaskUtils.FALSE; }
 		public boolean last() { return false; }
 		public IResult<Boolean> next() { return TaskUtils.FALSE; }
 		public IResult<Boolean> to(K e) { return TaskUtils.FALSE; }
+		public IResult<Boolean> to(IResult<K> e) { return TaskUtils.FALSE; }
 	}
 	public class SingleValueCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 		private T _t;
-		private int _state= 0;
+		private int _state= 0; // 0 before value; 1 on value; 2 after value
 		public SingleValueCursor(T t) { _t= t;  }
-		public T keyValue() { return _t; }
+		public IResult<T> keyValue() { if (_state == 1) return TaskUtils.asResult(_t); return TaskUtils.NULL; }
 		public IResult<Boolean> first() { if (1 < _state) return TaskUtils.FALSE; _state= 1; return TaskUtils.TRUE; }
 		public Direction getDirection() { return Direction.FORWARD; }
 		public IResult<Boolean> hasNext() { return TaskUtils.asResult(_state == 0); }
@@ -65,6 +68,13 @@ public interface IOrderedSetCursor<K> {
 			}
 			return TaskUtils.FALSE;
 		}
+		public IResult<Boolean> to(IResult<T> result) {
+			return new InvocationHandler<T>(result) {
+				protected IResult<Boolean> onSuccess(T t) {
+					return to(t);
+				}
+			};
+		}
 	}
 
 	public static class EmptyForwardCursor<K> extends EmptyCursor<K> implements IForwardCursor<K> {
@@ -83,7 +93,7 @@ public interface IOrderedSetCursor<K> {
 	 * @return 
 	 * 	the value of the key associated with the current cursor position.
 	 */
-	 @Immediate K keyValue();
+	 IResult<K> keyValue();
 	
     /**
      * Moves the cursor to the next element.
@@ -100,6 +110,7 @@ public interface IOrderedSetCursor<K> {
      * 	<code>false</code> if there is no such element.
      */
     IResult<Boolean> to(K e);
+    IResult<Boolean> to(IResult<K> e);
 
     /**
      * Moves the cursor to the first element.

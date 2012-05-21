@@ -16,6 +16,7 @@ import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.impl.PathUtils;
+import com.googlecode.contraildb.core.storage.ObjectStorage.Session;
 import com.googlecode.contraildb.core.utils.ForEachHandler;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -62,8 +63,7 @@ public class StorageSession implements IEntityStorage.Session {
 	};
 	private boolean _isActive= true;
 	
-	public StorageSession(StorageSystem storageSystem, String sessionId, long revisionNumber, long startingCommitNumber, Mode mode) 
-	throws IOException 
+	public static IResult<StorageSession> create(final StorageSystem storageSystem, final String sessionId, final long revisionNumber, final long startingCommitNumber, final Mode mode) 
 	{
 		/*
 		 * Ok, I guess the next line requires some explanation (and of course if it requires so much explanation then 
@@ -73,7 +73,25 @@ public class StorageSession implements IEntityStorage.Session {
 		 * So... here I create an entity session from the StorageService's EntityStore and then use the EntitySession's 
 		 * embedded ObjectStore.Session. 
 		 */
-		_storage= ((EntityStorage.Session)((EntityStorage)storageSystem._entityStorage).connect())._objectSession;
+		return new Handler(((EntityStorage)storageSystem._entityStorage).connect()) {
+			protected IResult onSuccess() {
+				ObjectStorage.Session session= (Session) incoming().getResult();
+				return asResult(new StorageSession(session, storageSystem, sessionId, revisionNumber, startingCommitNumber, mode));
+			}
+			
+		};
+	}
+	private StorageSession(ObjectStorage.Session session, StorageSystem storageSystem, String sessionId, long revisionNumber, long startingCommitNumber, Mode mode) 
+	{
+		/*
+		 * Ok, I guess the next line requires some explanation (and of course if it requires so much explanation then 
+		 * it's not good code, but I'm not ready to clean this up)...
+		 * I need an ObjectStore session (cause this class needs to save entities under an ID other than the Entity's ID) 
+		 * but I also want all StorageSessions from the same StorageService to share the same cache.
+		 * So... here I create an entity session from the StorageService's EntityStore and then use the EntitySession's 
+		 * embedded ObjectStore.Session. 
+		 */
+		_storage= session;
 		_sessionId= sessionId;
 		_storageSystem= storageSystem;
 		_revisionNumber= revisionNumber;
