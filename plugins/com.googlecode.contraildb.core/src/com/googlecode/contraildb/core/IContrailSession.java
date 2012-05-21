@@ -72,6 +72,7 @@ public interface IContrailSession
 	public <E extends Item> IResult<E> fetch(Identifier path);
 	public <E extends Item> IResult<Collection<E>> fetch(Identifier... paths);
 	public <E extends Item> IResult<Collection<E>> fetch(Iterable<Identifier> paths);
+	public <E extends Item> IResult<E> fetch(IResult<Identifier> path);
 
 	public IResult<Collection<Identifier>> listChildren(Identifier path);
 	public IResult<Map<Identifier, Collection<Identifier>>> listChildren(Identifier... paths);

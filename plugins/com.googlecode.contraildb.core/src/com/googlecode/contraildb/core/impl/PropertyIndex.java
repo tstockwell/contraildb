@@ -5,13 +5,11 @@ import java.io.Serializable;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.impl.btree.BTree;
-import com.googlecode.contraildb.core.impl.btree.CursorImpl;
+import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
-import com.googlecode.contraildb.core.impl.btree.IKeyValueCursor;
-import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
+import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.Immediate;
@@ -70,9 +68,9 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 				// the key has a single value currently associated with it
 				// create a set index and add the two values
 				final Identifier setId= Identifier.create(__indexRoot);
-				return new InvocationHandler<BTree<Identifier>>(BTree.<Identifier>createInstance(_btree.getStorage(), setId)) {
-					protected IResult onSuccess(BTree<Identifier> result) throws Exception {
-						BTree<Identifier> set= result;
+				return new Handler(KeyValueSet.create(_btree.getStorage(), setId)) {
+					protected IResult onSuccess() throws Exception {
+						KeyValueSet set= (KeyValueSet) incoming().getResult();
 						spawn(set.insert(value));
 						spawn(set.insert(document));
 						spawn(_btree.insert(key, setId));

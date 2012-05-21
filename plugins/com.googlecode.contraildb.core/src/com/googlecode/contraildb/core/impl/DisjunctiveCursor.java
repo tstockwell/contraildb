@@ -6,8 +6,8 @@ import java.util.TreeSet;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
+import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 import com.googlecode.contraildb.core.utils.Handler;
 import com.googlecode.contraildb.core.utils.InvocationHandler;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -40,10 +40,10 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 	}
 
 	@Override
-	public T keyValue() {
+	public IResult<T> keyValue() {
 		if (_queue.isEmpty())
-			return null;
-		return _queue.first();
+			return TaskUtils.NULL;
+		return TaskUtils.asResult(_queue.first());
 	}
 
 	@Override
@@ -60,7 +60,12 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 				return new InvocationHandler<Boolean>(cursor.first()) {
 					protected IResult onSuccess(Boolean first) {
 						if (first) 
-							_queue.add(cursor.keyValue());
+							return new InvocationHandler<T>(cursor.keyValue()) {
+								protected IResult onSuccess(T keyValue) {
+									_queue.add(keyValue);
+									return TaskUtils.DONE;
+								}
+							};
 						return TaskUtils.DONE;
 					}
 				};
@@ -86,7 +91,12 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 				return new InvocationHandler<Boolean>(cursor.to(e)) {
 					protected IResult onSuccess(Boolean to) {
 						if (to) 
-							_queue.add(cursor.keyValue());
+							return new InvocationHandler<T>(cursor.keyValue()) {
+								protected IResult onSuccess(T keyValue) {
+									_queue.add(keyValue);
+									return TaskUtils.DONE;
+								}
+							};
 						return TaskUtils.DONE;
 					}
 				};
@@ -122,7 +132,12 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 				return new InvocationHandler<Boolean>(cursor.next()) {
 					protected IResult onSuccess(Boolean next) {
 						if (next) 
-							_queue.add(cursor.keyValue());
+							return new InvocationHandler<T>(cursor.keyValue()) {
+								protected IResult onSuccess(T keyValue) {
+									_queue.add(keyValue);
+									return TaskUtils.DONE;
+								}
+							};
 						return TaskUtils.DONE;
 					}
 				};
@@ -155,7 +170,12 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 				return new InvocationHandler<Boolean>(cursor.next()) {
 					protected IResult onSuccess(Boolean next) {
 						if (next) 
-							_queue.add(cursor.keyValue());
+							return new InvocationHandler<T>(cursor.keyValue()) {
+								protected IResult onSuccess(T keyValue) {
+									_queue.add(keyValue);
+									return TaskUtils.DONE;
+								}
+							};
 						return TaskUtils.DONE;
 					}
 				};
@@ -172,6 +192,16 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 	@Override
 	public Direction getDirection() {
 		return Direction.FORWARD;
+	}
+
+
+	@Override
+	public IResult<Boolean> to(IResult<T> e) {
+		return new InvocationHandler<T>(e) {
+			protected IResult onSuccess(T results) {
+				return to(results);
+			}
+		};
 	}
 
 }

@@ -76,8 +76,8 @@ implements IKeyValueCursor<T,V> {
 	}
 
 	@Override 
-	@Immediate public T keyValue() {
-		return _page._keys[_index];
+	@Immediate public IResult<T> keyValue() {
+		return TaskUtils.asResult(_page._keys[_index]);
 	}
 	protected IResult<Boolean> previous() {
 		IResult<Void> init= TaskUtils.DONE;
@@ -141,10 +141,13 @@ implements IKeyValueCursor<T,V> {
 		return new InvocationHandler<Boolean>(ge(e)) {
 			protected IResult onSuccess(Boolean ge) throws Exception {
 				if (ge) {
-					T t= keyValue();
-					if (KeyValueSet.compare(t, e) == 0)
-						return TaskUtils.TRUE;
-					return previous();
+					return new InvocationHandler<T>(keyValue()) {
+						protected IResult onSuccess(T keyValue) throws Exception {
+							if (KeyValueSet.compare(keyValue, e) == 0)
+								return TaskUtils.TRUE;
+							return previous();
+						}
+					};
 				}
 				return last();
 			}
@@ -293,12 +296,24 @@ implements IKeyValueCursor<T,V> {
 					protected IResult onSuccess(Boolean to) throws Exception {
 						if (!to)
 							return TaskUtils.NULL;
-						T k= keyValue();
-						if (KeyValueSet.compare(key, k) != 0)
-							return TaskUtils.NULL;
-						return asResult(elementValue());
+						return new InvocationHandler<T>(keyValue()) {
+							protected IResult onSuccess(T keyValue) throws Exception {
+								if (KeyValueSet.compare(key, keyValue) != 0)
+									return TaskUtils.NULL;
+								return asResult(elementValue());
+							}
+						};
 					}
 				};
+			}
+		};
+	}
+
+	@Override
+	public IResult<Boolean> to(IResult<T> e) {
+		return new InvocationHandler<T>(e) {
+			protected IResult onSuccess(T t) {
+				return to(t);
 			}
 		};
 	}

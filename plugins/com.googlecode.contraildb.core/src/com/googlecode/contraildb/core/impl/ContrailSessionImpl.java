@@ -31,7 +31,6 @@ import com.googlecode.contraildb.core.ContrailQuery;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
-import com.googlecode.contraildb.core.IProcessor;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
@@ -283,10 +282,10 @@ implements IContrailSession
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
 
-				ArrayList<IResult> stores= new ArrayList<IResult>();
+				ArrayList<IResult> tasks= new ArrayList<IResult>();
 				for (T t:entities)
-					stores.add(_storageSession.store(t));
-				return new Handler(combineResults(stores)) {
+					tasks.add(_storageSession.store(t));
+				return new Handler(combineResults(tasks)) {
 					protected IResult onSuccess() throws Exception {
 						return _searcher.index(entities);
 					}
@@ -488,7 +487,15 @@ implements IContrailSession
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
-				return _searcher.fetchIdentifiers(query, processor);
+				return _searcher.fetchIdentifiers(query);
+			}
+		};
+	}
+
+	public <E extends Item> IResult<E> fetch(IResult<Identifier> result) {
+		return new InvocationHandler<Identifier>(result) {
+			protected IResult onSuccess(Identifier path) {
+				return fetch(path);
 			}
 		};
 	}

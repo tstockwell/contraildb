@@ -2,6 +2,8 @@ package com.googlecode.contraildb.core;
 
 import java.util.List;
 
+import com.googlecode.contraildb.core.utils.IAsyncerator;
+
 public interface IPreparedQuery<T extends Item>  {
 	
 	/**
@@ -14,13 +16,13 @@ public interface IPreparedQuery<T extends Item>  {
 	 * This method is the fastest way to retrieve some results 
 	 * since you dont have to wait for all the results. 
 	 */
-	public IResult<IProcessor<Identifier>> identifiers(FetchOptions fetchOptions);
+	public IResult<IAsyncerator<Identifier>> identifiers(FetchOptions fetchOptions);
 	/**
 	 * An asynchronous method for getting values.
 	 * This method is the fastest way to retrieve some results 
 	 * since you dont have to wait for all the results. 
 	 */
-	public IResult<IProcessor<T>> iterate(FetchOptions fetchOptions);
+	public IResult<IAsyncerator<T>> iterate(FetchOptions fetchOptions);
 
 	/**
 	 * A convenience method for getting results.
