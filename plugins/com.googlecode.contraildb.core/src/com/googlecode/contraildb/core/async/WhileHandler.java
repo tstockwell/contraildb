@@ -2,6 +2,14 @@ package com.googlecode.contraildb.core.async;
 
 import com.googlecode.contraildb.core.IResult;
 
+/**
+ * Repeatedly calls the While() method, invokes the Do() method until 
+ * While() returns false.
+ * 
+ * The Init() method is is invoked once, before the first call to While().
+ *  
+ * @author ted.stockwell
+ */
 @SuppressWarnings({"rawtypes","unchecked"})
 abstract public class WhileHandler extends Handler {
 	

@@ -144,7 +144,7 @@ implements IContrailSession
 				
 				return asResult(new PreparedQueryImpl<T>(_service, ContrailSessionImpl.this, query));
 			}
-		};
+		}.run();
 	}
 
 //	public <T extends Item> Iterable<T> search(ContrailQuery query) throws IOException {
@@ -166,7 +166,7 @@ implements IContrailSession
 					}
 				};
 			}
-		};
+		}.run();
 	}
 
 	@Override
@@ -198,7 +198,7 @@ implements IContrailSession
 					throw new SessionAlreadyClosedException();
 				return StorageUtils.fetchAll(_storageSession, paths);
 			}
-		};
+		}.run();
 	}
 
 	@Override
@@ -225,18 +225,18 @@ implements IContrailSession
 					}
 				};
 			}
-		};
+		}.run();
 	}
 
 	public IResult<Void> flush() {
 		return new Handler() {
-			protected IResult onSuccess() throws Exception {
+			protected IResult onSuccess() {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
 				
 				return _storageSession.flush();
 			}
-		};
+		}.run();
 	}
 
 	@Override
@@ -272,12 +272,12 @@ implements IContrailSession
 					}
 				};
 			}
-		};
+		}.run();
 	}
 
 	@Override
 	public <T extends Item> IResult<Void> store(final Iterable<T> entities) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();
@@ -451,7 +451,7 @@ implements IContrailSession
 			protected IResult onSuccess() throws Exception {
 				throw new UnsupportedOperationException();
 			}
-		};
+		}.run();
 	}
 
 	@Override
@@ -483,7 +483,7 @@ implements IContrailSession
 	}
 
 	public IResult<IAsyncerator<Identifier>> iterate(final ContrailQuery query) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (_storageSession == null)
 					throw new SessionAlreadyClosedException();

@@ -26,11 +26,14 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 		// do nothing
 		// incoming task needs to be set with handleResult method
 	}
-	public Handler(IResult... tasks) {
-		this((IResult<I>)TaskUtils.combineResults(tasks));
-	}
+//	public Handler(IResult... tasks) {
+//		this((IResult<I>)TaskUtils.combineResults(tasks));
+//	}
 	public Handler(Collection<IResult> tasks) {
 		this((IResult<I>)TaskUtils.combineResults(tasks));
+	}
+	public Handler(IResult result, IResult... moreResults) {
+		this((IResult<I>)TaskUtils.combineResults(result, moreResults));
 	}
 	public Handler(I value) {
 		this(TaskUtils.asResult(value));
@@ -52,7 +55,9 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 
 	@Override
 	final public void onComplete(IResult<I> result) throws Exception {
-		_incoming= result;
+		_onComplete(result);
+	}
+	protected void _onComplete(IResult<I> result) {
 		try {
 			onComplete();
 			
@@ -67,9 +72,8 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 								return lastly;
 							}
 						};
-					pending.addHandler(new Handler() {
-						public void onComplete() {
-							IResult result= incoming();
+					pending.addHandler(new IResultHandler() {
+						public void onComplete(IResult result) {
 							if (result.isSuccess()) {
 								_outgoing.success(retval.getResult());
 							}
@@ -145,6 +149,17 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	public Result<O> toResult() {
 		return _outgoing;
 	}
+	
+	
+	/**
+	 * If a handler represents a 'top-level' task, and has no incoming result, 
+	 * then it can be executed using this method. 
+	 */
+	public IResult<O> run() {
+		handleResult(TaskUtils.DONE); // this causes the block's onSuccess method to be invoked
+		return outgoing();
+	}
+	
 
 	
 	/////////////////////

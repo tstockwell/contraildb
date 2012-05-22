@@ -140,7 +140,7 @@ public class StorageCleanupAction {
 	}
 	
 	private IResult<Void> cleanupAndDeleteRevision(final RevisionFolder revision, final String sessionId) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 
 					spawn(cleanupFiles(revision));
