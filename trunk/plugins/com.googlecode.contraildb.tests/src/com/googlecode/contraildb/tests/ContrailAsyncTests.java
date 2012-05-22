@@ -17,12 +17,12 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
+import junit.framework.TestCase;
+
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.async.Block;
 import com.googlecode.contraildb.core.async.Series;
 import com.googlecode.contraildb.core.async.TaskUtils;
-
-import junit.framework.TestCase;
 
 
 /**
@@ -39,6 +39,32 @@ public class ContrailAsyncTests extends TestCase {
 	@SuppressWarnings("rawtypes")
 	public void testSeries() {
 		final String[] result= new String[] { "" };
+		Series series= new Series(
+			new Block() {
+				protected IResult onSuccess() {
+					result[0]+= "1";
+					return TaskUtils.DONE;
+				}
+			},
+			new Block() {
+				protected IResult onSuccess() {
+					result[0]+= "2";
+					return TaskUtils.DONE;
+				}
+			},
+			new Block() {
+				protected IResult onSuccess() {
+					result[0]+= "3";
+					return TaskUtils.DONE;
+				}
+			});
+		series.run().get();
+		assertEquals("123", result[0]);
+	}
+	
+	public void testWhile() {
+		final String[] result= new String[] { "" };
+		While
 		Series series= new Series(
 			new Block() {
 				protected IResult onSuccess() {

@@ -12,7 +12,10 @@ import java.util.Map;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.Action;
 import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.If;
+import com.googlecode.contraildb.core.async.Series;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
@@ -114,19 +117,24 @@ public class ObjectStorage {
 			
 			_cache.store(identifier, item);
 			
-			return new Handler() {
-				protected IResult onSuccess() throws Exception {
-					if (lifecycle != null)
-						spawn(lifecycle.onInsert(identifier));
-					spawn(_storageSession.store(identifier, serializeTask));
-					return TaskUtils.DONE;
-				}
-			}.toResult();
+			return new Series(
+					new If(lifecycle != null) {
+						protected IResult onSuccess() {
+							return lifecycle.onInsert(identifier);
+						}
+					},
+					new Action() {
+						protected IResult onSuccess() {
+							return _storageSession.store(identifier, serializeTask);
+						}
+					}).run();
 		}
 
 		public IResult<Void> delete(final Identifier path) {
 			return new Handler(fetch(path)) {
 				protected IResult onSuccess() throws IOException {
+					return new Parallel(
+					)
 
 					spawn(new Handler(_storageSession.delete(path)) {
 						protected IResult onSuccess() throws IOException {
@@ -141,7 +149,7 @@ public class ObjectStorage {
 					
 					return null;
 				}
-			}.toResult();
+			};
 		}
 
 		public <T extends Serializable> IResult<T> fetch(final Identifier path) 

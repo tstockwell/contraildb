@@ -35,6 +35,7 @@ import com.googlecode.contraildb.core.impl.btree.IKeyValueCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor;
 import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
 import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
+import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 
 
@@ -143,11 +144,9 @@ public class IndexSearcher {
 	private IResult<PropertyIndex> createPropertyIndex(String propertyName) 
 	{
 		Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+propertyName);
-		final IResult<KeyValueSet> fetchTree= _storageSession.fetch(indexId);
-		return new Handler() {
-			protected IResult onSuccess() throws Exception {
-				KeyValueSet tree= fetchTree.getResult();
-				return asResult(new PropertyIndex(tree));
+		return new ResultHandler<IEntity>(_storageSession.fetch(indexId)) {
+			protected IResult onSuccess(IEntity tree) throws Exception {
+				return asResult(new PropertyIndex((KeyValueSet)tree));
 			}
 		};
 	}

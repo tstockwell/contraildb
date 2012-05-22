@@ -172,7 +172,7 @@ public class StorageSession implements IEntityStorage.Session {
 
 
 	public <E extends IEntity> IResult<Void> store(final E entity) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Session is read only: "+_revisionNumber);
@@ -194,7 +194,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 	
 	public IResult<Void> update(final Identifier path, final IEntity item) throws IOException {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
@@ -211,7 +211,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 	
 	public IResult<Void> deleteAllChildren(final Collection<Identifier> paths) throws IOException {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
@@ -236,7 +236,7 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 	public IResult<Void> delete(final Identifier  path) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);
@@ -384,7 +384,7 @@ public class StorageSession implements IEntityStorage.Session {
 
 	@Override
 	public <E extends IEntity> IResult<Boolean> create(E entity, long waitMillis) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() {
 				throw new UnsupportedOperationException();
 			}
@@ -393,7 +393,7 @@ public class StorageSession implements IEntityStorage.Session {
 
 	@Override
 	public IResult<Void> deleteAllChildren(final Identifier path) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (_mode == Mode.READONLY)
 					throw new ContrailException("Revision is read only: "+_revisionNumber);

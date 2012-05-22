@@ -221,7 +221,7 @@ public class StorageSystem {
 				return TaskUtils.DONE;
 			}
 		};
-		return new Handler(addSession, revisionFolder) {
+		return new Handler(TaskUtils.combineResults(addSession, revisionFolder)) {
 			protected void onComplete() throws Exception {
 				RevisionFolder revision= revisionFolder.getResult();
 				spawn(new Handler(revision.unlock(sessionId)) {
@@ -404,7 +404,7 @@ public class StorageSystem {
 			
 			@OnComplete("UnlockRoot")
 			protected IResult DoCommit() {
-				return new Handler() {
+				return new Action() {
 					List<RevisionFolder> revisions;
 					long lastCommitNumber;
 					
@@ -486,7 +486,7 @@ public class StorageSystem {
 				try { Logging.info("Committed session "+storageSession); } catch (Throwable t) { }
 				fork(new StorageCleanupAction(this));
 			}
-		};
+		}.run();
 		String sessionId= storageSession.getSessionId();
 		long revisionNumber= storageSession.getRevisionNumber();
 		final long startingCommit= storageSession.getStartingCommitNumber();

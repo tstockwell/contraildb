@@ -67,7 +67,7 @@ public class IdentifierCursorAdaptor implements IForwardCursor<Identifier> {
 
 	@Override
 	public IResult<Boolean> to(final Identifier e) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				throw new UnsupportedOperationException("This operation is not supported");
 			}

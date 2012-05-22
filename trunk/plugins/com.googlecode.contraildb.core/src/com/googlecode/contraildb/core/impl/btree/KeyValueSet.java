@@ -233,7 +233,7 @@ implements IKeyValueSet<T,V>
 	 * Remove an entry with the given key from the BTree.
 	 */
 	public synchronized IResult<Void> remove(final T key) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				if (key == null) 
 					throw new IllegalArgumentException("Argument 'key' is null");
@@ -297,7 +297,7 @@ implements IKeyValueSet<T,V>
 			}
 			@Override
 			public IResult<Void> remove() {
-				return new Handler() {
+				return new Action() {
 					protected IResult onSuccess() throws Exception {
 						throw new UnsupportedOperationException();
 					}

@@ -89,7 +89,7 @@ implements Cloneable
 	 * @return new right sibling node if the key was inserted and provoked an overflow.
 	 */
 	public IResult<Node<K>> insert(final K key, final Object value) {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				final int index = indexOf(key);
 				IResult<Node<K>> overflow= TaskUtils.NULL;
@@ -128,7 +128,7 @@ implements Cloneable
 	 * @throws IOException 
 	 */
 	IResult<Node<K>> split() throws IOException {
-		return new Handler() {
+		return new Action() {
 			protected IResult onSuccess() throws Exception {
 				int half = _index._pageSize >> 1;
 				final Node<K> overflow= new Node<K>(_index); // clone this node

@@ -1,5 +1,6 @@
 package com.googlecode.contraildb.core.async;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -17,6 +18,11 @@ public class TaskUtils {
 	public static final IResult<Boolean> FALSE= asResult(false); 
 	public static final IResult NULL= asResult(null); 
 	
+	public static final <T> IResult<T> run(Handler<?,T> handler) {
+		handler.handleResult(DONE);
+		return handler.outgoing();
+	}
+	
 	
 	
 	/**
@@ -29,9 +35,8 @@ public class TaskUtils {
 		final Result<Void> result= new Result<Void>();
 		final int[] count= new int[] { tasks.size() };
 		final IResult[] error= new IResult[] { null };
-		IResultHandler handler= new Handler() {
-			synchronized public void onComplete() {
-				IResult r= incoming();
+		IResultHandler handler= new IResultHandler() {
+			public void onComplete(IResult r) throws Exception {
 				if (!r.isSuccess()) {
 					error[0]= r;
 				}
@@ -49,12 +54,12 @@ public class TaskUtils {
 		}
 		return result;
 	} 
-	public static final <T extends IResult<?>> IResult<Void> combineResults(T... tasks) {
-		if (tasks == null || tasks.length <= 0)
-			return DONE;
-		if (tasks.length <= 1)
-			return (IResult<Void>) tasks[0];
-		return combineResults(Arrays.asList(tasks));
+	public static final <T extends IResult<?>> IResult<Void> combineResults(T task, T... moreTasks) {
+		if (moreTasks.length <= 0)
+			return (IResult<Void>) task;
+		ArrayList<T> list= new ArrayList<T>(Arrays.asList(moreTasks));
+		list.add(task);
+		return combineResults(list);
 	} 
 
 	public static final <T extends Throwable> void throwSomething(Throwable t, Class<T> type) throws T {
