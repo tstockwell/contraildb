@@ -123,7 +123,7 @@ public class ObjectStorage {
 							return lifecycle.onInsert(identifier);
 						}
 					},
-					new Action() {
+					new Handler() {
 						protected IResult onSuccess() {
 							return _storageSession.store(identifier, serializeTask);
 						}

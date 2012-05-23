@@ -20,9 +20,11 @@ package com.googlecode.contraildb.tests;
 import junit.framework.TestCase;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.async.Block;
+import com.googlecode.contraildb.core.async.Handler;
 import com.googlecode.contraildb.core.async.Series;
 import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.async.TryFinally;
+import com.googlecode.contraildb.core.async.WhileHandler;
 
 
 /**
@@ -30,61 +32,71 @@ import com.googlecode.contraildb.core.async.TaskUtils;
  * 
  * @author Ted Stockwell
  */
+@SuppressWarnings("rawtypes")
 public class ContrailAsyncTests extends TestCase {
 	
 	/**
 	 * A simple test to make sure that tasks get run sequentially by the Series 
 	 * class.
 	 */
-	@SuppressWarnings("rawtypes")
 	public void testSeries() {
 		final String[] result= new String[] { "" };
 		Series series= new Series(
-			new Block() {
+			new Handler() {
 				protected IResult onSuccess() {
 					result[0]+= "1";
 					return TaskUtils.DONE;
 				}
 			},
-			new Block() {
+			new Handler() {
 				protected IResult onSuccess() {
 					result[0]+= "2";
 					return TaskUtils.DONE;
 				}
 			},
-			new Block() {
+			new Handler() {
 				protected IResult onSuccess() {
 					result[0]+= "3";
 					return TaskUtils.DONE;
 				}
 			});
-		series.run().get();
+		series.get();
 		assertEquals("123", result[0]);
 	}
 	
 	public void testWhile() {
 		final String[] result= new String[] { "" };
-		While
-		Series series= new Series(
-			new Block() {
-				protected IResult onSuccess() {
-					result[0]+= "1";
-					return TaskUtils.DONE;
-				}
-			},
-			new Block() {
-				protected IResult onSuccess() {
-					result[0]+= "2";
-					return TaskUtils.DONE;
-				}
-			},
-			new Block() {
-				protected IResult onSuccess() {
-					result[0]+= "3";
-					return TaskUtils.DONE;
-				}
-			});
-		series.run().get();
-		assertEquals("123", result[0]);
+		WhileHandler wile= new WhileHandler() {
+			int i= 10;
+			protected IResult<Boolean> While() throws Exception {
+				return TaskUtils.asResult(0 < i--);
+			}
+			
+			protected IResult<Void> Do() throws Exception {
+				result[0]+= i;
+				return TaskUtils.DONE;
+			}
+		};
+		wile.get();
+		assertEquals("9876543210", result[0]);
+	}
+	
+	public void testTryFinally() {
+		final String[] result= new String[] { "" };
+		TryFinally handler= new TryFinally() {
+			protected IResult doTry() throws Exception {
+				result[0]+= "try";
+				throw new RuntimeException("some error");
+			}
+			
+			@Override
+			protected IResult doFinally() throws Exception {
+				result[0]+= "-finally";
+				return TaskUtils.DONE;
+			}
+		};
+		handler.get();
+		assertEquals("try-finally", result[0]);
+		assertFalse(handler.isSuccess());
 	}
 }
