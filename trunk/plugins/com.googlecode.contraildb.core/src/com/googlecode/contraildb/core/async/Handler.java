@@ -15,7 +15,16 @@ import com.googlecode.contraildb.core.utils.Logging;
 public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 
 	IResult<I> _incoming;
-	Result<O> _outgoing= new Result();
+	Result<O> _outgoing= new Result() {
+		public synchronized Object getResult() {
+			checkForHandler();
+			return super.getResult();
+		};
+		public synchronized Object get() {
+			checkForHandler();
+			return super.get();
+		};
+	};
 	ArrayList<IResult> _pending= new ArrayList<IResult>(); 
 	
 	public Handler(IResult<I> task) {
@@ -150,17 +159,20 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 		return _outgoing;
 	}
 	
-	
 	/**
-	 * If a handler represents a 'top-level' task, and has no incoming result, 
-	 * then it can be executed using this method. 
+	 * If this handler was not created with an incoming result 
+	 * and it has been exposed to dependencies then we assume that 
+	 * this handler should now be run by adding a default incoming result. 
+	 * 
+	 * This check was added as a convenience in order to avoid always having to 
+	 * explicity calling some kind of 'run' method on top-level handlers.
+	 * It makes code a little easier to read/write.
+	 * 
 	 */
-	public IResult<O> run() {
-		handleResult(TaskUtils.DONE); // this causes the block's onSuccess method to be invoked
-		return outgoing();
+	protected void checkForHandler() {
+		if (!_outgoing.isDone() && !_outgoing.hasHandlers())
+			handleResult(TaskUtils.DONE);
 	}
-	
-
 	
 	/////////////////////
 	//

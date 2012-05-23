@@ -9,21 +9,18 @@ import com.googlecode.contraildb.core.IResult;
  *
  */
 @SuppressWarnings({"rawtypes","unchecked"})
-abstract public class TryFinally extends Block {
+abstract public class TryFinally<T> extends Handler<Void,T> {
 	
 	@Override
 	final protected IResult onSuccess() throws Exception {
 		try {
-			IResult result= doTry();
-			((Result)incoming()).complete(result);
+			return doTry();
 		}
-		catch (Exception x) {
-			
+		finally {
+			doFinally();
 		}
-			// TODO Auto-generated method stub
-			return super.onSuccess();
 	}
 	
-	abstract protected IResult doTry() throws Exception;
-	abstract protected IResult doFinally() throws Exception;
+	abstract protected IResult<T> doTry() throws Exception;
+	abstract protected IResult<T> doFinally() throws Exception;
 }

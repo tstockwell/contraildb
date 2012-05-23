@@ -147,5 +147,9 @@ public class Result<V> implements IResult<V>{
 	public boolean isCancelled() {
 		return _cancelled;
 	}
+	
+	public boolean hasHandlers() {
+		return _completedHandlers != null && !_completedHandlers.isEmpty();
+	}
 
 }
