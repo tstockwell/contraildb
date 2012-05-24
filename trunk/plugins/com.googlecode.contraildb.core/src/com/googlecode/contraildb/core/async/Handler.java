@@ -24,6 +24,18 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 			checkForHandler();
 			return super.get();
 		};
+		public synchronized void join() {
+			checkForHandler();
+			super.join();
+		};
+		public synchronized Throwable getError() {
+			checkForHandler();
+			return super.getError();
+		}
+		public synchronized boolean isSuccess() {
+			checkForHandler();
+			return super.isSuccess();
+		}
 	};
 	ArrayList<IResult> _pending= new ArrayList<IResult>(); 
 	
@@ -165,12 +177,14 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	 * this handler should now be run by adding a default incoming result. 
 	 * 
 	 * This check was added as a convenience in order to avoid always having to 
-	 * explicity calling some kind of 'run' method on top-level handlers.
-	 * It makes code a little easier to read/write.
+	 * explicitly calling some kind of 'run' method on top-level handlers.
+	 * It makes most code a little easier to read/write.
+	 * Unfortunately it makes the process of starting top-level handlers 
+	 * somewhat cryptic.
 	 * 
 	 */
 	protected void checkForHandler() {
-		if (!_outgoing.isDone() && !_outgoing.hasHandlers())
+		if (_incoming == null && !_outgoing.isDone() && !_outgoing.hasHandlers())
 			handleResult(TaskUtils.DONE);
 	}
 	
@@ -195,6 +209,9 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
     }
     public O get() {
     	return _outgoing.get();
+    }
+    public void join() {
+    	_outgoing.join();
     }
 	public void addHandler(IResultHandler<O> handler) {
 		_outgoing.addHandler(handler);

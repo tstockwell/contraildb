@@ -12,9 +12,12 @@ import java.util.Map;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.async.Action;
+import com.googlecode.contraildb.core.async.Activity;
 import com.googlecode.contraildb.core.async.Handler;
 import com.googlecode.contraildb.core.async.If;
+import com.googlecode.contraildb.core.async.Parallel;
 import com.googlecode.contraildb.core.async.Series;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
@@ -80,13 +83,13 @@ public class ObjectStorage {
 	}
 	
 	public IResult<Session> connect(final EntityStorage.Session entitySession) {
-		return new Handler(_storageProvider.connect()) {
-			protected IResult onSuccess() throws Exception {
+		return new Series(_storageProvider.connect()) {
+			IResult start() {
 				IStorageProvider.Session session= (IStorageProvider.Session) incoming().getResult();
 				return TaskUtils.asResult(
 						new Session(_tracker.beginSession(), session, entitySession));
-			};
-		}.toResult();
+			}
+		};
 	}
 	public IStorageProvider getStorageProvider() {
 		return _storageProvider;
@@ -119,7 +122,7 @@ public class ObjectStorage {
 			
 			return new Series(
 					new If(lifecycle != null) {
-						protected IResult onSuccess() {
+						protected IResult onTrue() {
 							return lifecycle.onInsert(identifier);
 						}
 					},
@@ -127,27 +130,40 @@ public class ObjectStorage {
 						protected IResult onSuccess() {
 							return _storageSession.store(identifier, serializeTask);
 						}
-					}).run();
+					});
 		}
 
 		public IResult<Void> delete(final Identifier path) {
-			return new Handler(fetch(path)) {
-				protected IResult onSuccess() throws IOException {
-					return new Parallel(
-					)
+			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
+			return new Series(_trackerSession.queue(path, )) {
+				Item item;
 
-					spawn(new Handler(_storageSession.delete(path)) {
-						protected IResult onSuccess() throws IOException {
-							_cache.delete(path);
-							return null;
+				IResult fetchThenSave() {
+					return fetch(path);
+				}
+				void saveItemThenDoDel() {
+					item= (Item) incoming().getResult();
+				}
+				IResult doDelete() {
+					return new Parallel() {
+						IResult start() {
+							return new Series() {
+								IResult start() {
+									_storageSession.delete(path);
+								}
+								IResult clearCache() {
+									_cache.delete(path);
+								}
+							};
 						}
-					});
-
-					Object item= incoming().getResult();
-					if (item instanceof ILifecycle) 
-						spawn(((ILifecycle)item).onDelete());
-					
-					return null;
+						IResult lifecycle() {
+							return new If(item instanceof ILifecycle) {
+								IResult ifTrue() {
+									return ((ILifecycle)item).onDelete();
+								}
+							};
+						}
+					};
 				}
 			};
 		}

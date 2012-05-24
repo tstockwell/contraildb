@@ -342,7 +342,6 @@ public class StorageSystem {
 
 
 	IResult<Void> commitRevision(final StorageSession storageSession) 
-	throws IOException, ConflictingCommitException 
 	{
 		return new Handler() {
 			String sessionId= storageSession.getSessionId();
@@ -354,7 +353,7 @@ public class StorageSystem {
 			
 			protected IResult onSuccess() {
 				return new Series(
-					new Block() { // init
+					new Handler() { // init
 						protected IResult onSuccess() {
 							final IResult getRevisionFolder= _root.getRevisionFolder(revisionNumber);
 							final IResult getStartRevision= _root.getRevisionFolder(startingCommit);
@@ -366,7 +365,7 @@ public class StorageSystem {
 							};
 						}
 					},
-					new Block() { // write journal
+					new Handler() { // write journal
 						protected IResult onSuccess() {
 							journal= new RevisionJournal(revision, storageSession);
 							return _entitySession.store(journal);
@@ -384,13 +383,13 @@ public class StorageSystem {
 						
 						protected IResult doFinally() {
 							return new Series(
-								new Block() {
+								new Handler() {
 									protected IResult onSuccess() {
 										_activeSessions.remove(storageSession);
 										return _root.unlock(sessionId);
 									}
 								},
-								new Block() {
+								new Handler() {
 									protected IResult onSuccess() {
 										try { Logging.info("Committed session "+storageSession); } catch (Throwable t) { }
 										fork(new StorageCleanupAction(this));

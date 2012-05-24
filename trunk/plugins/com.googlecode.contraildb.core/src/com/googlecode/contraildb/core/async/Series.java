@@ -23,20 +23,26 @@ public class Series extends Handler {
 	// the input to the first handler in series
 	Result _result= new Result();
 
-	public Series(Handler<?,?>... handlers) {
-		_handlers= handlers;
+	public Series() {
 		
-		// connect all handlers but the first one in series
-		for (int i= 1; i < _handlers.length; i++) {
-			_handlers[i].handleResult(_handlers[i-1]);
-		}
-		
-		// connect first handler to internal result which will completed
-		// when this handler is completed, thus firing off the first handler.
-		if (0 < _handlers.length) {
-			_handlers[0].handleResult(_result);
-		}
 	}
+	public Series(IResult result) {
+		
+	}
+//	public Series(Handler<?,?>... handlers) {
+//		_handlers= handlers;
+//		
+//		// connect all handlers but the first one in series
+//		for (int i= 1; i < _handlers.length; i++) {
+//			_handlers[i].handleResult(_handlers[i-1]);
+//		}
+//		
+//		// connect first handler to internal result which will completed
+//		// when this handler is completed, thus firing off the first handler.
+//		if (0 < _handlers.length) {
+//			_handlers[0].handleResult(_result);
+//		}
+//	}
 	
 	@Override
 	protected IResult onSuccess() throws Exception {
@@ -51,5 +57,9 @@ public class Series extends Handler {
 		// no handlers in series, we're done.
 		_outgoing.success(null);
 		return TaskUtils.DONE;
+	}
+	
+	protected void run(IResult handler) {
+		
 	}
 }

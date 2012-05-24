@@ -17,6 +17,7 @@ public class TaskUtils {
 	public static final IResult<Boolean> TRUE= asResult(true); 
 	public static final IResult<Boolean> FALSE= asResult(false); 
 	public static final IResult NULL= asResult(null); 
+	public static final <T> IResult<T> NULL() { return NULL; } 
 	
 	public static final <T> IResult<T> run(Handler<?,T> handler) {
 		handler.handleResult(DONE);
@@ -130,6 +131,9 @@ public class TaskUtils {
 		return new IResult<X>() {
 			public X get() {
 				return bs;
+			}
+			public void join() {
+				// do nothing
 			}
 			public boolean isDone() {
 				return true;
