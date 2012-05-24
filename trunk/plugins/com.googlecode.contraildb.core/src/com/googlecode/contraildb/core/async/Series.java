@@ -1,22 +1,71 @@
 package com.googlecode.contraildb.core.async;
 
+import java.util.HashMap;
+
 import com.googlecode.contraildb.core.IResult;
+import com.googlecode.contraildb.core.Item;
+import com.googlecode.contraildb.core.storage.ILifecycle;
 
 
 
 /**
- * Executes handlers sequentially.
- * The result returned from the Handler.onSuccess method will be the result 
- * returned from the last handler.
+ * This class uses reflection to look at its methods, which create 
+ * Handlers and return Results, and execute the handlers sequentially.
  * 
- * If an error occurs in any of the handlers the onError method is invoked.
- * The onError method is meant to be overwritten by subclasses.
+ * The order of the execution is determined by inspecting method names.
+ * For instance, a method named start will be become the first method to 
+ * execute.  Method names should end with the word 'Then' and then enough
+ * of the name of the next method to execute that the next method can be 
+ * determined.
+ * An example...
+ * 
+ *    			Handler hander= new Series(inputResult) {
+ *    				Item item;
+ *    
+ *    				IResult fetchThenSave() {
+ *    					return fetch(path);
+ *    				}
+ *    				void saveItemThenDoDel() {
+ *    					item= (Item) incoming().getResult();
+ *    				}
+ *    				IResult doDelete() {
+ *    					return new Parallel() {
+ *    						IResult delete() {
+ *    							_storageSession.delete(path);
+ *    						}
+ *    						IResult clearCache() {
+ *    							_cache.delete(path);
+ *    						}
+ *    					};
+ *    				}
+ *    			};
+ *    
+ * The above handler will run the handlers returned from fetchThenSave,
+ * saveItemThenDoDel, and doDelete in that order.
+ * Notice that each method ends with the prefix of the name of the next 
+ * method to run.
+ * 
+ * A method may return a Result and that result will become the input 
+ * to the handler created for the next method.
+ * A method may return void, in which case a Result<Void> will be the 
+ * input the next handler.  
+ *     
+ * The result of a Series handler is the result returned from the last
+ * executed handler.
+ * 
+ * If an error occurs in any of the handlers then the the Series handler
+ * will return an error result.
  * 
  * @author ted.stockwell
+ * 
+ * @see Parallel
  *
  */
 @SuppressWarnings({"rawtypes","unchecked"})
 public class Series extends Handler {
+	
+	private static HashMap<Class, Handler[]> _handlersByClass= 
+			new HashMap<Class, Handler[]>();
 	
 	Handler[] _handlers;
 	
@@ -43,6 +92,11 @@ public class Series extends Handler {
 //			_handlers[0].handleResult(_result);
 //		}
 //	}
+	
+	private void createHandlers() {
+		
+	}
+	
 	
 	@Override
 	protected IResult onSuccess() throws Exception {
