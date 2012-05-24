@@ -20,12 +20,13 @@ package com.googlecode.contraildb.tests;
 import junit.framework.TestCase;
 
 import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.async.Handler;
 import com.googlecode.contraildb.core.async.If;
 import com.googlecode.contraildb.core.async.Series;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.async.TryFinally;
 import com.googlecode.contraildb.core.async.WhileHandler;
+import com.googlecode.contraildb.core.async.init;
+import com.googlecode.contraildb.core.async.seq;
 
 
 /**
@@ -42,26 +43,22 @@ public class ContrailAsyncTests extends TestCase {
 	 */
 	public void testSeries() {
 		final String[] result= new String[] { "" };
-		Series series= new Series(
-			new Handler() {
-				protected IResult onSuccess() {
-					result[0]+= "1";
-					return TaskUtils.DONE;
-				}
-			},
-			new Handler() {
-				protected IResult onSuccess() {
-					result[0]+= "2";
-					return TaskUtils.DONE;
-				}
-			},
-			new Handler() {
-				protected IResult onSuccess() {
-					result[0]+= "3";
-					return TaskUtils.DONE;
-				}
-			});
-		series.get();
+		
+		new Series() {
+			@init("addTwo") String initTest;
+			
+			void start() {
+				result[0]+= "1";
+			}
+			@seq("start") IResult addTwo() {
+				result[0]+= "2";
+				return TaskUtils.asResult("init-test");
+			}
+			@seq("addTwo") void addThree() {
+				assertEquals(initTest, "init-test");
+				result[0]+= "3";
+			}
+		}.get();
 		assertEquals("123", result[0]);
 	}
 	
@@ -83,21 +80,18 @@ public class ContrailAsyncTests extends TestCase {
 	}
 	
 	public void testTryFinally() {
-		final String[] result= new String[] { "" };
 		TryFinally handler= new TryFinally() {
-			protected IResult doTry() throws Exception {
-				result[0]+= "try";
+			String result= "";
+			void doTry() {
+				result+= "try";
 				throw new RuntimeException("some error");
 			}
-			
-			@Override
-			protected IResult doFinally() throws Exception {
-				result[0]+= "-finally";
-				return TaskUtils.DONE;
+			String doFinally() {
+				return result+= "-finally";
 			}
 		};
 		handler.join();
-		assertEquals("try-finally", result[0]);
+		assertEquals("try-finally", handler.getResult());
 		
 		// the doTry method above throws an exception, therefore the result should no be successful
 		assertFalse(handler.isSuccess());

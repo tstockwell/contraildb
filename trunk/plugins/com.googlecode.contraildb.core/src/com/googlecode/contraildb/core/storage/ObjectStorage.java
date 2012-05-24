@@ -20,7 +20,10 @@ import com.googlecode.contraildb.core.async.If;
 import com.googlecode.contraildb.core.async.Parallel;
 import com.googlecode.contraildb.core.async.Series;
 import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.async.init;
+import com.googlecode.contraildb.core.async.seq;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
+import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
@@ -120,48 +123,37 @@ public class ObjectStorage {
 			
 			_cache.store(identifier, item);
 			
-			return new Series(
-					new If(lifecycle != null) {
-						protected IResult onTrue() {
-							return lifecycle.onInsert(identifier);
-						}
-					},
-					new Handler() {
-						protected IResult onSuccess() {
-							return _storageSession.store(identifier, serializeTask);
-						}
-					});
+			return new Series() {
+				IResult checkLifeCycleThenStore() {
+					if (lifecycle != null) 
+						return lifecycle.onInsert(identifier);
+					return TaskUtils.DONE;
+				}
+				IResult store() {
+					return _storageSession.store(identifier, serializeTask);
+				}
+			};
 		}
 
 		public IResult<Void> delete(final Identifier path) {
-			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-			return new Series(_trackerSession.queue(path, )) {
-				Item item;
+			return new Series(_trackerSession.queue(path, Operation.DELETE)) {
+				@init("doFetch") Item item;
 
-				IResult fetchThenSave() {
+				IResult doFetch() {
 					return fetch(path);
 				}
-				void saveItemThenDoDel() {
-					item= (Item) incoming().getResult();
-				}
-				IResult doDelete() {
-					return new Parallel() {
-						IResult start() {
-							return new Series() {
-								IResult start() {
-									_storageSession.delete(path);
-								}
-								IResult clearCache() {
-									_cache.delete(path);
-								}
-							};
-						}
-						IResult lifecycle() {
-							return new If(item instanceof ILifecycle) {
-								IResult ifTrue() {
+				@seq("doFetch") IResult doDelete() {
+					return new Series() {
+						IResult checkLifecycle() {
+							if (item instanceof ILifecycle) 
 									return ((ILifecycle)item).onDelete();
-								}
-							};
+							return TaskUtils.DONE;
+						}
+						IResult start() {
+							_storageSession.delete(path);
+						}
+						IResult clearCache() {
+							_cache.delete(path);
 						}
 					};
 				}
