@@ -9,6 +9,7 @@ import java.util.UUID;
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.ResultHandler;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.PathUtils;
 import com.googlecode.contraildb.core.utils.ContrailAction;
@@ -29,12 +30,12 @@ public class StorageCleanupAction {
 	private StorageSystem _storageSystem;
 
 	public static IResult<Void> cleanup(StorageSystem storageSystem) {
-		return new Handler(StorageCleanupAction.create(storageSystem)) {
-			protected IResult onSuccess() throws Exception {
-				spawn(((StorageCleanupAction)incoming().getResult()).run());
+		return new ResultHandler<StorageCleanupAction>(StorageCleanupAction.create(storageSystem)) {
+			protected IResult onSuccess(StorageCleanupAction cleanupAction) {
+				fork(cleanupAction.run());
 				return TaskUtils.DONE;
 			}
-		}.toResult();	
+		};	
 	}
 
 	public static final IResult<StorageCleanupAction> create(final StorageSystem storageSystem) 

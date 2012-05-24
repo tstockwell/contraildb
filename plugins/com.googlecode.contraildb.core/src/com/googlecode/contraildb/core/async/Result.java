@@ -43,16 +43,8 @@ public class Result<V> implements IResult<V>{
 	}
 
 	@Override synchronized public V get() {
-		if (ContrailTask.isContrailTask())
-			throw new RuntimeException("Contrail actions MUST be atomic!\nUse a Handler instead of calling get().");
 		
-		while (!_done) {
-			try {
-				wait();
-			}
-			catch (InterruptedException x) {
-			}
-		}
+		join();
 		
 		if (!_success) {
 			if (_cancelled) {
@@ -63,6 +55,23 @@ public class Result<V> implements IResult<V>{
 		}
 		
 		return _result;
+	}
+
+	@Override synchronized public void join() {
+		/*
+		 * The current thread is one of Contrail's internal threads. 
+		 * The get method should never be used in an internal API.
+		 */
+		if (ContrailTask.isContrailTask())
+			throw new RuntimeException("Contrail actions MUST be atomic!\nUse a Handler instead of calling get().");
+		
+		while (!_done) {
+			try {
+				wait();
+			}
+			catch (InterruptedException x) {
+			}
+		}
 	}
 
 	synchronized public void complete(final IResult<V> result) {

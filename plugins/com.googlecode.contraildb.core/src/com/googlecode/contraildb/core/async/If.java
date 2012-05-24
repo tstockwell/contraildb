@@ -18,9 +18,22 @@ abstract public class If<T> extends Handler<Boolean,T> {
 		this(TaskUtils.asResult(value));
 	}
 	
+	
 	@Override
-	protected void _onComplete(IResult<Boolean> result) {
-		if (!result.isSuccess() || result.getResult()) 
-			super._onComplete(result);
+	final protected IResult<T> onSuccess() throws Exception {
+		if (incoming().getResult()) {
+			return doTrue();
+		}
+		else {
+			return doFalse();
+		}
 	}
+	
+	protected IResult<T> doTrue() throws Exception {
+		return TaskUtils.NULL();
+	}
+	protected IResult<T> doFalse() throws Exception {
+		return TaskUtils.NULL();
+	}
+	
 }
