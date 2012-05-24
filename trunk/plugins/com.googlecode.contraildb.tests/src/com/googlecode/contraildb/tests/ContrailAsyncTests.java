@@ -21,6 +21,7 @@ import junit.framework.TestCase;
 
 import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.async.Handler;
+import com.googlecode.contraildb.core.async.If;
 import com.googlecode.contraildb.core.async.Series;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.async.TryFinally;
@@ -95,8 +96,43 @@ public class ContrailAsyncTests extends TestCase {
 				return TaskUtils.DONE;
 			}
 		};
-		handler.get();
+		handler.join();
 		assertEquals("try-finally", result[0]);
+		
+		// the doTry method above throws an exception, therefore the result should no be successful
 		assertFalse(handler.isSuccess());
+		
+		// the result's error should be the error thrown in the doTry method
+		assertEquals("some error", handler.getError().getMessage());
+	}
+	
+	public void testIf() {
+		final String[] result= new String[] { "" };
+		If handler= new If(true) {
+			protected IResult doTrue() throws Exception {
+				result[0]+= "true";
+				return TaskUtils.DONE;
+			}
+			protected IResult doFalse() throws Exception {
+				result[0]+= "false";
+				return TaskUtils.DONE;
+			}
+		};
+		handler.join();
+		assertEquals("true", result[0]);
+		
+		handler= new If(false) {
+			protected IResult doTrue() throws Exception {
+				result[0]+= "true";
+				return TaskUtils.DONE;
+			}
+			protected IResult doFalse() throws Exception {
+				result[0]+= "false";
+				return TaskUtils.DONE;
+			}
+		};
+		
+		handler.join();
+		assertEquals("truefalse", result[0]);
 	}
 }
