@@ -1,0 +1,13 @@
+This software is Copyright (c) 2009 Ted Stockwell
+
+It is licensed under the GNU Affero General Public License version 3,
+which in essence means that it's free to embed in other works of free software.
+
+However, if you're writing non-free (which usually means commercial) software
+and wish to use Contrail then you must buy a commercial license from Contrail 
+Technology (http://contrail.com).
+
+For legalese details, see LICENSE.txt.
+
+For more information, contact info@contrail.com.
+ 

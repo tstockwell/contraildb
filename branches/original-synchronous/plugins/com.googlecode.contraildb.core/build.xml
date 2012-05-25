@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="yars" basedir="." default="build">
+
+  <!-- YARS build file $id$ -->
+  <property name="projname" value="yars"/>
+  <property name="codename" value="trunk"/>
+  <property name="version" value="0.1"/>
+  <property name="src" value="src"/>
+  <property name="test.dir" value="test"/>
+  <property name="lib" value="lib"/>
+  <property name="build" value="build"/>
+  <property name="dist" value="dist"/>
+  <property name="javadoc" value="doc/javadoc"/>
+  <property name="tomcat.home"   value="/usr/share/tomcat5/"/>
+  <property name="javacc.home"   value="C:/Programme/Java/javacc-4.0"/>
+	
+  <path id="classpath">
+    <pathelement location="${build}"/>
+    
+    <fileset dir="${lib}">
+      <include name="*.jar"/>
+    </fileset>
+
+    <fileset dir="${tomcat.home}common/lib">
+      <include name="*.jar"/>
+    </fileset>
+
+    <fileset dir="/usr/share/ant/lib">
+      <include name="ant-junit.jar"/>
+    </fileset>
+  </path>
+
+  <target name="prepare">
+    <tstamp />
+    <mkdir dir="${build}"/>
+  </target>
+
+  <target name="javadoc" depends="prepare">
+    <javadoc destdir="${javadoc}" author="true" version="true">
+      <fileset dir="${src}" />
+    </javadoc>
+  </target>
+
+  <target name="dist" depends="build">
+    <mkdir dir="${dist}"/>
+
+    <jar jarfile="${dist}/${projname}-api-${codename}.jar"
+	 basedir="${build}" includes="org/semanticweb/yars/api/**">
+		<manifest>
+    	    <attribute name="Main-Class" value="com.googlecode.funkinstore.api.Main"/>
+		</manifest>
+  	</jar>
+  	
+    <jar jarfile="${dist}/${projname}-${codename}.jar"
+	 basedir="${build}">
+		<manifest>
+    	    <attribute name="Main-Class" value="com.googlecode.funkinstore.datastore.Main"/>
+		</manifest>
+  	</jar>
+
+    <war destfile="${dist}/${projname}-${codename}.war"
+    	 webxml="${src}/org/semanticweb/yars/webapp/web.xml">
+  	  <webinf file="${build}/org/semanticweb/yars/webapp/notfound.html"/>
+      <lib file="${dist}/${projname}-${codename}.jar"/>
+
+   	  <lib file="${lib}/je-*.jar"/>
+   	  <lib file="${lib}/lucene-*.jar"/>
+    </war>
+
+  </target>
+
+  <target name="build" depends="prepare">
+    <javac destdir="${build}"
+           srcdir="${src}"
+	   debug="yes">
+      <classpath refid="classpath"/>
+    </javac>
+  	
+  	<!-- fill in values for @version and such -->
+	 <copy file="${src}/org/semanticweb/yars/webapp/notfound.html" tofile="${build}/org/semanticweb/yars/webapp/notfound.html">
+	<filterset>
+   <filter token="now" value="${DSTAMP}-${TSTAMP}" />
+   <filter token="projname" value="${projname}"/>
+   <filter token="version" value="${version}"/>
+		</filterset>
+			</copy>
+  </target>
+
+  <target name="clean">
+    <delete dir="${build}"/>
+    <delete>
+      <fileset dir="${dist}">
+	<include name="*"/>
+      </fileset>
+    </delete>
+  </target>
+
+  <target name="rebuild" depends="clean,build"/>
+
+  <!-- unit tests -->
+  <target name="buildtest" depends="dist">
+    <javac destdir="${build}"
+           srcdir="${test.dir}"
+	   debug="yes">
+      <classpath refid="classpath"/>
+    </javac>
+
+    <jar jarfile="${dist}/${projname}-tests.jar"
+	 basedir="${build}"/>
+  </target>
+
+  <!--
+      start with "ant -lib lib/junit-3.8.1.jar junit", otherwise you
+      get classloader problems
+      http://issues.apache.org/bugzilla/show_bug.cgi?id=6606
+  -->
+  <target name="junit" depends="buildtest">
+    <junit printsummary="yes" haltonfailure="no">
+      <formatter type="plain"/>
+      <classpath refid="classpath"/>
+      <batchtest fork="yes">
+	<fileset dir="${test.dir}">
+	  <include name="**/*Test.java" />
+	</fileset>
+      </batchtest>
+    </junit> 
+  </target>
+	
+	<target name="parser">
+	  <delete>
+	   <fileset 
+	    dir="src/org/semanticweb/yars/api/n3/parser" 
+	    excludes="*Consumer.java"
+	    includes="*.java"/>
+	  </delete>
+	  <javacc
+	      target="src/org/semanticweb/yars/api/n3/parser/yars3.jj"
+	      outputdirectory="src/org/semanticweb/yars/api/n3/parser"
+	      javacchome="${javacc.home}"
+	      static="false"
+	  />
+	 </target>
+</project>

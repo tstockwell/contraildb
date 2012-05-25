@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry exported="true" kind="lib" path="geronimo-el_1.0_spec-1.0.1.jar"/>
+	<classpathentry exported="true" kind="lib" path="geronimo-jsp_2.1_spec-1.0.1.jar"/>
+	<classpathentry exported="true" kind="lib" path="geronimo-servlet_2.5_spec-1.2.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="con" path="org.eclipse.pde.core.requiredPlugins"/>
+	<classpathentry exported="true" kind="lib" path="appengine-tools-api.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="appengine-local-runtime.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="appengine-api.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="appengine-api-stubs.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="appengine-local-runtime-shared.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="repackaged-appengine-jasper-runtime-5.0.28.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="repackaged-appengine-ant-1.6.5.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="repackaged-appengine-ant-launcher-1.6.5.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="repackaged-appengine-commons-el-1.0.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="repackaged-appengine-commons-logging-1.1.1.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="repackaged-appengine-jasper-compiler-5.0.28.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="appengine-api-1.0-sdk-1.2.5.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="appengine-api-labs-1.2.5.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry exported="true" kind="lib" path="appengine-api-labs.jar" sourcepath="net.sf.contrail.library.appenginesrc.zip"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
