@@ -1,9 +1,6 @@
 package com.googlecode.contraildb.core.impl.btree;
 
-import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.async.Immediate;
-import com.googlecode.contraildb.core.async.ResultHandler;
-import com.googlecode.contraildb.core.async.TaskUtils;
+import java.io.IOException;
 
 /**
  * Simple API for navigating through the elements in a BTree.
@@ -15,8 +12,7 @@ import com.googlecode.contraildb.core.async.TaskUtils;
  * @param <K> The types of elements in the tree, the keys.
  * @param <V> The types of values stored in the leaves of the tree
  */
-@SuppressWarnings("unchecked")
-public interface IOrderedSetCursor<K> {
+public interface IBTreeCursor<K> {
 
 
 	/**
@@ -27,53 +23,45 @@ public interface IOrderedSetCursor<K> {
 		REVERSE
 	}
 
-	public static class EmptyCursor<K> implements IOrderedSetCursor<K> {
+	public static class EmptyCursor<K> implements IBTreeCursor<K> {
 		private final Direction _direction;
 		public EmptyCursor(Direction d) { _direction= d; } 
 		public boolean after(K e) { return false; }
 		public boolean before(K e) { return false; }
-		public IResult<K> keyValue() { return TaskUtils.NULL; }
-		public IResult<Boolean> first() { return TaskUtils.FALSE; }
+		public K keyValue() { return null; }
+		public boolean first() { return false; }
 		public Direction getDirection() { return _direction; }
-		public IResult<Boolean> hasNext() { return TaskUtils.FALSE; }
+		public boolean hasNext() { return false; }
 		public boolean last() { return false; }
-		public IResult<Boolean> next() { return TaskUtils.FALSE; }
-		public IResult<Boolean> to(K e) { return TaskUtils.FALSE; }
-		public IResult<Boolean> to(IResult<K> e) { return TaskUtils.FALSE; }
+		public boolean next() { return false; }
+		public boolean to(K e) { return false; }
 	}
 	public class SingleValueCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 		private T _t;
-		private int _state= 0; // 0 before value; 1 on value; 2 after value
+		private int _state= 0;
 		public SingleValueCursor(T t) { _t= t;  }
-		public IResult<T> keyValue() { if (_state == 1) return TaskUtils.asResult(_t); return TaskUtils.NULL; }
-		public IResult<Boolean> first() { if (1 < _state) return TaskUtils.FALSE; _state= 1; return TaskUtils.TRUE; }
+		public T keyValue() { return _t; }
+		public boolean first() { if (1 < _state) return false; _state= 1; return true; }
 		public Direction getDirection() { return Direction.FORWARD; }
-		public IResult<Boolean> hasNext() { return TaskUtils.asResult(_state == 0); }
-		public IResult<Boolean> next() { if (1 <= _state) return TaskUtils.FALSE; _state= 1; return TaskUtils.TRUE; }
-		public IResult<Boolean> to(T e) {
+		public boolean hasNext() { return (_state == 0); }
+		public boolean next() { if (1 <= _state) return false; _state= 1; return true; }
+		public boolean to(T e) {
 			if (1 < _state)
-				return TaskUtils.FALSE;
-			int i= KeyValueSet.compare(e, _t);
+				return false;
+			int i= BPlusTree.compare(e, _t);
 			if (i == 0) {
 				_state= 1;
-				return TaskUtils.TRUE;
+				return true;
 			}
 			else if (i < 0) {
 				if (_state == 1) { 
 					_state= 2;
-					return TaskUtils.FALSE;
+					return false;
 				}
 				_state= 1;
-				return TaskUtils.TRUE; 
+				return true; 
 			}
-			return TaskUtils.FALSE;
-		}
-		public IResult<Boolean> to(IResult<T> result) {
-			return new ResultHandler<T>(result) {
-				protected IResult<Boolean> onSuccess(T t) {
-					return to(t);
-				}
-			};
+			return false;
 		}
 	}
 
@@ -85,15 +73,15 @@ public interface IOrderedSetCursor<K> {
 		public EmptyReverseCursor() { super(Direction.REVERSE); }
 	}
 	
-	@Immediate Direction getDirection();
+	Direction getDirection();
 	
-	IResult<Boolean> hasNext();
+	boolean hasNext() throws IOException;
 	
 	/**
 	 * @return 
 	 * 	the value of the key associated with the current cursor position.
 	 */
-	 IResult<K> keyValue();
+	K keyValue() throws IOException;
 	
     /**
      * Moves the cursor to the next element.
@@ -101,7 +89,7 @@ public interface IOrderedSetCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    IResult<Boolean> next();
+    boolean next() throws IOException;
 	
     /**
      * Moves the cursor to the given element or, if the element does not exist, the next element..
@@ -109,8 +97,7 @@ public interface IOrderedSetCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    IResult<Boolean> to(K e);
-    IResult<Boolean> to(IResult<K> e);
+    boolean to(K e) throws IOException;
 
     /**
      * Moves the cursor to the first element.
@@ -118,6 +105,6 @@ public interface IOrderedSetCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    IResult<Boolean> first();
+    boolean first() throws IOException;
 
 }

@@ -3,8 +3,8 @@ package com.googlecode.contraildb.core.storage.provider;
 import java.io.IOException;
 import java.util.Collection;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.utils.IResult;
 
 
 /**
@@ -32,16 +32,16 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	IResult<Session> connect();
+	com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException;
 	
 	
 	static public interface Session {
 		
 		/**
 		 * MUST be called when the session is no longer needed.
-		 * Any pending changes are flushed before closing.
+		 * Any pending changed are flushed before closing.
 		 */
-		public IResult<Void> close() throws IOException; 
+		public void close() throws IOException; 
 		
 		/**
 		 * Returns the complete paths to all the children of the given path.
@@ -57,12 +57,11 @@ public interface IStorageProvider {
 		 * Stores the given contents at the given location.
 		 * The file is created if it does not already exist.
 		 */
-		public IResult<Void> store(Identifier path, IResult<byte[]> content);
+		public void store(Identifier path, IResult<byte[]> content);
 
 		/**
 		 * Stores the given contents at the given location if the file 
-		 * does not already exist.  
-		 * If the file already exists then this method does nothing.
+		 * does not already exist.  Otherwise does nothing.
 		 * 
 		 * @param waitMillis
 		 * 		if the file already exists and parameter is greater than zero   
@@ -78,12 +77,12 @@ public interface IStorageProvider {
 		/**
 		 * Deletes the contents stored at the given locations.
 		 */
-		public IResult<Void> delete(Identifier path);
+		public void delete(Identifier path);
 		
 		/**
 		 * Flush any pending changes made by this session to physical storage.
 		 */
-		public IResult<Void> flush();
+		public void flush() throws IOException;
 
 
 	}

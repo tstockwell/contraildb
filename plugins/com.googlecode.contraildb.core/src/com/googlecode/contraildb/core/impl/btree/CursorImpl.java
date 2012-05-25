@@ -3,23 +3,18 @@
  */
 package com.googlecode.contraildb.core.impl.btree;
 
-import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.Immediate;
-import com.googlecode.contraildb.core.async.ResultAction;
-import com.googlecode.contraildb.core.async.ResultHandler;
-import com.googlecode.contraildb.core.async.TaskUtils;
-import com.googlecode.contraildb.core.async.WhileHandler;
-import com.googlecode.contraildb.core.storage.IEntity;
+import java.io.IOException;
+
+import com.googlecode.contraildb.core.storage.StorageUtils;
 
 
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class CursorImpl<T extends Comparable, V> 
-implements IKeyValueCursor<T,V> {
-	KeyValueSet _tree;
+implements IBTreePlusCursor<T,V> {
+	BPlusTree _tree;
 	Direction _direction;
 	
-	public CursorImpl(KeyValueSet index, Direction direction) {
+	public CursorImpl(BPlusTree index, Direction direction) {
 		_direction= direction;
 		_tree= index;
 	}
@@ -27,252 +22,150 @@ implements IKeyValueCursor<T,V> {
 	int _index;
 
 	@Override
-	public IResult<V> elementValue() {
-		return TaskUtils.asResult((V) _page._values[_index]);
+	public V elementValue() throws IOException {
+		return (V) _page._values[_index];
 	}
 	
-	private IResult<Void> initFirst()  {
+	private void initFirst() throws IOException {
 		_index= -1;
 		if ((_page= _tree.getRoot()) != null) {
-			return new WhileHandler() {
-				protected IResult<Boolean> While() throws Exception {
-					return asResult(!_page.isLeaf());
-				}
-				protected IResult<Void> Do() throws Exception {
-					return new ResultHandler<Node<T>>(_page.getChildNode(0)) {
-						protected IResult onSuccess(Node<T> child) throws Exception {
-							_page= child;
-							return TaskUtils.DONE;
-						}
-					}; 
-				}
-			};
+			while (!_page.isLeaf()) 
+				_page= _page.getChildNode(0);
 		}
-		return TaskUtils.DONE;
 	}
-	
-	protected IResult<Void> initLast() {
+	protected void initLast() throws IOException {
 		if ((_page= _tree.getRoot()) != null) {
-			IResult dowhile= new WhileHandler() {
-				protected IResult<Boolean> While() throws Exception {
-					return asResult(!_page.isLeaf());
-				}
-				protected IResult<Void> Do() throws Exception {
-					return new ResultHandler<Node<T>>(_page.getChildNode(_page._size-1)) {
-						protected IResult onSuccess(Node<T> child) throws Exception {
-							_page= child;
-							return TaskUtils.DONE;
-						}
-					}; 
-				}
-			};
-			return new ResultAction(dowhile) {
-				protected void onSuccess(Object results) throws Exception {
-					_index= _page._size;
-				}
-			};
+			while (!_page.isLeaf()) 
+				_page= _page.getChildNode(_page._size-1);
+			_index= _page._size;
 		}
-		return TaskUtils.DONE;
 	}
 
 	@Override 
-	@Immediate public IResult<T> keyValue() {
-		return TaskUtils.asResult(_page._keys[_index]);
+	public T keyValue() throws IOException {
+		return _page._keys[_index];
 	}
-	protected IResult<Boolean> previous() {
-		IResult<Void> init= TaskUtils.DONE;
+	protected boolean previous() throws IOException {
 		if (_page == null)
-			init= initLast();
-		return new Handler(init) {
-			protected IResult onSuccess() throws Exception {
-				if (_page == null)
-					return TaskUtils.FALSE;
-				
-				IResult<Void > fetch= TaskUtils.DONE;
-				if (_index <= 0) {
-					if (_page._previous == null) 
-						return TaskUtils.FALSE;
-					fetch= new ResultHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
-						protected IResult onSuccess(IEntity previousPage) throws Exception {
-							_page = (Node<T>) previousPage;
-							_index = _page._size;
-							return TaskUtils.DONE;
-						}
-					};
-				}
-				
-				return new Handler(fetch) {
-					protected IResult onSuccess() throws Exception {
-						_index--;
-						return TaskUtils.TRUE;
-					}
-				};
-			}
-		};
-	}
-	
-	protected IResult<Boolean> ge(final T e) {
-		if ((_page= _tree.getRoot()) == null)
-			return TaskUtils.asResult(false);
-		IResult whileNotLeaf= new WhileHandler() {
-			protected IResult<Boolean> While() throws Exception {
-				return asResult(!_page.isLeaf());
-			}
-			protected IResult<Void> Do() throws Exception {
-				_index= _page.indexOf(e);
-				return new ResultHandler<Node<T>>(_page.getChildNode(_index)) {
-					protected IResult onSuccess(Node<T> childNode) throws Exception {
-						_page = childNode;
-						return TaskUtils.DONE;
-					}
-				};
-			}
-		};
+			initLast();
+		if (_page == null)
+			return false;
 		
-		return new Handler(whileNotLeaf) {
-			protected IResult onSuccess() throws Exception {
-				_index= _page.indexOf(e);
-				return asResult(0 <= _index && _index < _page._size && (KeyValueSet.compare(e, _page._keys[_index]) == 0)); 
-			}
-		};
+		if (_index <= 0) {
+			if (_page._previous == null) 
+				return false;
+			_page = StorageUtils.syncFetch(_page.getStorage(), _page._previous);
+			_index = _page._size;
+		}
+		
+		_index--;
+		return true;
 	}
 	
-	protected IResult<Boolean> le(final T e) {
-		return new ResultHandler<Boolean>(ge(e)) {
-			protected IResult onSuccess(Boolean ge) throws Exception {
-				if (ge) {
-					return new ResultHandler<T>(keyValue()) {
-						protected IResult onSuccess(T keyValue) throws Exception {
-							if (KeyValueSet.compare(keyValue, e) == 0)
-								return TaskUtils.TRUE;
-							return previous();
-						}
-					};
-				}
-				return last();
-			}
-		};
+	protected boolean ge(T e) throws IOException {
+		if ((_page= _tree.getRoot()) == null)
+			return false;
+		
+		while (!_page.isLeaf()) {
+			_index= _page.indexOf(e);
+			_page = _page.getChildNode(_index);
+		}
+		_index= _page.indexOf(e);
+		
+		return 0 <= _index && _index < _page._size && (BPlusTree.compare(e, _page._keys[_index]) == 0); 
+	}
+	protected boolean le(T e) throws IOException {
+		
+		if (ge(e)) {
+			T t= keyValue();
+			if (BPlusTree.compare(t, e) == 0)
+				return true;
+			if (previous())
+				return true;
+			return false;
+		}
+		return last();
 	}
 	
 	@Override
-	public IResult<Boolean> next() {
+	public boolean next() throws IOException {
 		if (Direction.REVERSE == _direction)
 			return previous();
 		
 		if (_page == null) 
 			return first();
-	
-		IResult next= TaskUtils.DONE;
+		
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
-				return TaskUtils.FALSE;
-			next= new ResultAction<IEntity>(_page.getStorage().fetch(_page._next)) {
-				protected void onSuccess(IEntity next) throws Exception {
-					_page = (Node<T>) next;
-					_index = -1;
-				}
-			};
+				return false;
+			_page = StorageUtils.syncFetch(_page.getStorage(), _page._next);
+			_index = -1;
 		}
-		return new Handler(next) {
-			protected IResult onSuccess() throws Exception {
-				_index++;
-				return TaskUtils.TRUE;	
-			}
-		};
 		
+		_index++;
+		return true;
 	}
 
 	@Override
-	public IResult<Boolean> hasNext() {
+	public boolean hasNext() throws IOException {
 		if (Direction.REVERSE == _direction)
 			return hasPrevious();
 		
 		if (_page == null) 
 			initFirst();
 		if (_page == null)
-			return TaskUtils.FALSE;
+			return false;
 		
-		IResult next= TaskUtils.DONE;
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
-				return TaskUtils.FALSE;
-			next= new ResultAction<IEntity>(_page.getStorage().fetch(_page._next)) {
-				protected void onSuccess(IEntity next) throws Exception {
-					_page = (Node<T>) next;
-					_index = -1;
-				}
-			};
+				return false;
+			_page = StorageUtils.syncFetch(_page.getStorage(), _page._next);
+			_index = -1;
 		}
-		return new Handler(next) {
-			protected IResult onSuccess() throws Exception {
-				return TaskUtils.TRUE;	
-			}
-		};
+		return true;
 	}
 
-	public IResult<Boolean> hasPrevious() {
-		IResult<Void> init= TaskUtils.DONE;
+	public boolean hasPrevious() throws IOException {
 		if (_page == null)
-			init= initLast();
-		return new Handler(init) {
-			protected IResult onSuccess() throws Exception {
-				if (_page == null)
-					return TaskUtils.FALSE;
-				
-				IResult<Void > fetch= TaskUtils.DONE;
-				if (_index <= 0) {
-					if (_page._previous == null) 
-						return TaskUtils.FALSE;
-					fetch= new ResultHandler<IEntity>(_page.getStorage().fetch(_page._previous)) {
-						protected IResult onSuccess(IEntity previousPage) throws Exception {
-							_page = (Node<T>) previousPage;
-							_index = _page._size;
-							return TaskUtils.DONE;
-						}
-					};
-				}
-				
-				return new Handler(fetch) {
-					protected IResult onSuccess() throws Exception {
-						return TaskUtils.TRUE;
-					}
-				};
-			}
-		};
+			initLast();
+		if (_page == null)
+			return false;
+		
+		if (_index <= 0) {
+			if (_page._previous == null) 
+				return false;
+			_page = StorageUtils.syncFetch(_page.getStorage(), _page._previous);
+			_index = _page._size;
+		}
+		return true;
 	}
 
 	@Override
-	public IResult<Boolean> first() {
+	public boolean first() throws IOException {
 		if (Direction.REVERSE == _direction)
 			return last();
 		
-		return new Handler(initFirst()) {
-			protected IResult onSuccess() throws Exception {
-				if (_page == null)
-					return TaskUtils.FALSE;
-				return next();
-			}
-		};
+		initFirst();
+		if (_page == null)
+			return false;
+		return next();
 	}
 
-	protected IResult<Boolean> last() {
+	protected boolean last() throws IOException {
 		if (Direction.REVERSE == _direction)
 			return first();
 		
-		return new Handler(initLast()) {
-			protected IResult onSuccess() throws Exception {
-				if (_page == null)
-					return TaskUtils.FALSE;
-				return previous();
-			}
-		};
+		initLast();
+		if (_page == null)
+			return false;
+		return previous();
 	}
 	@Override
-	public IKeyValueCursor.Direction getDirection() {
+	public IBTreePlusCursor.Direction getDirection() {
 		return _direction;
 	}
 	@Override
-	public IResult<Boolean> to(T e) {
+	public boolean to(T e) throws IOException {
 		if (Direction.REVERSE == _direction)
 			return le(e);
 		return ge(e);
@@ -283,39 +176,18 @@ implements IKeyValueCursor<T,V> {
 	 * Always starts the search from the beginning 
 	 */
 	@Override
-	public synchronized IResult<V> find(final T key) {
-		IResult init;
+	public synchronized V find(T key) throws IOException {
 		if (Direction.REVERSE == _direction) {
-			init= initLast();
+			initLast();
 		}
 		else
-			init= initFirst();
-		return new Handler(init) {
-			protected IResult onSuccess() throws Exception {
-				return new ResultHandler<Boolean>(to(key)) {
-					protected IResult onSuccess(Boolean to) throws Exception {
-						if (!to)
-							return TaskUtils.NULL;
-						return new ResultHandler<T>(keyValue()) {
-							protected IResult onSuccess(T keyValue) throws Exception {
-								if (KeyValueSet.compare(key, keyValue) != 0)
-									return TaskUtils.NULL;
-								return asResult(elementValue());
-							}
-						};
-					}
-				};
-			}
-		};
-	}
-
-	@Override
-	public IResult<Boolean> to(IResult<T> e) {
-		return new ResultHandler<T>(e) {
-			protected IResult onSuccess(T t) {
-				return to(t);
-			}
-		};
+			initFirst();
+		if (!to(key))
+			return null;
+		T k= keyValue();
+		if (BPlusTree.compare(key, k) != 0)
+			return null;
+		return elementValue();
 	}
 	
 }

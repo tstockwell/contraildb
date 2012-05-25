@@ -19,16 +19,16 @@ package com.googlecode.contraildb.tests;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.Iterator;
 
-import junit.framework.TestCase;
-
-import com.googlecode.contraildb.core.async.IAsyncerator;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
-import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
-import com.googlecode.contraildb.core.impl.btree.IKeyValueCursor;
+import com.googlecode.contraildb.core.impl.btree.BPlusTree;
+import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
+import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
+
+import junit.framework.TestCase;
 
 
 /**
@@ -39,9 +39,9 @@ import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 public class ContrailBTreeTests extends TestCase {
 	
 	public void testBasics() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		KeyValueSet<String, String> tree= KeyValueSet.<String, String>create(storage).get();
-		IKeyValueCursor<String, String> cursor= tree.cursor(Direction.FORWARD);
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		BPlusTree<String, String> tree= BPlusTree.createInstance(storage);
+		IBTreePlusCursor<String, String> cursor= tree.cursor(Direction.FORWARD);
 		
 		tree.insert("Churchill", "Good Guys");
 		assertNull(cursor.find("Ghandi"));
@@ -56,16 +56,16 @@ public class ContrailBTreeTests extends TestCase {
 		assertEquals("value-1.1", cursor.find("key-1"));
 		assertEquals("value-2.0", cursor.find("key-2"));
 		
-		IAsyncerator<String> iterator= tree.iterator();
-		assertTrue(iterator.hasNext().get());
+		Iterator<String> iterator= tree.iterator();
+		assertTrue(iterator.hasNext());
 		assertEquals("Churchill", iterator.next());
-		assertTrue(iterator.hasNext().get());
+		assertTrue(iterator.hasNext());
 		assertEquals("Ghandi", iterator.next());
-		assertTrue(iterator.hasNext().get());
+		assertTrue(iterator.hasNext());
 		assertEquals("key-1", iterator.next());
-		assertTrue(iterator.hasNext().get());
+		assertTrue(iterator.hasNext());
 		assertEquals("key-2", iterator.next());
-		assertFalse(iterator.hasNext().get());
+		assertFalse(iterator.hasNext());
 		
 		
 		tree.remove("Churchill");
@@ -80,9 +80,9 @@ public class ContrailBTreeTests extends TestCase {
 	}
 	
 	public void testIncreasingInserts() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		KeyValueSet<Integer, Integer> tree= KeyValueSet.<Integer, Integer>create(storage, 4).get();
-		IKeyValueCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		String lastDump= "";
 		for (int i= 0; i < 100; i++) {
@@ -105,15 +105,15 @@ public class ContrailBTreeTests extends TestCase {
 				}
 			}
 			
-			IKeyValueCursor<Integer, Integer> cursor= tree.cursor(Direction.FORWARD);
+			IBTreePlusCursor<Integer, Integer> cursor= tree.cursor(Direction.FORWARD);
 			for (int j= 0; j <= i; j++) {
-				assertTrue(cursor.next().get());
+				assertTrue(cursor.next());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
 			cursor= tree.cursor(Direction.REVERSE);
 			for (int j= i; 0 <= j; j--) {
-				assertTrue(cursor.next().get());
+				assertTrue(cursor.next());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
@@ -122,9 +122,9 @@ public class ContrailBTreeTests extends TestCase {
 	}
 	
 	public void testDecreasingInserts() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		KeyValueSet<Integer, Integer> tree= KeyValueSet.<Integer, Integer>create(storage, 4).get();
-		IKeyValueCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		String lastDump= "";
 		for (int i= 100; 0 < i--;) {
@@ -146,15 +146,15 @@ public class ContrailBTreeTests extends TestCase {
 				}
 			}
 
-			IKeyValueCursor<Integer, Integer> cursor= tree.cursor(Direction.FORWARD);
+			IBTreePlusCursor<Integer, Integer> cursor= tree.cursor(Direction.FORWARD);
 			for (int j= i; j < 100; j++) {
-				assertTrue(cursor.next().get());
+				assertTrue(cursor.next());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
 			cursor= tree.cursor(Direction.REVERSE);
 			for (int j= 100; i < j--; ) {
-				assertTrue(cursor.next().get());
+				assertTrue(cursor.next());
 				assertEquals(new Integer(j), cursor.elementValue());
 			}
 			
@@ -163,9 +163,9 @@ public class ContrailBTreeTests extends TestCase {
 	}
 	
 	public void testIncreasingDeletes() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		KeyValueSet<Integer, Integer> tree= KeyValueSet.<Integer, Integer>create(storage, 4).get();
-		IKeyValueCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		for (int i= 0; i < 100; i++) {
 			Integer I= new Integer(i);
@@ -200,9 +200,9 @@ public class ContrailBTreeTests extends TestCase {
 	
 	
 	public void testDecreasingDeletes() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		KeyValueSet<Integer, Integer> tree= KeyValueSet.<Integer, Integer>create(storage, 4).get();
-		IKeyValueCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
+		IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 		
 		String lastDump= "";
 		for (int i= 0; i < 100; i++) {
@@ -236,9 +236,10 @@ public class ContrailBTreeTests extends TestCase {
 	
 	
 	public void testIterators() throws Exception {
-		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
-		KeyValueSet<Integer, Integer> tree= KeyValueSet.<Integer, Integer>create(storage, 4).get();
+		IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
+		BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 		
+		String lastDump= "";
 		for (int i= 0; i < 100; i++) {
 			Integer I= new Integer(i);
 			tree.insert(I, I);

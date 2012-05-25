@@ -10,9 +10,8 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.util.Collection;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -70,24 +69,24 @@ public class Entity implements IEntity, ILifecycle {
 	}
 	
 
-	public IResult<Collection<Identifier>> listChildren() {
+	public IResult<Collection<Identifier>> listChildren() throws IOException {
 		return storage.listChildren(id);
 	}
 	
-	public IResult<Collection<Entity>> getChildren() {
+	public IResult<Collection<Entity>> getChildren() throws IOException {
 		return storage.fetchChildren(id);
 	}
 	
-	public IResult<Void> delete() {
-		return storage.delete(getId());
+	public void delete() throws IOException {
+		storage.delete(getId());
 	}
 	
-	public IResult<Void> deleteAllChildren()  {
-		return storage.deleteAllChildren(id);
+	public void deleteAllChildren() throws IOException {
+		storage.deleteAllChildren(id);
 	}
 	
-	public IResult<Void> update() {
-		return storage.store(this);
+	public void update() throws IOException {
+		storage.store(this);
 	}
 	
 	
@@ -97,22 +96,21 @@ public class Entity implements IEntity, ILifecycle {
 	}
 	
 	@Override
-	public IResult<Void> onDelete()
+	public void onDelete()
+	throws IOException 
 	{
 		// do nothing
-		return TaskUtils.DONE;
 	}
 	@Override
-	public IResult<Void> onInsert(Identifier identifier)
-	{
+	public void onInsert(Identifier identifier)
+	throws IOException {
 		// do nothing
-		return TaskUtils.DONE;
 	}
 	@Override
-	public IResult<Void> onLoad(Identifier identifier)
+	public void onLoad(Identifier identifier)
+	throws IOException 
 	{
 		// do nothing
-		return TaskUtils.DONE;
 	}
 
 

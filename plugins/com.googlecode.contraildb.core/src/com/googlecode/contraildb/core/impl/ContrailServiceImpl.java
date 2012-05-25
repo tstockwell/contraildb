@@ -26,9 +26,6 @@ import java.util.Stack;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.IContrailService;
 import com.googlecode.contraildb.core.IContrailSession;
-import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.StorageSystem;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 
@@ -38,72 +35,53 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
  * 
  * @author Ted Stockwell
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
 public class ContrailServiceImpl implements IContrailService {
 	
 	private Stack<IContrailSession> _transactions= new Stack<IContrailSession>();
 	
 	StorageSystem _storageSystem;
 	
-	public static IResult<ContrailServiceImpl> create(IStorageProvider storageProvider) 
+	public ContrailServiceImpl(IStorageProvider storageProvider) 
+	throws IOException 
 	{
-		final IResult<StorageSystem> createStorageSystem= StorageSystem.create(storageProvider);
-		return new Handler(createStorageSystem) {
-			protected IResult onSuccess() throws Exception {
-				ContrailServiceImpl impl= new ContrailServiceImpl();
-				impl._storageSystem= createStorageSystem.getResult();
-				return TaskUtils.asResult(impl);
-			}
-		}.toResult();
+		_storageSystem= new StorageSystem(storageProvider);
 	}
-	private ContrailServiceImpl() 
+
+	@Override
+	public IContrailSession beginSession(Mode mode) throws ContrailException, IOException {
+		IContrailSession session= new ContrailSessionImpl(this, mode); 
+		_transactions.push(session);
+		return session;
+	}
+
+	@Override
+	public IContrailSession beginSession(long revisionNumber) 
+	throws IOException, ContrailException 
 	{
+		IContrailSession session= new ContrailSessionImpl(this, revisionNumber);
+		_transactions.push(session);
+		return session;
 	}
 
 	@Override
-	public IResult<IContrailSession> beginSession(Mode mode) {
-		final IResult<ContrailSessionImpl> create= ContrailSessionImpl.create(this, mode);
-		return new Handler(create) {
-			protected IResult onSuccess() throws Exception {
-				ContrailSessionImpl session= create.getResult();
-				_transactions.push(session);
-				return TaskUtils.asResult(session);
-			}
-		}.toResult();
+	public Collection<IContrailSession> getActiveSessions() {
+		return Collections.unmodifiableCollection(_transactions);
 	}
 
 	@Override
-	public IResult<IContrailSession> beginSession(long revisionNumber) 
-	{
-		final IResult<ContrailSessionImpl> create= ContrailSessionImpl.create(this, revisionNumber);
-		return new Handler(create) {
-			protected IResult onSuccess() throws Exception {
-				ContrailSessionImpl session= create.getResult();
-				_transactions.push(session);
-				return TaskUtils.asResult(session);
-			}
-		}.toResult();
-	}
-
-	@Override
-	public IResult<Collection<IContrailSession>> getActiveSessions() {
-		return TaskUtils.asResult(Collections.unmodifiableCollection(_transactions));
-	}
-
-	@Override
-	public IResult<List<Long>> getAvailableRevisions() 
+	public List<Long> getAvailableRevisions() 
+	throws IOException 
 	{
 		return _storageSystem.getAvailableRevisions();
 	}
 	
-	IResult<Void> onClose(IContrailSession session) {
+	void onClose(IContrailSession session) {
 		_transactions.remove(session);
-		return TaskUtils.DONE;
 	}
 
 	@Override
-	public IResult<Void> close() {
-		return _storageSystem.close();
+	public void close() throws IOException, ContrailException {
+		_storageSystem.close();
 	}
 
 //	@Override

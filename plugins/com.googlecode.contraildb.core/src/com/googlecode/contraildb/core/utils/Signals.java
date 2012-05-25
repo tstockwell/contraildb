@@ -30,7 +30,7 @@ public class Signals {
 		if (set != null) {
 			final HashSet<SignalHandler> actions= (HashSet<SignalHandler>) set.clone();
 			new ContrailAction() {
-				protected void action() throws Exception {
+				protected void run() throws Exception {
 					for (final SignalHandler action:actions) {
 						try {
 							action.signal(path);

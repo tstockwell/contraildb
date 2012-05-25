@@ -7,7 +7,8 @@ import java.util.HashMap;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
+import com.googlecode.contraildb.core.impl.btree.BPlusTree;
+import com.googlecode.contraildb.core.impl.btree.BTree;
 import com.googlecode.contraildb.core.impl.btree.InnerNode;
 import com.googlecode.contraildb.core.impl.btree.Node;
 import com.googlecode.contraildb.core.storage.CommitMarker;
@@ -45,7 +46,6 @@ public class ExternalizationManager {
 			new HashMap<Integer, Serializer<?>>();
 	
 	public static void registerSerializer(Serializer<?> serializer) {
-		System.out.println("register type code:"+serializer.typeCode());
 		__serializers.put(serializer.typeCode(), serializer);
 	}
 	
@@ -163,7 +163,8 @@ public class ExternalizationManager {
 		registerSerializer(Node.SERIALIZER);
 		registerSerializer(InnerNode.SERIALIZER);
 		registerSerializer(CommitMarker.SERIALIZER);
-		registerSerializer(KeyValueSet.SERIALIZER);
+		registerSerializer(BPlusTree.SERIALIZER);
+		registerSerializer(BTree.SERIALIZER);
 		registerSerializer(Item.SERIALIZER);
 	}
 

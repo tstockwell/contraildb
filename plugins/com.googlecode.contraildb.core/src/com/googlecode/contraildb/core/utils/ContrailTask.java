@@ -2,16 +2,12 @@ package com.googlecode.contraildb.core.utils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.Result;
 
 
 /**
@@ -26,18 +22,13 @@ import com.googlecode.contraildb.core.async.Result;
  * 
  * Subclasses need to implement the run method.
  * 
- * This class uses a fixed pool of threads to run tasks.
+ * @author Ted Stockwell
  *
  * @param <T> The result type returned by the <tt>getResult</tt> method
- * 
- * @author Ted Stockwell
- * @see ContrailTaskTracker
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
-abstract public class ContrailTask<T> {
-
-
-
+abstract public class ContrailTask<T> implements IResult<T> {
+	
 	/**
 	 * Tasks waiting to be executed
 	 */
@@ -45,11 +36,13 @@ abstract public class ContrailTask<T> {
 	private static Object __done= new Object(); // used to wait/notify when tasks are completed
 	private static Object __arrive= new Object(); // used to wait/notify when new tasks arrive
 	private static ArrayList<ContrailTask> __deferred= new ArrayList<ContrailTask>();
-	private static ArrayList<Thread> __yielded= new ArrayList<Thread>();
 	private static int __THREAD_COUNT= 0;
 	
 	private static Logger __logger= Logging.getLogger();
 	
+	public static interface CompletionListener {
+		void done(ContrailTask task);
+	}
 	
 	static class ContrailThread extends Thread {
 		ContrailTask _currentTask= null;
@@ -80,7 +73,8 @@ abstract public class ContrailTask<T> {
 	}
 	
 	static {
-		for (int count= Runtime.getRuntime().availableProcessors() * 2; 0 < count--;) { 
+System.out.println("");
+		for (int count= Runtime.getRuntime().availableProcessors() * 10; 0 < count--;) { 
 			new ContrailThread().start();
 		}
 	}
@@ -99,23 +93,6 @@ abstract public class ContrailTask<T> {
 	
 	
 	/**
-	 * Returns true if the current thread is running a ContrailTask.  
-	 */
-	public static final boolean isContrailTask() {
-		return Thread.currentThread() instanceof ContrailThread;
-	}
-	/**
-	 * Returns the current ContrailTask, if any.  
-	 */
-	public static final <T> ContrailTask<T> getContrailTask() {
-		Thread thread= Thread.currentThread();
-		if (thread instanceof ContrailThread) {
-			return ((ContrailThread)thread)._currentTask;
-		}
-		return null;
-	}
-	
-	/**
 	 * Returns true if the current thread is running a ContrailTask and that 
 	 * task has been canceled.  
 	 */
@@ -123,23 +100,9 @@ abstract public class ContrailTask<T> {
 		Thread thread= Thread.currentThread();
 		if (thread instanceof ContrailThread) {
 			ContrailTask t= ((ContrailThread)thread)._currentTask;
-			if (t != null) {
-				IResult result= t.getResult();
-				if (result.isDone())
-					return result.isCancelled();
-			}
+			if (t != null)
+				return t.isCancelled();
 		}
-		return false;
-	}
-	/**
-	 * Returns true if the current thread is running a ContrailTask that has yielded.  
-	 */
-	public static final boolean isTaskYielded() {
-//		Thread thread= Thread.currentThread();
-//		synchronized (__yielded) {
-//			if (__yielded.contains(thread))
-//				return true;
-//		}
 		return false;
 	}
 	
@@ -147,11 +110,13 @@ abstract public class ContrailTask<T> {
 	
 	Identifier _id;
 	Operation _operation;
+	private Throwable _throwable;
+	private T _result;
 	private volatile boolean _done= false;
+	private volatile boolean _cancelled= false;
 	private volatile boolean _submitted= false;
 	private volatile List<ContrailTask<?>> _pendingTasks;
-	private final Result<T> _result= new Result<T>(); 
-	
+	private volatile List<CompletionListener> _completionListeners;
 	
 	public ContrailTask(Identifier id, Operation operation) {
 		if ((_id= id) == null)
@@ -166,8 +131,11 @@ abstract public class ContrailTask<T> {
 	}
 	
 	public void cancel() {
-		_result.cancel();
-		done(true);
+			done(true);
+	}
+	
+	public boolean isCancelled() {
+		return _cancelled;
 	}
 	
 	/**
@@ -194,23 +162,19 @@ abstract public class ContrailTask<T> {
 		return _operation;
 	}
 	
-	protected abstract T run() throws Exception;
+	protected abstract void run() throws Exception;
 	
-	protected void error(Throwable throwable) {
-		_result.error(throwable);
+	protected void setError(Throwable throwable) {
+		_throwable= throwable;
 		done(false);
 	}
 	
-	protected void success(T result) {
-		_result.success(result);
-		done(true);
+	protected void setResult(T result) {
+		_result= result;
 	}
-	protected void setResult(IResult<T> result) {
-		result.addHandler(new Handler() {
-			public void onComplete() {
-				success((T)incoming().getResult());
-			}
-		});
+	
+	protected void done() {
+		done(false);
 	}
 	
 	private void done(boolean cancelled) {
@@ -219,6 +183,7 @@ abstract public class ContrailTask<T> {
 			synchronized (__done) {
 				if (!_done) {
 					if (cancelled) {
+						_cancelled= true;
 						try { stop(); } catch (Throwable t) { Logging.warning("Error while trying to stop a task", t); } 
 					}
 					_done= true;
@@ -236,32 +201,52 @@ abstract public class ContrailTask<T> {
 								deferredTask.submit();
 					}
 					
+					// notify completion listeners 
+					if (_completionListeners != null) {
+						for (CompletionListener listener: _completionListeners) {
+							try {
+								listener.done(this);
+							}
+							catch (Throwable t) {
+								Logging.warning(t);
+							}
+						}
+					}
+					
 					__done.notifyAll();
 				}
 			}
 		}
 	}
 	
-	public IResult<T> getResult() {
+	protected T getResult() {
 		return _result;
 	}
+	
+	Throwable getThrowable() {
+		quietlyJoin();
+		return _throwable;
+	}
+	
 	
 	private synchronized void runTask() {
 if (__logger.isLoggable(Level.FINER))
 	__logger.finer("run task "+hashCode()+", id "+_id+", op "+_operation+", thread "+Thread.currentThread().getName() );		
 		if (!_done) { 
 			try {
-				T result= run();
-				if (!_result.isCancelled())
-					success(result); 
+				run();
 			}
 			catch (Throwable x) {
-				error(x);
+				setError(x);
+			}
+			finally {
+
+				done(false);
 			}
 		}
 	}
 	
-	synchronized public IResult<T> submit() {
+	synchronized public ContrailTask<T> submit() {
 		if (!_submitted) {
 			__tasks.append(this);
 			_submitted= true;
@@ -269,21 +254,34 @@ if (__logger.isLoggable(Level.FINER))
 				__arrive.notify();
 			}
 		}
+		return this;
+	}
+	
+	
+	public <X extends Throwable> T get(Class<X> type) throws X {
+		join(type);
 		return _result;
 	}
-	synchronized public boolean isSubmitted() {
-		return _submitted;
+	public T get() {
+		join();
+		return _result;
 	}
-	
-	
 	public boolean isDone() {
 		return _done;
 	}
 	
+	public synchronized void addCompletionListener(CompletionListener listener) {
+		if (_completionListeners == null) {
+			_completionListeners= new ArrayList<CompletionListener>(1);
+		}
+		_completionListeners.add(listener);
+	}
+	
+	
 	/**
 	 * Submit this task for execution but don't run the task until the given tasks have completed
 	 */
-	public IResult<T> submit(List<ContrailTask<?>> dependentTasks) {
+	public ContrailTask<T> submit(List<ContrailTask<?>> dependentTasks) {
 		if (dependentTasks != null)  {
 			dependentTasks= new ArrayList<ContrailTask<?>>(dependentTasks); 
 			synchronized (__done) {
@@ -302,157 +300,105 @@ if (__logger.isLoggable(Level.FINER))
 		}
 		if (dependentTasks == null) 
 			submit();
+		return this;
+	}
+	
+	public ContrailTask<T> join() {
+		quietlyJoin();
+		TaskUtils.throwSomething(_throwable);
+		return this;
+	}
+	
+	public final <X extends Throwable> T invoke(Class<X> errorType) throws X {
+		submit();
+		join(errorType);
 		return _result;
 	}
 	
-	public T get() {
-		return _result.get();
+	public final <X extends Throwable> ContrailTask<T> join(Class<X> errorType) throws X {
+		quietlyJoin();
+		TaskUtils.throwSomething(_throwable, errorType);
+		return this;
+	}
+	
+	public boolean quietlyJoin() {
+		return quietlyJoin(1000L*60*60/*one hour*/);
 	}
 	
 	/**
-	 * Run other tasks in this thread while waiting for other things to happen
-	 * @return true if another task was run 
+	 * Return false if the join timed out, true if the task is complete
 	 */
-	protected boolean yield() {
-		return yield(0);
-	}
-	/**
-	 * Yields to some other task.
-	 * If there are no other tasks to run then wait the given number of milliseconds.
-	 */
-	protected boolean yield(long waitMillis) {
-		boolean taskWasRun= false;
-		
-		if (!isTaskYielded()) { // no nested yields for now
-			if (!yieldToDependent()) {
+	public boolean quietlyJoin(long timeoutMillis) {
+		final long start= System.currentTimeMillis();
+		while (true) {
+			ContrailTask nextTask= null;
+			synchronized (__done) {
+
+				if (_done)
+					return true;
+				
 				/*
-				 * If this task has no dependencies then choose a random task to run.  
-				 * DONT mess with a task that has any dependencies, choose something nice and simple.
+				 * If this task is not done then, in order to avoid deadlock, 
+				 * we have to perform some other task while we wait.  
+				 * If the task we're waiting for is not done them we'll see if 
+				 * we can get it off the list of waiting tasks and run it in 
+				 * this thread.
+				 * If the task we're waiting for is deferred then try to get 
+				 * one of the tasks it is waiting for off the list and run it. 
 				 */
-
-				ContrailTask nextTask= null;
-				for (Iterator<ContrailTask> i= __tasks.iterator(); i.hasNext();) {
-					ContrailTask t= i.next();
-					if (t._pendingTasks == null || t._pendingTasks.isEmpty()) {
-						if (__tasks.remove(t)) {
-							nextTask= t;
-							break;
-						}
+				if (_submitted) 
+					if (__tasks.remove(this)) { 
+						nextTask= this;
 					}
-				}
-
-				if (nextTask != null) 
-					taskWasRun= yieldToTask(nextTask);
-			}
-		}
-		
-		if (!taskWasRun && 0 < waitMillis) {
-			synchronized (this) {
-				try {
-					wait(waitMillis);
-				}
-				catch (InterruptedException x) {
-				}
-			}
-		}
-		
-		return taskWasRun;
-	}
-	
-	/**
-	 * Run other dependency tasks in this thread while waiting for other things to happen
-	 * @return true if a task was run
-	 */
-	protected boolean yieldToDependent() {
-		if (isTaskYielded())
-			return false; // no nested yields for now
-		
-		ContrailTask nextTask= null;
-		synchronized (__done) {
-
-			if (_done)
-				return false;
-
-			/*
-			 * If this task is not done then perform some other task while we wait.
-			 * This task may be waiting on some other task to complete, if so 
-			 * we will run one of those dependent tasks first.  
-			 * 
-			 * If the task we're waiting for is not done them we'll see if 
-			 * we can get it off the list of waiting tasks and run it in 
-			 * this thread.
-			 * If the task we're waiting for is deferred then try to get 
-			 * one of the tasks it is waiting for off the list and run it. 
-			 * 
-			 * If this task has no dependencies then choose a random task
-			 * to run.  DONT choose a task that's dependent on this one.
-			 */
-			if (_submitted) 
-				if (__tasks.remove(this)) { 
-					nextTask= this; // this task has not been assigned to a thread, run it now.
-				}
-
-			// find a dependent task to run
-			if (!_submitted && nextTask == null && _pendingTasks != null) {
-				HashSet<Identifier> done= new HashSet<Identifier>();
-				LinkedList<ContrailTask> todo= new LinkedList<ContrailTask>();
-				todo.add(this);
-				while (!_done && !todo.isEmpty() && nextTask == null) {
-					ContrailTask t= todo.removeFirst();
-					Identifier taskID= t.getId();
-					if (done.contains(taskID))
-						continue;
-					done.add(taskID);
-					if (!t._done) {
-						if (t._submitted) {
-							if (__tasks.remove(t)) { 
-								nextTask= t;
-							}
-						}
-						else if (t._pendingTasks != null) {
-							List<ContrailTask> l= t._pendingTasks;
-							for (int i= l.size(); 0 < i--;) {
-								ContrailTask p= l.get(i);
-								if (p._done) {
-									t._pendingTasks.remove(i);
+				if (!_submitted && nextTask == null && _pendingTasks != null) {
+					HashSet<Identifier> done= new HashSet<Identifier>();
+					LinkedList<ContrailTask> todo= new LinkedList<ContrailTask>();
+					todo.add(this);
+					while (!_done && !todo.isEmpty() && nextTask == null) {
+						ContrailTask t= todo.removeFirst();
+						Identifier taskID= t.getId();
+						if (done.contains(taskID))
+							continue;
+						done.add(taskID);
+						if (!t._done) {
+							if (t._submitted) {
+								if (__tasks.remove(t)) { 
+									nextTask= t;
 								}
-								else
-									todo.add(p);
+							}
+							else if (t._pendingTasks != null) {
+								List<ContrailTask> l= t._pendingTasks;
+								for (int i= l.size(); 0 < i--;) {
+									ContrailTask p= l.get(i);
+									if (p._done) {
+										t._pendingTasks.remove(i);
+									}
+									else
+										todo.add(p);
+								}
 							}
 						}
 					}
 				}
+			}	
+			
+			if (nextTask == null) {
+				synchronized (__done) {
+					if (_done)
+						return true;
+					try {__done.wait(); } catch (InterruptedException x) { }
+				}
 			}
+			else { 
+				nextTask.runTask();
+			}
+			
+			
+			long millisRemaining= timeoutMillis - (System.currentTimeMillis() - start);
+			if (millisRemaining <= 0) 
+				return false;
 		}
-
-		if (nextTask != null) {
-			return yieldToTask(nextTask);
-		}
-		
-		return false;
 	}
 	
-	/**
-	 * Yield to the given task
-	 * @return true if the task was run
-	 */
-	protected boolean yieldToTask(ContrailTask task) {
-		Thread thread= Thread.currentThread();
-		synchronized (__yielded) {
-			if (isTaskYielded())
-				return false; // no nested yields for now
-			
-			__yielded.add(thread);
-		}
-		try {
-			task.runTask();
-			return true;
-		}
-		finally {
-			synchronized (__yielded) {
-				__yielded.remove(thread);
-			}
-		}
-	}
 }
 

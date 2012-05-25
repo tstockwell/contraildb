@@ -3,10 +3,7 @@ package com.googlecode.contraildb.core.storage.provider;
 import java.io.IOException;
 import java.util.Collection;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.TaskUtils;
-import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
 
 
@@ -20,8 +17,8 @@ public class RamStorageProvider extends AbstractStorageProvider {
 	IdentifierIndexedStorage<byte[]> _storage= new IdentifierIndexedStorage<byte[]>(); 
 	
 	@Override
-	public IResult<IStorageProvider.Session> connect() {
-		return TaskUtils.asResult(new RamStorageSession());
+	public com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException {
+		return new RamStorageSession();
 	}
 	
 	private class RamStorageSession 
@@ -29,20 +26,18 @@ public class RamStorageProvider extends AbstractStorageProvider {
 	{
 
 		@Override
-		protected IResult<Void> doClose() {
+		protected void doClose() throws IOException {
 			// do nothing
-			return TaskUtils.asResult(null);
 		}
 
 		@Override
-		protected IResult<byte[]> doFetch(Identifier path) {
-			return TaskUtils.asResult(_storage.fetch(path));
+		protected byte[] doFetch(Identifier path) {
+			return _storage.fetch(path);
 		}
 
 		@Override
-		protected IResult<Void> doFlush() {
+		protected void doFlush() throws IOException {
 			// do nothing
-			return TaskUtils.asResult(null);
 		}
 
 		@Override
@@ -51,48 +46,18 @@ public class RamStorageProvider extends AbstractStorageProvider {
 		}
 
 		@Override
-		protected IResult<Void> doStore(Identifier path, byte[] byteArray) {
+		protected void doStore(Identifier path, byte[] byteArray) {
 			_storage.store(path, byteArray);
-			return TaskUtils.asResult(null);
 		}
 		
 		@Override
-		protected IResult<Void> doDelete(Identifier path) {
+		protected void doDelete(Identifier path) throws IOException {
 			_storage.delete(path);
-			return TaskUtils.asResult(null);
 		}
 		
 		@Override
-		protected IResult<Boolean> exists(Identifier path) {
-			return TaskUtils.asResult(_storage.exists(path));
-		}
-
-		@Override
-		protected IResult<Boolean> doCreate(final Identifier path, final byte[] byteArray, final long waitMillis) {
-			return new ContrailTask<Boolean>() {
-				@Override protected Boolean run() throws Exception {
-					boolean success= false;
-					long start= System.currentTimeMillis();
-					while(!success) {
-						synchronized (_storage) {
-							if (!_storage.exists(path)) {
-								_storage.store(path, byteArray);
-								success= true; 
-							}
-						}
-						
-						if (!success) {
-							// check to see if we've timed out
-							if (waitMillis < System.currentTimeMillis() - start)
-								break;
-							
-							// do something else for a while
-							yield(100);
-						}
-					}
-					return success;
-				}
-			}.submit();
+		protected boolean exists(Identifier path) throws IOException {
+			return _storage.exists(path);
 		}
 	}
 	

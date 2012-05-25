@@ -5,16 +5,9 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.UUID;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.ConditionalHandler;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.Immediate;
-import com.googlecode.contraildb.core.async.ResultAction;
-import com.googlecode.contraildb.core.async.ResultHandler;
-import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.Entity;
-import com.googlecode.contraildb.core.storage.IEntity;
+import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
@@ -23,14 +16,14 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 /**
  * Leaf nodes
  */
-@SuppressWarnings({"unchecked","rawtypes"})
+@SuppressWarnings("unchecked")
 public class Node<K extends Comparable<?>>
 extends Entity 
 implements Cloneable
 {
 	final static long serialVersionUID = 1L;
 
-	transient KeyValueSet<K,?> _index;
+	transient BPlusTree<K,?> _index;
 	protected Identifier _indexId;
 	protected K[] _keys;
 	protected Object[] _values;
@@ -38,7 +31,7 @@ implements Cloneable
 	protected Identifier _previous;
 	protected Identifier _next;
 	
-	@Immediate Node(KeyValueSet<K,?> btree)  
+	Node(BPlusTree<K,?> btree)  
 	{
 		super(Identifier.create(btree.getId(), UUID.randomUUID().toString()));
 		_index = btree;
@@ -50,129 +43,90 @@ implements Cloneable
 	
 	protected Node() { }
 	
-	@Immediate Node<K> clone(Node<K> node) { return  new Node<K>(node._index); }
-	@Immediate boolean isLeaf() { return true; }  
-	@Immediate public KeyValueSet<K,?> getIndex() { return _index; }
-	
-	IResult<Node<K>> getNextSibling() { 
-		if (_next == null) 
-			return null; 
-		return getStorage().fetch(_next); 
-	}
-	
-	IResult<K> getLookupKey() { 
-		if (_next == null) 
-			return TaskUtils.asResult(getLargestKey()); 
-		return new ResultHandler<Node<K>>(getNextSibling()) {
-			protected IResult onSuccess(Node<K> node) throws Exception {
-				return asResult(node.getSmallestKey());
-			}
-		}; 
-	}		
+	Node<K> clone(Node<K> node) { return  new Node<K>(node._index); }
+	boolean isLeaf() { return true; }  
+	public BPlusTree<K,?> getIndex() { return _index; }
+	Node<K> getNextSibling() throws IOException { if (_next == null) return null; return StorageUtils.syncFetch(getStorage(), _next); }
+	K getLookupKey() throws IOException { if (_next == null) return getLargestKey(); return getNextSibling().getSmallestKey(); }		
 
-	public IResult<Void> onLoad(Identifier identifier)
+	public void onLoad(Identifier identifier)
+	throws IOException 
 	{
-		return new ResultAction<IEntity>(storage.fetch(_indexId)) {
-			protected void onSuccess(IEntity index) throws Exception {
-				_index= (KeyValueSet<K, ?>) index;
-			}
-		};
+		super.onLoad(identifier);
+		_index= StorageUtils.syncFetch(storage, _indexId);
 	}
 
-	@Immediate K getSmallestKey() { return _keys[0]; }
-	@Immediate K getLargestKey() { return _keys[_size-1]; }
-	@Immediate boolean isEmpty() { return _size <= 0; }
-	@Immediate boolean isFull() { return _index._pageSize <= _size; }
+	K getSmallestKey() { return _keys[0]; }
+	K getLargestKey() { return _keys[_size-1]; }
+	boolean isEmpty() { return _size <= 0; }
+	boolean isFull() { return _index._pageSize <= _size; }
 	
 	/**
 	 * Insert the given key and value.
 	 * @return new right sibling node if the key was inserted and provoked an overflow.
 	 */
-	public IResult<Node<K>> insert(final K key, final Object value) {
-		return new Handler() {
-			protected IResult onSuccess() throws Exception {
-				final int index = indexOf(key);
-				IResult<Node<K>> overflow= TaskUtils.NULL;
+	public Node<K> insert(K key, Object value) throws IOException {
+		int index = indexOf(key);
+		Node<K> overflow= null;
 
-				if (index < _size && KeyValueSet.compare(key, _keys[index]) == 0) { // key already exists
-					_values[index] = value;
-				}
-				else if (!isFull()) {
-					insertEntry(index, key, value);
-				}
-				else { // page is full, we must divide the page
-					overflow= new ResultHandler<Node<K>>(split()) {
-						protected IResult onSuccess(Node<K> overflow) throws Exception {
-							if (index <= _size) {
-								insertEntry(index, key, value);
-							}
-							else
-								overflow.insertEntry(index-_size, key, value);
-								
-							spawn(getStorage().store(overflow));
-							return asResult(overflow);
-						}
-					};
-				}
+		if (index < _size && BPlusTree.compare(key, _keys[index]) == 0) { // key already exists
+			_values[index] = value;
+		}
+		else if (!isFull()) {
+			insertEntry(index, key, value);
+		}
+		else { // page is full, we must divide the page
+			overflow= split();
+
+			if (index <= _size) {
+				insertEntry(index, key, value);
+			}
+			else
+				overflow.insertEntry(index-_size, key, value);
 				
-				return overflow;
-			}
-			protected IResult lastly() throws Exception {
-				return update();
-			}
-		};
+			getStorage().store(overflow);
+		}
+		
+		update();
+		return overflow;
 	}
 
 	/**
 	 * Split this node into two and return the new node
 	 * @throws IOException 
 	 */
-	IResult<Node<K>> split() throws IOException {
-		return new Handler() {
-			protected IResult onSuccess() throws Exception {
-				int half = _index._pageSize >> 1;
-				final Node<K> overflow= new Node<K>(_index); // clone this node
-				overflow._size= _size-half;
-				System.arraycopy(_keys, half, overflow._keys, 0, overflow._size);
-				System.arraycopy(_values, half, overflow._values, 0, overflow._size);
-				_size= half;
-				
-				for (int i= _keys.length; _size < i--;) {
-					_keys[i]= null;
-					_values[i]= null;
-				}
-				
-				// link newly created node
-				overflow._next = _next;
-				overflow._previous = getId();
-				IResult checkNext= new ConditionalHandler(_next != null) {
-					protected IResult onTrue() throws Exception {
-						return new ResultHandler<IEntity>(getStorage().fetch(_next)) {
-							protected IResult onSuccess(IEntity results) throws Exception {
-								Node<?> next = (Node<?>) results;
-								next._previous = overflow.getId();
-								return next.update();
-							}
-						};
-					}
-				};
-				return new Handler(checkNext) {
-					protected IResult onSuccess() throws Exception {
-						_next= overflow.getId();
-						
-						spawn(getStorage().store(overflow));
-						
-						return asResult(overflow);
-					}
-				};
-			}
-		};
+	Node<K> split() throws IOException {
+		int half = _index._pageSize >> 1;
+		Node<K> overflow= clone(this);
+		overflow._size= _size-half;
+		System.arraycopy(_keys, half, overflow._keys, 0, overflow._size);
+		System.arraycopy(_values, half, overflow._values, 0, overflow._size);
+		_size= half;
+		
+		for (int i= _keys.length; _size < i--;) {
+			_keys[i]= null;
+			_values[i]= null;
+		}
+		
+		// link newly created node
+		overflow._next = _next;
+		overflow._previous = getId();
+		if (_next != null) {
+			Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
+			next._previous = overflow.getId();
+			next.update();
+		}
+		_next= overflow.getId();
+		
+		getStorage().store(overflow);
+		
+		return overflow;
 	}
 
 	/**
 	 * Merge the given node into this node.
 	 */
-	IResult<Void> merge(Node<K> rightSibling) {
+	void merge(Node<K> rightSibling) throws IOException {
 		if (_index._pageSize < _size + rightSibling._size)
 			throw new IllegalStateException("Combined node size exceeds index page size");
 
@@ -182,15 +136,10 @@ implements Cloneable
 		
 		// link newly created node
 		if ((_next = rightSibling._next) != null) {
-			return new ResultHandler<IEntity>(getStorage().fetch(_next)) {
-				protected IResult onSuccess(IEntity entity) throws Exception {
-					Node<?> next = (Node<?>) entity;
-					next._previous = getId();
-					return next.update();
-				}
-			}; 
+			Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
+			next._previous = getId();
+			next.update();
 		}
-		return TaskUtils.DONE;
 	}
 	
 	/**
@@ -199,14 +148,14 @@ implements Cloneable
 	 * 		For leaf nodes this is the index of the first element that is >= to the given key.
 	 * 		For inner nodes this is the index of the first key that is > the given key   
 	 */
-	@Immediate int indexOf(K key) {
+	int indexOf(K key) {
 		int left = 0;
 		int right = _size - 1;
 
 		// binary search
 		while (left <= right) {
 			int middle = (left + right) / 2;
-			int i= KeyValueSet.compare(_keys[middle], key);
+			int i= BPlusTree.compare(_keys[middle], key);
 			if (i == 0)
 				return middle;
 			if (i < 0) {
@@ -218,7 +167,8 @@ implements Cloneable
 		return left;
 	}
 	
-	@Immediate void insertEntry(int index, K key, Object value) {
+
+	void insertEntry(int index, K key, Object value) {
 		System.arraycopy(_keys, index, _keys, index+1, _size-index);
 		_keys[index] = key;
 		System.arraycopy(_values, index, _values, index+1, _size-index);
@@ -226,7 +176,7 @@ implements Cloneable
 		_size++;
 	}
 
-	@Immediate void removeEntry(int index) {
+	void removeEntry(int index) {
 		_size--;
 		if (index < _size) {
 			System.arraycopy(_keys, index+1, _keys, index, _size-index);
@@ -236,7 +186,7 @@ implements Cloneable
 		_values[_size]= null;
 	}
 	
-	@Immediate void setEntry(int index, K key, Object value) {
+	void setEntry(int index, K key, Object value) {
 		_keys[index] = key;
 		_values[index] = value;
 	}
@@ -245,27 +195,18 @@ implements Cloneable
 	 * Remove the entry associated with the given key.
 	 * @return true if underflow
 	 */
-	IResult<Boolean> remove(final K key) {
-		IResult remove= new Handler() {
-			protected IResult onSuccess() throws Exception {
-				int index = indexOf(key);
-				if (index < _size) {
-					if (KeyValueSet.compare(_keys[index], key) == 0) {
-						removeEntry(index);
-						return update();
-					}
-				}
-				return TaskUtils.DONE;
+	boolean remove(K key) throws IOException {
+		int index = indexOf(key);
+		if (index < _size) {
+			if (BPlusTree.compare(_keys[index], key) == 0) {
+				removeEntry(index);
+				update();
 			}
-		};
-		return new Handler(remove) {
-			protected IResult onSuccess() throws Exception {
-				return asResult(_size < _index._pageSize / 2);
-			}
-		};
+		}
+		return _size < _index._pageSize / 2;
 	}
 
-	@Immediate void dump(PrintStream out, int depth) throws IOException {
+	void dump(PrintStream out, int depth) throws IOException {
 		String prefix = "";
 		for (int i = 0; i < depth; i++) {
 			prefix += "    ";
@@ -275,12 +216,13 @@ implements Cloneable
 				out.println(prefix + i+": [" + _keys[i] + "] " + _values[i]);
 	}
 
-	IResult<Node<K>> getChildNode(int index) {
+	Node<K> getChildNode(int index) throws IOException {
 		assert 0 < index;
-		return getStorage().fetch((Identifier)_values[index]);
+		return StorageUtils.syncFetch(getStorage(), (Identifier)_values[index]);
 	}
 
 
+	@SuppressWarnings("rawtypes")
 	public static final Serializer<Node> SERIALIZER= new Serializer<Node>() {
 		private final int typeCode= Node.class.getName().hashCode();
 		public Node<?> readExternal(java.io.DataInput in) 

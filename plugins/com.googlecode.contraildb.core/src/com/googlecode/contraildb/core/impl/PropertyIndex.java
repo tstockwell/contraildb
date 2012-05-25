@@ -3,25 +3,23 @@ package com.googlecode.contraildb.core.impl;
 import java.io.IOException;
 import java.io.Serializable;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.Immediate;
-import com.googlecode.contraildb.core.async.ResultHandler;
-import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.BTree;
+import com.googlecode.contraildb.core.impl.btree.CursorImpl;
+import com.googlecode.contraildb.core.impl.btree.IBTreeCursor;
+import com.googlecode.contraildb.core.impl.btree.IBTreePlusCursor;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
-import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor;
-import com.googlecode.contraildb.core.impl.btree.IOrderedSetCursor.Direction;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
-import com.googlecode.contraildb.core.storage.IEntity;
+import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
+import com.googlecode.contraildb.core.storage.StorageUtils;
 
 
 /**
- * Contrail creates an index for every unique property name. 
- * The index maps property values to the identifiers of the entities that contain that property. 
- * If there is more that one entity for a given property value then
- * instead the index instead contains the id of another index that lists all the entities.
+ * In Contrail an index is created for every unique property name. The index
+ * maps property values to the identifiers of the entities that contain that
+ * property. If there is more that one entity for a given property value then
+ * instead the index instead contains the id of another index that lists all the
+ * entities.
  * 
  * When iterating through an index, identifiers associated with the same
  * property value are always returned in order (the order defined by the
@@ -30,113 +28,82 @@ import com.googlecode.contraildb.core.storage.IEntity;
  * 
  * @author ted stockwell
  */
-@SuppressWarnings({"unchecked","rawtypes"})
+@SuppressWarnings("unchecked")
 public class PropertyIndex<K extends Comparable<K> & Serializable>
 {
 	
-	KeyValueSet<K, Identifier> _btree;
+	BPlusTree<K, Identifier> _btree;
 	
 	static final Identifier __indexRoot= Identifier.create("net/sf/contrail/core/indexes/sets");
 	
-	@Immediate public PropertyIndex(KeyValueSet<K, Identifier> btree) throws IOException {
+	public PropertyIndex(BPlusTree<K, Identifier> btree) throws IOException {
 		_btree= btree;
 	}
 
 
-	synchronized public IResult<Void> insert(final K key, final Identifier document) throws IOException {
-		return new ResultHandler<Identifier>(_btree.cursor(Direction.FORWARD).find(key)) {
-			protected IResult onSuccess(Identifier found) throws Exception {
-				final Identifier value= found;
-				if (value == null) { 
-					// the key has no value currently associated with it, just store the identifier
-					spawn(_btree.insert(key, document));
-					return TaskUtils.DONE;
-				} 
-				
-				if (__indexRoot.isAncestorOf(value)) {
-					// the key has more than one value currently associated with it, 
-					// add the identifier to the list
-					return new ResultHandler<IEntity>(_btree.getStorage().fetch(value)) {
-						protected IResult onSuccess(IEntity item) throws Exception {
-							BTree<Identifier> set= (BTree<Identifier>) item;
-							spawn(set.insert(document));
-							return TaskUtils.DONE;
-						}
-					};
-				}
+	synchronized public void insert(K key, Identifier document) throws IOException {
+		Identifier value= _btree.cursor(Direction.FORWARD).find(key);
+		if (value == null) { 
+			// the key has no value currently associated with it, just store the identifier
+			_btree.insert(key, document);
+			return;
+		} 
+		
+		if (__indexRoot.isAncestorOf(value)) {
+			// the key has more than one value currently associated with it, 
+			// add the identifier to the list
+			BTree<Identifier> set= StorageUtils.syncFetch(_btree.getStorage(), value);
+			set.insert(document);
+			return;
+		}
 
-				// the key has a single value currently associated with it
-				// create a set index and add the two values
-				final Identifier setId= Identifier.create(__indexRoot);
-				return new Handler(KeyValueSet.create(_btree.getStorage(), setId)) {
-					protected IResult onSuccess() throws Exception {
-						KeyValueSet set= (KeyValueSet) incoming().getResult();
-						spawn(set.insert(value));
-						spawn(set.insert(document));
-						spawn(_btree.insert(key, setId));
-						return TaskUtils.DONE;
-					}
-				};
-			}
-		};
+		// the key has a single value currently associated with it
+		// create a set index and add the two values
+		Identifier setId= Identifier.create(__indexRoot);
+		BTree<Identifier> set= BTree.createInstance(_btree.getStorage(), setId);
+		set.insert(value);
+		set.insert(document);
+		_btree.insert(key, setId);
 	}
 
 
-	synchronized public IPropertyCursor<K> cursor(Direction direction) 
+	@SuppressWarnings("rawtypes")
+	synchronized public IBTreePlusCursor<K, IForwardCursor<Identifier>> cursor(Direction direction) 
+	throws IOException 
 	{
-		return new PropertyCursorImpl(_btree, direction) {
-			private  IResult<IForwardCursor<Identifier>> toIterable(Identifier id)  {
+		return new CursorImpl(_btree, direction) {
+			private  IForwardCursor<Identifier> toIterable(Identifier id) throws IOException {
 				if (id == null)
-					return TaskUtils.asResult(new IOrderedSetCursor.EmptyForwardCursor<Identifier>());
+					return new IBTreeCursor.EmptyForwardCursor<Identifier>();
 				if (__indexRoot.isAncestorOf(id)) {
-					return new Handler(_btree.getStorage().fetch(id)) {
-						protected IResult onSuccess() throws Exception {
-							BTree<Identifier> tree= (BTree<Identifier>) incoming().getResult();
-							return asResult(tree.forwardCursor());
-						}
-					};
+					BTree<Identifier> tree= StorageUtils.syncFetch(_btree.getStorage(), id);
+					return tree.forwardCursor();
 				}
-				return TaskUtils.asResult(new IOrderedSetCursor.SingleValueCursor<Identifier>(id));
+				return new IBTreeCursor.SingleValueCursor<Identifier>(id);
 			}
 			@Override
-			public IResult<IForwardCursor<Identifier>> elementValue() {
-				return new Handler(super.elementValue()) {
-					protected IResult onSuccess() throws Exception {
-						return toIterable((Identifier)incoming().getResult());
-					}
-				};
+			public IForwardCursor<Identifier> elementValue() throws IOException {
+				return toIterable((Identifier)super.elementValue());
 			}
 		};
 	}
 
 
-	synchronized public IResult<Void> remove(final K key, final Identifier document) {
-		return new Handler(_btree.cursor(Direction.FORWARD).find(key)) {
-			protected IResult onSuccess() throws Exception {
-				Identifier value= (Identifier) incoming().getResult();
-				if (value == null)
-					return TaskUtils.DONE;
-				if (__indexRoot.isAncestorOf(value)) {
-					return new Handler(_btree.getStorage().fetch(value)) {
-						protected IResult onSuccess() throws Exception {
-							final BTree<Identifier> set= (BTree<Identifier>) incoming().getResult();
-							return new Handler(set.remove(document)) {
-								protected IResult onSuccess() throws Exception {
-									if (set.isEmpty()) {
-										spawn(_btree.remove(key));
-										spawn(set.delete());
-									}
-									return TaskUtils.DONE;
-								}
-							};
-						}
-					};
-				}
-				
-				if (value.equals(document)) 
-					spawn(_btree.remove(key));
-				return TaskUtils.DONE;
+	synchronized public void remove(K key, Identifier document) throws IOException {
+		Identifier value= _btree.cursor(Direction.FORWARD).find(key);
+		if (value == null)
+			return;
+		if (__indexRoot.isAncestorOf(value)) {
+			BTree<Identifier> set= StorageUtils.syncFetch(_btree.getStorage(), value);
+			set.remove(document);
+			if (set.isEmpty()) {
+				_btree.remove(key);
+				set.delete();
 			}
-		};
+			return;
+		}
+		
+		if (value.equals(document)) 
+			_btree.remove(key);
 	}
 }

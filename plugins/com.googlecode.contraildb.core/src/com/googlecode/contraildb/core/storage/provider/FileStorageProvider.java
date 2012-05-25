@@ -10,11 +10,10 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -40,7 +39,6 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	
 	static final String LOCK_FILE = ".lock";
 	static final String CONTENT_FILE= ".content"; 
-	static final long RETRY_MILLIS= 100; 
 
 	
 	private File _root;
@@ -52,13 +50,13 @@ public class FileStorageProvider extends AbstractStorageProvider {
 			_file= file;
 		}
 		@Override
-		protected void action() {
+		protected void run() {
 			File[] files= _file.listFiles();
 			if (files != null) {
-				ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
+				ArrayList<ContrailTask<?>> tasks= new ArrayList<ContrailTask<?>>();
 				for (final File file2: files)
 					tasks.add(new DeleteAction(Identifier.create(getId(), file2.getName()), file2).submit());
-				TaskUtils.combineResults(tasks).get();
+				TaskUtils.joinAll(tasks);
 			}
 			for (int i= 0; i < 10; i++) {
 				if (_file.delete()) {
@@ -79,14 +77,8 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	}
 	public FileStorageProvider(File root, boolean clean) throws IOException {
 		if (clean) {
-			if (root.exists()) {
-				try {
-					new DeleteAction(Identifier.create(""), root).submit().get();
-				}
-				catch (Throwable t) {
-					TaskUtils.throwSomething(t, IOException.class);
-				}
-			}
+			if (root.exists())
+				new DeleteAction(Identifier.create(""), root).submit().join(IOException.class);
 		}
 		root.mkdirs();
 		_root= root;
@@ -97,32 +89,26 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	}
 	
 	@Override
-	public IResult<IStorageProvider.Session> connect() {
-		return TaskUtils.asResult(new FileStorageSession());
+	public Session connect() throws IOException {
+		return new FileStorageSession();
 	}
 	
 	
 	class FileStorageSession extends AbstractStorageProvider.Session {
 		
 		@Override
-		protected IResult<Void> doClose() {
+		protected void doClose() throws IOException {
 			// do nothing
-			return TaskUtils.asResult(null);
 		}
 
 		@Override
-		protected IResult<byte[]> doFetch(final Identifier path) {
-			return new ContrailTask<byte[]>() {
-				@Override protected byte[] run() throws Exception {
-					return fetchFile(new File(new File(_root, path.toString()), CONTENT_FILE));
-				}
-			}.submit();
+		protected byte[] doFetch(Identifier path) throws IOException {
+			return fetchFile(new File(new File(_root, path.toString()), CONTENT_FILE));
 		}
 
 		@Override
-		protected IResult<Void> doFlush() {
+		protected void doFlush() throws IOException {
 			// do nothing
-			return TaskUtils.asResult(null);
 		}
 
 		@Override
@@ -140,68 +126,30 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		}
 
 		@Override
-		protected IResult<Void> doStore(final Identifier path, final byte[] byteArray) 
+		protected void doStore(Identifier path, byte[] byteArray) 
+		throws IOException 
 		{
-			return new ContrailAction() {
-				@Override protected void action() throws Exception {
-					File folder= new File(_root, path.toString());
-					folder.mkdirs();
-					File file= new File(folder, CONTENT_FILE);
-					OutputStream out= new FileOutputStream(file);
-					try {
-						out.write(byteArray);
-						out.flush();
-					}
-					finally {
-						out.close(); 
-					}
-				}
-			}.submit();
+			File folder= new File(_root, path.toString());
+			folder.mkdirs();
+			File file= new File(folder, CONTENT_FILE);
+			OutputStream out= new FileOutputStream(file);
+			try {
+				out.write(byteArray);
+				out.flush();
+			}
+			finally {
+				out.close(); 
+			}
 		}
 		
 		@Override
-		protected IResult<Void> doDelete(Identifier path) {
-			return new DeleteAction(path, new File(_root, path.toString())).submit();
+		protected void doDelete(Identifier path) throws IOException {
+			new DeleteAction(path, new File(_root, path.toString())).invoke(IOException.class);
 		}
 		
 		@Override
-		protected IResult<Boolean> exists(Identifier path) {
-			return TaskUtils.asResult(new File(_root, path.toString()).exists());
-		}
-
-		@Override
-		protected IResult<Boolean> doCreate(final Identifier path, final byte[] byteArray, final long waitMillis) {
-			return new ContrailTask<Boolean>() {
-				@Override protected Boolean run() throws Exception {
-					boolean success= false;
-					long start= System.currentTimeMillis();
-					File folder= new File(_root, path.toString());
-					while(!success) {
-						if (folder.mkdirs()) {
-							// ok, we created this folder, now just write the contents and we're done...
-							File file= new File(folder, CONTENT_FILE);
-							OutputStream out= new FileOutputStream(file);
-							try {
-								out.write(byteArray);
-								out.flush();
-							}
-							finally {
-								out.close(); 
-							}
-							success= true; 
-						}
-						else {
-							// check to see if we've timed out
-							if (waitMillis < System.currentTimeMillis() - start)
-								break;
-							
-							// do something else for a while
-							yield(100);
-						}
-					}
-					return success;
-				}
-			}.submit();
+		protected boolean exists(Identifier path) throws IOException {
+			return new File(_root, path.toString()).exists();
 		}
 	}
 	

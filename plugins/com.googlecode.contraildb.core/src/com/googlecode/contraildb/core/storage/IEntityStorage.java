@@ -3,9 +3,9 @@ package com.googlecode.contraildb.core.storage;
 import java.io.IOException;
 import java.util.Collection;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
+import com.googlecode.contraildb.core.utils.IResult;
 
 
 /**
@@ -35,7 +35,7 @@ public interface IEntityStorage {
 	/**
 	 * Start a storage session. 
 	 */
-	public IResult<Session> connect() throws IOException;
+	public Session connect() throws IOException;
 	
 	
 	static public interface Session {
@@ -44,22 +44,22 @@ public interface IEntityStorage {
 		 * MUST be called when the session is no longer needed.
 		 * Any pending changed are flushed before closing.
 		 */
-		public IResult<Void> close(); 
+		public void close() throws IOException; 
 	
 		/**
 		 * Flush any pending changes to physical storage.
 		 */
-		public IResult<Void> flush();
+		public void flush() throws IOException;
 		
-		public IResult<Void> delete(Identifier path);
+		public void delete(Identifier path);
 		
-		public IResult<Void> deleteAllChildren(Identifier path);
+		public void deleteAllChildren(Identifier path);
 
 		public <E extends IEntity> IResult<E> fetch(Identifier path);
 
 		public <E extends IEntity> IResult<Collection<E>> fetchChildren(final Identifier path);
 
-		public <E extends IEntity> IResult<Void> store(E entity);
+		public <E extends IEntity> void store(E entity);
 
 		public IResult<Collection<Identifier>> listChildren(Identifier path);
 

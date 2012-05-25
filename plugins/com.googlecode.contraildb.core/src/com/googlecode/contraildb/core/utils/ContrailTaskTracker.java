@@ -7,16 +7,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
-import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.IResultHandler;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
 
 /**
- * A convenient task scheduler for Contrail that coordinates tasks according 
+ * A convenient task manager for Contrail that coordinates tasks according 
  * to an associated Identifier and operation type (READ, WRITE, DELETE, LIST, 
  * or CREATE).
  * The purpose of this class is to manage the order in which asynchronous 
@@ -52,7 +48,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
  * A CREATE operation on an object may not proceed until all pending READ, 
  * and WRITE operations on that object have completed.  Since the purpose of 
  * the IStorageProvider.create method is to coordinate asynchronous CREATE 
- * requests, CREATE requests do not have to wait for other CREATE requests.   
+ * requests CREATE requests do not have to wait for other CREATE requests.   
  * 
  * @author Ted Stockwell
  */
@@ -150,50 +146,59 @@ public class ContrailTaskTracker {
 
 	public class Session {
 		
-		IResultHandler _completionListener= new Handler() {
-			@Override public void onComplete() {
-				IResult incoming= incoming();
-				for (ContrailTask task:_sessionTasks) {
-					if (task.getResult() == incoming) {
-						removeTask(task);
-						break;
-					}
-				}
+		ContrailTask.CompletionListener _completionListener= new ContrailTask.CompletionListener() {
+			public void done(ContrailTask task) {
+				removeTask(task);
 			}
 		};
 		
 		List<ContrailTask> _sessionTasks= Collections.synchronizedList(new ArrayList<ContrailTask>());
-		private boolean _closed=false;
 		
-		synchronized public IResult<Void> close() {
-			if (_closed)
-				return TaskUtils.asResult(null);
-			_closed= true;
-			if (_sessionTasks == null)
-				return TaskUtils.asResult(null);
-			List<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
-			List<IResult> results= new ArrayList<IResult>(_sessionTasks.size());
-			for (ContrailTask task:tasks)
-				results.add(task.getResult());
-			return TaskUtils.combineResults(results);
+		public void close() {
+			awaitCompletion();
+			_sessionTasks= null;
 		}
 		
 		@Override
 		protected void finalize() throws Throwable {
-			close();
+			if (_sessionTasks != null) {
+				try { awaitCompletion(); } catch (Throwable t) { }
+			}
 			super.finalize();
 		}
 		
-		synchronized public <T> IResult<T> submit(ContrailTask<T> task) {
-			if (_closed)
-				throw new IllegalStateException("The session has already been closed");
+		synchronized public Session submit(ContrailTask<?> task) {
 			List<ContrailTask<?>> pendingTasks= null;
 
 			pendingTasks= findPendingTasks(task);
 			addTask(task);
-			return task.submit(pendingTasks);
+			task.submit(pendingTasks);
+			
+			
+			return this;
 		}
 		
+		public <X extends Throwable, T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks, Class<X> errorType) 
+		throws X 
+		{
+			for (ContrailTask task : tasks) 
+				submit(task);
+			awaitCompletion(tasks, errorType);
+			return this;
+		}
+		public <T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks) 
+		{
+			for (ContrailTask task : tasks) 
+				submit(task);
+			awaitCompletion(tasks);
+			return this;
+		}
+		
+		public <T extends ContrailTask<?>> Session invoke(T task) 
+		{
+			invokeAll(ConversionUtils.asList(task));
+			return this;
+		}
 		
 		private void addTask(ContrailTask<?> task) {
 			Identifier taskId= task.getId();
@@ -206,7 +211,7 @@ public class ContrailTaskTracker {
 				tasks.add(task);
 			}
 			_sessionTasks.add(task);
-			task.getResult().addHandler(_completionListener);
+			task.addCompletionListener(_completionListener);
 		}
 		
 		private void removeTask(ContrailTask<?> task) {
@@ -222,32 +227,84 @@ public class ContrailTaskTracker {
 			}
 			_sessionTasks.remove(task);
 		}
-		
-		/**
-		 * Returns all result that completes when all the current tasks are complete.
-		 */
-		public IResult<Void> complete() {
-			List<ContrailTask> tasks;
-			synchronized (this) {
-				tasks= new ArrayList<ContrailTask>(_sessionTasks);
+
+		public Session awaitCompletion() {
+			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
+			while (!_sessionTasks.isEmpty()) {
+				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
+				ArrayList<ContrailTask> todo= new ArrayList<ContrailTask>();
+				for (ContrailTask t: tasks) {
+					if (!done.contains(t)) {
+						todo.add(t);
+						done.add(t);
+					}
+				}
+				if (todo.isEmpty())
+					break;
+				
+				Throwable t= getThrowable(new ArrayList(todo));
+				if (t != null) 
+					TaskUtils.throwSomething(t);
 			}
-			ArrayList<IResult> results= new ArrayList<IResult>(tasks.size());
-			for (ContrailTask task:tasks)
-				results.add(task.getResult());
-			return TaskUtils.combineResults(results);
+			return this;
 		}
 
-//		/**
-//		 * @throws An unchecked exception if an error occurred while producing the result
-//		 */
-//		public void join() {
-//			List<ContrailTask> tasks;
-//			synchronized (this) {
-//				tasks= new ArrayList<ContrailTask>(_sessionTasks);
-//			}
-//			for (ContrailTask task:tasks)
-//				task.getResult().get();
-//		}
+		public <X extends Throwable> Session awaitCompletion(Class<X> errorType) throws X {
+			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
+			while (!_sessionTasks.isEmpty()) {
+				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
+				ArrayList<ContrailTask> todo= new ArrayList<ContrailTask>();
+				for (ContrailTask t: tasks) {
+					if (!done.contains(t)) {
+						todo.add(t);
+						done.add(t);
+					}
+				}
+				if (todo.isEmpty())
+					break;
+				Throwable t= getThrowable(new ArrayList(todo));
+				if (t != null) 
+					TaskUtils.throwSomething(t, errorType);
+			}
+			return this;
+		}
+		
+		public <T extends ContrailTask<?>> Session awaitCompletion(Iterable<T> tasks) {
+			try {
+				Throwable t= getThrowable(tasks);
+				if (t != null) 
+					TaskUtils.throwSomething(t);
+			}
+			finally {
+				for (T t:tasks)
+					_sessionTasks.remove(t);
+			}
+			return this;
+		}
+		public <X extends Throwable, T extends ContrailTask<?>> Session awaitCompletion(Iterable<T> tasks, Class<X> errorType) throws X {
+			Throwable t= getThrowable(tasks);
+			if (t != null) 
+				TaskUtils.throwSomething(t, errorType);
+			return this;
+		}
+
+		public boolean contains(ContrailAction action) {
+			return _sessionTasks.contains(action);
+		}
+
+		private <T extends ContrailTask<?>> Throwable getThrowable(Iterable<T> tasks) {
+			Throwable t= null;
+			for (ContrailTask task : tasks) {
+				
+				if (task.getOperation() == Operation.CREATE && !task.isDone())
+					continue;
+				
+				Throwable t2= task.getThrowable();
+				if (t == null) 
+					t= t2;
+			}
+			return t;
+		}
 	}
 	
 }

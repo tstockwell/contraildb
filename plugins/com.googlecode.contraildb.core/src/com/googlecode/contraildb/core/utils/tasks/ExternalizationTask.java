@@ -4,10 +4,10 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.List;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.utils.ClosableByteArrayOutputStream;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -22,20 +22,30 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 	}
 	
 	@Override
-	public IResult<byte[]> submit() {
-		return super.submit();
+	public ExternalizationTask submit() {
+		super.submit();
+		return this;
 	}
 	
 	@Override
-	public IResult<byte[]> submit(List<ContrailTask<?>> dependentTasks) {
-		return super.submit(dependentTasks);
+	public ExternalizationTask submit(List<ContrailTask<?>> dependentTasks) {
+		super.submit(dependentTasks);
+		return this;
 	}
 	
-	protected byte[] run() throws IOException {
-		ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
-		outputStream.writeObject(_item);
-		outputStream.flush();
-		return _byteStream.toByteArray();
+	protected void run() throws IOException {
+		try {
+			ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
+			outputStream.writeObject(_item);
+			outputStream.flush();
+			setResult(_byteStream.toByteArray());
+		}
+		catch (Throwable x) {
+			if (!isCancelled()) { // if task was canceled then we can ignore the error.
+				x.printStackTrace();
+				TaskUtils.throwSomething(x, IOException.class);
+			}
+		}
 	}
 	
 	public byte[] get() {
