@@ -1,49 +1,88 @@
-package contrail
+package id
 
-import "strings"
+import (
+	"strings"
+	"sync"
+	"contrail/utils/uuid"
+	"contrail/utils/lru"
+)
 
-type identifierFactory struct { }
-type identifier struct { }
-var Identifier = new(identifierFactory)
+/**
+ * Identifies an item in a hierarchy of items.
+ * Identifiers may have information attached to them by clients, 
+ * see the GetProperty and SetProperty methods.
+ * 
+ * The name of an item may not contain the '/' character.
+ * Names are separated by '/' characters to form hierarchies.
+ *
+ * Identifiers are 'symbols', only one instance of a given identifier 
+ * ever exists in memory.     
+ * 
+ * @author Ted Stockwell
+ */
+type Identifier struct {
+	completePath string;
+	ancestors Identifier[];
+	name string;
+	properties map[string]interface{};
+}
+
+var cache Cache = lru.New(1000);
+
+func getCached(path string) Identifer {
+	lock.Lock()
+	defer lock.UnLock()
+	return cache[path]
+}
+
+
+func Create(path string) Identifier {
+	path= strings.Trim(path, "/")
+	var id Identifier= cache.Get(path)
+	if (id != null)
+		return id;
+	
+	id= new Identifier{}
+	i:= strings.LastIndex(path, "/")
+	if 0 <= i {
+		id.completePath= path;
+		id.name= path[i+1:];
+		Identifier parent= Create(path[:i]);
+		Identifier[] ancestors= parent._ancestors;
+		_ancestors= new Identifier[ancestors.length+1];
+		System.arraycopy(ancestors, 0, _ancestors, 0, ancestors.length);
+		_ancestors[ancestors.length]= parent;
+	}
+	else { 
+		_completePath= _name= path;
+		_ancestors= EMPTY_ANCESTORS;
+	}
+	
+	// clean up expired references
+	IdentifierReference ref;
+	while ((ref= (IdentifierReference)__referenceQueue.poll()) != null) {
+		synchronized (__cache) {
+			__cache.remove(ref._path);
+		}
+	}
+}
+
 
 /**
  * Create a unique identifier with a random UUID for the path 
 */
-func Random(factory *identifierFactory) identifier {
+func Unique() Identifier {
+	return Create(uuid.GenUUID());
 }
 
-func FromString(factory *identifierFactory, path string) identifier {
-	path= strings.Trim(path, "/")
-	
-	i:= strings.LastIndex(path, "/")
+/**
+ * Create/Get a child identifier
+ */ 
+func (parent Identifier*) Child(String name) {
+	if (parent == null)
+		return Create(name);
+	return Create(parent.completePath+"/"+name);
 }
-//	while (path.startsWith("/"))
-//		path= path.substring(1);
-//	int i= path.lastIndexOf('/');
-//	if (0 <= i) {
-//		_completePath= path;
-//		_name= path.substring(i+1);
-//		Identifier parent= create(path.substring(0, i));
-//		Identifier[] ancestors= parent._ancestors;
-//		_ancestors= new Identifier[ancestors.length+1];
-//		System.arraycopy(ancestors, 0, _ancestors, 0, ancestors.length);
-//		_ancestors[ancestors.length]= parent;
-//	}
-//	else { 
-//		_completePath= _name= path;
-//		_ancestors= EMPTY_ANCESTORS;
-//	}
-//	
-//	// clean up expired references
-//	IdentifierReference ref;
-//	while ((ref= (IdentifierReference)__referenceQueue.poll()) != null) {
-//		synchronized (__cache) {
-//			__cache.remove(ref._path);
-//		}
-//	}
-//}
-
-
 ///**
 // * Identifies an item in a hierarchy of items.
 // * 
@@ -107,11 +146,6 @@ func FromString(factory *identifierFactory, path string) identifier {
 //		return identifier;
 //	}
 //	
-//	public static Identifier create(Identifier parent, String name) {
-//		if (parent == null)
-//			return create(name);
-//		return create(parent._completePath+"/"+name);
-//	}
 //	
 //	private Identifier(String path) {
 //		while (path.endsWith("/"))
