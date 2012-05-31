@@ -3,8 +3,8 @@ package id
 import (
 	"strings"
 	"sync"
-	"contrail/utils/uuid"
-	"contrail/utils/lru"
+	"contrail/util/uuid"
+	"contrail/util/lru"
 )
 
 /**
