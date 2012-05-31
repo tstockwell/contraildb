@@ -22,12 +22,13 @@ import (
  */
 type Identifier struct {
 	completePath string;
-	ancestors Identifier[];
+	ancestors []Identifier;
 	name string;
 	properties map[string]interface{};
 }
 
 var cache Cache = lru.New(1000);
+var empty_ancestors []Identifier = []Identifier{};
 
 func getCached(path string) Identifer {
 	lock.Lock()
@@ -40,31 +41,26 @@ func Create(path string) Identifier {
 	path= strings.Trim(path, "/")
 	var id Identifier= cache.Get(path)
 	if (id != null)
-		return id;
+		return id
 	
 	id= new Identifier{}
+	id.completePath= path;
+	
 	i:= strings.LastIndex(path, "/")
 	if 0 <= i {
-		id.completePath= path;
-		id.name= path[i+1:];
-		Identifier parent= Create(path[:i]);
-		Identifier[] ancestors= parent._ancestors;
-		_ancestors= new Identifier[ancestors.length+1];
-		System.arraycopy(ancestors, 0, _ancestors, 0, ancestors.length);
-		_ancestors[ancestors.length]= parent;
+		id.name= path[i+1:]
+		var parent Identifier= Create(path[:i])
+		id.ancestors= append(parent.ancestors, parent)
 	}
 	else { 
-		_completePath= _name= path;
-		_ancestors= EMPTY_ANCESTORS;
+		id.name= path
+		id.ancestors= empty_ancestors
 	}
+	id.properties= map[string]interface{}
 	
-	// clean up expired references
-	IdentifierReference ref;
-	while ((ref= (IdentifierReference)__referenceQueue.poll()) != null) {
-		synchronized (__cache) {
-			__cache.remove(ref._path);
-		}
-	}
+	cache.Add(id);
+	
+	return id
 }
 
 
