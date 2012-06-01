@@ -63,17 +63,17 @@ type StorageSession interface  {
 	 * 		true if the file was created, false if the file already exists 
 	 * 		and was not deleted within the wait period.
 	 */
-	Create(path *Identifier, content byte[], waitMillis uint64)
+	Create(path *Identifier, content []byte, waitMillis uint64)
 
 	/**
 	 * Deletes the contents stored at the given locations.
 	 */
-	Delete(path *Identifier);
+	Delete(path *Identifier)
 	
 	/**
 	 * Flush any pending changes made by this session to physical storage.
 	 */
-	Flush();
+	Flush()
 
 
 }
