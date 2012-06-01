@@ -40,9 +40,8 @@ func getCached(path string) Identifer {
 func Create(path string) Identifier {
 	path= strings.Trim(path, "/")
 	var id Identifier= cache.Get(path)
-	if id != nil {
+	if (id != null)
 		return id
-	}
 	
 	id= new Identifier{}
 	id.completePath= path;
