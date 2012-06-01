@@ -15,74 +15,92 @@ import (
  * The name of an item may not contain the '/' character.
  * Names are separated by '/' characters to form hierarchies.
  *
- * Identifiers are 'symbols', only one instance of a given identifier 
+ * Identifiers are 'symbols', only one instance of a given Identifier 
  * ever exists in memory.     
  * 
  * @author Ted Stockwell
  */
 type Identifier struct {
 	completePath string;
-	ancestors []Identifier;
+	ancestors []*Identifier;
 	name string;
 	properties map[string]interface{};
 }
 
-var cache Cache = lru.New(1000);
-var empty_ancestors []Identifier = []Identifier{};
+var cache *lru.Cache = lru.New(1000);
+var lock sync.Mutex= sync.Mutex {}
+var empty_ancestors []*Identifier = []*Identifier{};
 
-func getCached(path string) Identifer {
+func getCached(path string) *Identifier {
 	lock.Lock()
-	defer lock.UnLock()
-	return cache[path]
+	defer lock.Unlock()
+	id, ok := cache.Get(path)
+	if ok {
+		return id.(*Identifier)
+	}
+	return nil
 }
 
 
-func Create(path string) Identifier {
+func Create(path string) *Identifier {
 	path= strings.Trim(path, "/")
-	var id Identifier= cache.Get(path)
-	if (id != null)
-		return id
+	if id, ok := cache.Get(path); ok {
+		return id.(*Identifier)
+	}
 	
-	id= new Identifier{}
+	var id Identifier= Identifier{}
 	id.completePath= path;
 	
 	i:= strings.LastIndex(path, "/")
 	if 0 <= i {
 		id.name= path[i+1:]
-		var parent Identifier= Create(path[:i])
+		var parent *Identifier= Create(path[:i])
 		id.ancestors= append(parent.ancestors, parent)
-	}
-	else { 
+	} else { 
 		id.name= path
 		id.ancestors= empty_ancestors
 	}
-	id.properties= map[string]interface{}
+	id.properties= map[string]interface{}{}
 	
-	cache.Add(id);
+	cache.Add(path, id)
 	
-	return id
+	return &id
 }
 
 
 /**
- * Create a unique identifier with a random UUID for the path 
+ * Create a unique Identifier with a random UUID for the path 
 */
-func Unique() Identifier {
-	return Create(uuid.GenUUID())
+func Unique() *Identifier {
+	uuid, err:= uuid.GenUUID()
+	if err != nil {
+		return Create(uuid)
+	}
+	panic(err)
+}
+
+func (this *Identifier) Path() string {
+	return this.completePath;
+}
+
+func (this *Identifier) Name() string {
+	return this.name;
 }
 
 /**
- * Create/Get a child identifier
+ * Create/Get a child Identifier
  */ 
-func (parent Identifier*) Child(String name) {
-	if (parent == null)
+func (parent *Identifier) Child(name string) *Identifier {
+	if parent == nil {
 		return Create(name)
+	}
 	return Create(parent.completePath+"/"+name)
 }
 
-func (this Identifier*) Parent() {
-	if (len(this.ancestors) <= 0)
-		return null
+func (this *Identifier) Parent() *Identifier {
+	if len(this.ancestors) <= 0 {
+		return nil
+	}
 	return this.ancestors[len(this.ancestors)-1]
 }
 
@@ -94,7 +112,7 @@ func (this Identifier*) Parent() {
 // * 
 // * @author Ted Stockwell
 // */
-//type identifier {
+//type Identifier {
 //	private static final long serialVersionUID = 1L;
 //	
 //	private static final Identifier[] EMPTY_ANCESTORS= new Identifier[0];
@@ -132,15 +150,15 @@ func (this Identifier*) Parent() {
 //	
 //	
 //	public static Identifier create(String path) {
-//		Identifier identifier= null;
+//		Identifier Identifier= null;
 //		synchronized (__cache) {
 //			Reference<Identifier> ref= __cache.get(path);
-//			if (ref != null && (identifier= ref.get()) != null)
-//				return identifier;
-//			identifier= new Identifier(path);
-//			__cache.put(path, new IdentifierReference(identifier));
+//			if (ref != null && (Identifier= ref.get()) != null)
+//				return Identifier;
+//			Identifier= new Identifier(path);
+//			__cache.put(path, new IdentifierReference(Identifier));
 //		}
-//		return identifier;
+//		return Identifier;
 //	}
 //	
 //	
@@ -193,8 +211,8 @@ func (this Identifier*) Parent() {
 //		return _name;
 //	}
 //	
-//	public boolean isAncestorOf(Identifier identifier) {
-//		Identifier[] a= identifier._ancestors;
+//	public boolean isAncestorOf(Identifier Identifier) {
+//		Identifier[] a= Identifier._ancestors;
 //		for (int i= a.length; 0 < i--;)
 //			if (a[i] == this)
 //				return true;
