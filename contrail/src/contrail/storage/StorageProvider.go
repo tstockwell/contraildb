@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"contrail/id"
+	. "contrail/id"
 )
 
 
