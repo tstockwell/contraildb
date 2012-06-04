@@ -110,12 +110,12 @@ func (this *IdStorage) DeleteAll(paths []Identifier) {
 	}
 }
 
-func (this *IdStorage) Exists(path Identifier) {
+func (this *IdStorage) Exists(id Identifier) bool {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 	
-	return this.contents.containsKey(path);
-	}
+	return this.contents[id.Path()] != nill;
+}
 
 	synchronized public T fetch(Identifier path) {
 		Node<T> data= _contents.get(path);
