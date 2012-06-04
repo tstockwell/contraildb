@@ -9,6 +9,7 @@ func TestUUID(t *testing.T) {
     if  err != nil {
         t.Fatalf("GenUUID error %s",err)
     }
+    ..
     t.Logf("uuid[%s]\n",uuid)
 }
 

@@ -32,6 +32,7 @@ var lock sync.Mutex= sync.Mutex {}
 var empty_ancestors []*Identifier = []*Identifier{};
 
 func getCached(path string) *Identifier {
+
 	lock.Lock()
 	defer lock.Unlock()
 	id, ok := cache.Get(path)
