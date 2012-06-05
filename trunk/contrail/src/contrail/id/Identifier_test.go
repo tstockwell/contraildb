@@ -6,10 +6,10 @@ import (
 )
 
 func TestBasicIdentifiers(t *testing.T) {
-    var id *Identifier= Unique()
+    var id *Identifier= UniqueIdentifier()
     ct.AssertNotNull(t, id, "Failed to generate a random id")
 
-    var id2 *Identifier= Create(id.Path())
+    var id2 *Identifier= CreateIdentifier(id.Path())
     ct.AssertEquals(t, id, id2, "Identifier was not cached")
         
     var id3 *Identifier= id.Child("giggity")
