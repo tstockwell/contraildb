@@ -47,7 +47,7 @@ type StorageSession interface  {
 	 * MUST be called when the session is no longer needed.
 	 * Any pending changes are flushed before closing.
 	 */
-	Close();
+	Close()
 	
 	/**
 	 * Returns the complete paths to all the children of the given path.
@@ -103,6 +103,6 @@ type StorageProvider interface {
 	/**
 	 * MUST be called when the provoder is no longer needed.
 	 */
-	Close();
+	Close()
 	
 }

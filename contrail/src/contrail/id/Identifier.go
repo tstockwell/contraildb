@@ -28,7 +28,7 @@ type Identifier struct {
 }
 
 var cache *lru.Cache = lru.New(1000);
-var lock sync.Mutex= sync.Mutex {}
+var lock *sync.Mutex= new(sync.Mutex)
 var empty_ancestors []*Identifier = []*Identifier{};
 
 func getCached(path string) *Identifier {
@@ -43,19 +43,19 @@ func getCached(path string) *Identifier {
 }
 
 
-func Create(path string) *Identifier {
+func CreateIdentifier(path string) *Identifier {
 	path= strings.Trim(path, "/")
 	if id, ok := cache.Get(path); ok {
 		return id.(*Identifier)
 	}
 	
-	var id Identifier= Identifier{}
+	var id *Identifier= new(Identifier)
 	id.completePath= path;
 	
 	i:= strings.LastIndex(path, "/")
 	if 0 <= i {
 		id.name= path[i+1:]
-		var parent *Identifier= Create(path[:i])
+		var parent *Identifier= CreateIdentifier(path[:i])
 		id.ancestors= append(parent.ancestors, parent)
 	} else { 
 		id.name= path
@@ -65,17 +65,17 @@ func Create(path string) *Identifier {
 	
 	cache.Add(path, id)
 	
-	return &id
+	return id
 }
 
 
 /**
  * Create a unique Identifier with a random UUID for the path 
 */
-func Unique() *Identifier {
+func UniqueIdentifier() *Identifier {
 	uuid, err:= uuid.GenUUID()
 	if err != nil {
-		return Create(uuid)
+		return CreateIdentifier(uuid)
 	}
 	panic(err)
 }
@@ -93,9 +93,9 @@ func (this *Identifier) Name() string {
  */ 
 func (parent *Identifier) Child(name string) *Identifier {
 	if parent == nil {
-		return Create(name)
+		return CreateIdentifier(name)
 	}
-	return Create(parent.completePath+"/"+name)
+	return CreateIdentifier(parent.completePath+"/"+name)
 }
 
 func (this *Identifier) Parent() *Identifier {
