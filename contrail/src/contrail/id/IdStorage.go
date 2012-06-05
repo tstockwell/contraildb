@@ -20,7 +20,7 @@ type IdStorage struct {
 	lock sync.Mutex
 }
 type Visitor interface {
-	Visit(identifier Identifier , content interface{});
+	Visit(identifier Identifier, content interface{});
 }
 
 type tNode struct {
@@ -114,139 +114,180 @@ func (this *IdStorage) Exists(id Identifier) bool {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 	
-	return this.contents[id.Path()] != nill;
+	return this.contents[id.Path()] != nill
 }
 
-	synchronized public T fetch(Identifier path) {
-		Node<T> data= _contents.get(path);
-		if (data == null)
-			return null;
-		return data._content;
-	}
+func (this *IdStorage) Fetch(id Identifier) interface{} {
+	this.lock.Lock()
+	defer this.lock.Unlock()
 
-	synchronized public Map<Identifier, T> fetch(Iterable<Identifier> paths) {
-		HashMap<Identifier, T> items= new HashMap<Identifier, T>();
-		for (Identifier path: paths) {
-			Node<T> data= _contents.get(path);
-			if (data != null && data._content != null)
-				items.put(path, data._content);
-		}
-		return items;
+	var data tNode= this.contents[path]
+	if data == nil {
+		return nil
 	}
+	return data.content;
+}
 
-	synchronized public Map<Identifier, Map<Identifier, T>> fetchChildren(Iterable<Identifier> paths)
-	{
-		HashMap<Identifier, Map<Identifier, T>> result= new HashMap<Identifier, Map<Identifier, T>>();
-		for (Identifier p: paths) 
-			result.put(p, fetchChildren(p));
-		return result;
+/**
+ * Returns an IdStorage that contains all the found results for the given 
+ * identifiers
+ */  
+func (this *IdStorage) FetchAll(ids []Identifier) *IdStorage {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+
+	items:= CreateIdStorage()
+	for i, id:= range ids {
+		node:= this.contents[id.Path()]
+		if node != nil && node.content != nil
+			items.Store(id, node.content)
 	}
+	return items
+}
 
-	synchronized public void store(Map<Identifier, T> records) {
-		
-		for (Map.Entry<Identifier, T> entry: records.entrySet())
-			_store(entry.getKey(), entry.getValue());
-	}
+/**
+ * Returns an IdStorage that contains all the found results for the given 
+ * identifier
+ */  
+func (this *IdStorage) FetchChildren(id Identifier) *IdStorage {
+	this.lock.Lock()
+	defer this.lock.Unlock()
 
-	synchronized public Map<Identifier, Collection<Identifier>> listChildren(Iterable<Identifier> paths)
-	{
-		HashMap<Identifier, Collection<Identifier>> result= new HashMap<Identifier, Collection<Identifier>>();
-		for (Identifier path: paths) 
-			result.put(path, listChildren(path));
-		return result;
-	}
-
-	synchronized public Iterable<T> values() {
-		ArrayList<T> values= new ArrayList<T>();
-		for (Node<T> data:_contents.values()) {
-			if (data._content != null)
-				values.add(data._content);
-		}
-		return values;
-	}
-
-	synchronized public Map<Identifier, T> fetchChildren(Identifier path) {
-		Node<T> n= _contents.get(path);		
-		if (n != null && !n._children.isEmpty()) {
-			HashMap<Identifier, T> set= new HashMap<Identifier, T>();
-			for (Node<T> c:n._children) {
-				if (c._content != null)
-					set.put(c._identifier, c._content);
+	items:= CreateIdStorage()
+	n tNode= this.contents[id.Path()]
+	if n != nil && n.children != nil && 0 < len(n.children) {
+		for (path, node:= range n.children {
+			if (node.content != nil) {
+				items.Store(node.identifier, node.content)
 			}
-			return set;
 		}
-		return Collections.emptyMap();
+		return set
 	}
+	return items
+}
 
-	synchronized public Map<Identifier, T> fetchDescendents(Identifier path) {
-		Node<T> n= _contents.get(path);		
-		if (n != null && !n._children.isEmpty()) {
-			HashMap<Identifier, T> set= new HashMap<Identifier, T>();
-			LinkedList<Node<T>> todo= new LinkedList<Node<T>>();
-			todo.add(n);
-			while (!todo.isEmpty()) {
-				n= todo.removeFirst();
-				for (Node<T> c:n._children) {
-					if (c._content != null)
-						set.put(c._identifier, c._content);
-					todo.add(c);
-				}
-			}
-			return set;
+/**
+ * Returns an IdStorage that contains all the found results for the given 
+ * identifiers.
+ * The returned IdStorage has values with type IdStorage
+ */  
+func (this *IdStorage) FetchChildrenAll(ids []Identifier) *IdStorage {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+
+	results:= CreateIdStorage()
+	for (_, id:= range ids {
+		results.Store(id, this.FetchChildren(id))
+	}
+	return results;
+}
+
+func (this *IdStorage) ListChildren(id Identifier) []Identifier {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+
+	n tNode:= this.contents[id]
+	if n != nil && 0 < len(n.children) {
+		list= make([]Identifier, 0, len(n.children))
+		for i, node:= range n.children {
+			list[i]= node.identifier
 		}
-		return Collections.emptyMap();
+		return list;
 	}
+	return make([]Identifier, 0)
+}
 
-	synchronized public Collection<Identifier> listChildren(Identifier path) {
-		Node<T> n= _contents.get(path);
-		if (n != null && !n._children.isEmpty()) {
-			ArrayList<Identifier> list= new ArrayList<Identifier>(n._children.size());
-			for (Node<T> node:n._children)
-				if (node._content != null)
-					list.add(node._identifier);
-			return list;
-		}
-		return Collections.emptySet();
+/**
+ * Returns an IdStorage that contains all the found results for the given 
+ * identifiers.
+ * The returned IdStorage has values with type []Identifier
+ */  
+func (this *IdStorage) ListChildrenAll(ids []Identifier) *IdStorage {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+
+	results:= CreateIdStorage()
+	for i,id:= range ids { 
+		results.Store(id, ListChildren(id))
 	}
+	return results;
+}
 
-public class IdentifierIndexedStorage<T> {
+func (this *IdStorage) Values() []interface{} {
+	this.lock.Lock()
+	defer this.lock.Unlock()
 	
-	synchronized void visitNode(Identifier path, Visitor<T> visitor) {
-		Node<T> n= _contents.get(path);
-		if (n != null) 
+	values:= make([]interface{}, 0, len(this.contents))
+	for path, node:= range this.contents {
+		if (node.content != nil)
+			append(values, node.content)
+	}
+	return values;
+}
+
+
+/**
+ * Returns an IdStorage that contains all the found results for the given 
+ * identifiers.
+ */  
+func (this *IdStorage) FetchDescendents(id Identifier) *IdStorage {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+
+	n:= this.contents[id.Path()];		
+	items:= CreateIdStorage()
+	if n != null && n.children != nil && 0 < len(n._children) {
+		todo:= make([]tNode, 0, 10)
+		append(todo, n);
+		for ;0 < len(todo); {
+			n= remove(todo, 0)
+			for i,node:= range n.children {
+				if (node.content != nill)
+					items.Store(node.identifier, node.content)
+				todo.add(c);
+			}
+		}
+	}
+	return items;
+}
+
+func (this *IdStorage) VisitNode(path Identifier, visitor Visitor) {
+	n tNode:= this.contents[path]
+	if n != nil { 
+		visitor.visit(n.identifier, n.content);
+	}
+}
+
+func (this *IdStorage) VisitParents(path Identifier, visitor Visitor) {
+	Node<T> data= _contents.get(path);
+	if (data != null) {
+		for (Node<T> n= data._parent; n != null; n= n._parent) {
 			visitor.visit(n._identifier, n._content);
-	}
-	
-	synchronized void visitParents(Identifier path, Visitor<T> visitor) {
-		Node<T> data= _contents.get(path);
-		if (data != null) {
-			for (Node<T> n= data._parent; n != null; n= n._parent) {
-				visitor.visit(n._identifier, n._content);
-			}
 		}
 	}
-	
-	synchronized void visitDescendents(Identifier path, Visitor<T> visitor) {
-		Node<T> n= _contents.get(path);		
-		if (n != null) {
-			LinkedList<Node<T>> todo= new LinkedList<Node<T>>();
-			todo.add(n);
-			while (!todo.isEmpty()) {
-				n= todo.removeFirst();
-				for (Node<T> c:n._children) {
-					visitor.visit(c._identifier, c._content);
-					todo.add(c);
-				}
-			}
-		}
-	}
-	
-	synchronized void visitChildren(Identifier path, Visitor<T> visitor) {
-		Node<T> n= _contents.get(path);
-		if (n != null) {
-			for (Node<T> node:n._children) {
-				visitor.visit(node._identifier, node._content);
+}
+
+func (this *IdStorage) VisitDescendents(path Identifier, visitor Visitor) {
+	n tNode:= this.contents[path]
+	if n != nil { 
+		LinkedList<Node<T>> todo= new LinkedList<Node<T>>();
+		todo.add(n);
+		while (!todo.isEmpty()) {
+			n= todo.removeFirst();
+			for (Node<T> c:n._children) {
+				visitor.visit(c._identifier, c._content);
+				todo.add(c);
 			}
 		}
 	}
 }
+
+func (this *IdStorage) VisitChildren(path Identifier, visitor Visitor) {
+	n tNode:= this.contents[path]
+	if n != nil { 
+		for i,node:= range n.children) {
+			visitor.visit(node.identifier, node.content);
+		}
+	}
+}
+
