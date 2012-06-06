@@ -2,35 +2,37 @@ package id
 
 import (
  "testing"
- ct "contrail/util/testing"
 )
 
 func TestBasicIdStorage(t *testing.T) {
     storage:= CreateIdStorage()
-	if err := quick.Check(f, nil); err != nil {
-		t.Error(err)
-	}
-	    ct.AssertNotNull(t, storage, "Failed to generate storage")
+	if storage == nil { t.Errorf("Failed to generate storage") }
     
     id:= CreateIdentifier("group/name")
     storage.Store(id, "one")
+    if !storage.Exists(id){ t.Errorf("Store failed") }
+    if storage.Size() != 1 { t.Errorf("Store failed") }
     storage.Store(id.Parent(), "two")
+    if !storage.Exists(id.Parent()){ t.Errorf("Store failed") }
+    if storage.Size() != 2 { t.Errorf("Store failed") }
+    
+    found:= false
+    storage.VisitNode(id, func(identifier *Identifier, content interface{}) {
+    	found= true
+    })
+    if !found { t.Errorf("Visit failed") }
     
     one:= storage.Fetch(id)
-    ct.AssertEquals(t, "one", one, "Fetch failed")
+	if "one" != one { t.Errorf("Fetch failed") }
 
-    ct.AssertTrue(t, storage.Exists(id), "Exists failed")
-    
     children:= storage.ListChildren(id.Parent())
-    ct.AssertEquals(t, 1, len(children), "ListChildren failed")
+	if len(children) != 1 { t.Errorf("ListChildren failed") }
+	if children[0] != id { t.Errorf("ListChildren failed") }
     
     childStorage:= storage.FetchChildren(id.Parent())
-    ct.AssertEquals(t, "one", childStorage.Fetch(id), "FetchChildren failed")
+	if childStorage.Size() != 1 { t.Errorf("FetchChildren failed") }
+	if "one" != childStorage.Fetch(id) { t.Errorf("FetchChildren failed") }
     
     storage.Delete(id)
-    ct.AssertNull(t, childStorage.Fetch(id), "FetchChildren failed")
-    
-    storage.Store(id, "one")
-    one= storage.Fetch(id)
-    ct.AssertEquals(t, "one", one, "Fetch failed")
+    if storage.Size() != 1 { t.Errorf("Delete failed") }
 }

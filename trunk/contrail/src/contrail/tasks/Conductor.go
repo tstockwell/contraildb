@@ -1,4 +1,4 @@
-package util
+package tasks
 
 /**
  * A convenient task scheduler for Contrail that coordinates tasks according 
@@ -50,25 +50,54 @@ package util
  * @author Ted Stockwell
  */
  
-type typeTask struct {
+ import (
+ 	"sync"
+ )
+
+type op int
+const READ 		op= 1 
+const WRITE 	op= 2 
+const DELETE 	op= 3 
+const LIST 		op= 4 
+const CREATE 	op= 5 
+
+type tTask struct {
+	operation op
+	id *Identifier
+	pendingTasks []*tTask
 }
 type Conductor struct {
-	tasks map[id.Identifier]typeTask
-}
-type Session struct {
-	conductor *Conductor 
+	tasks map[string][]*tTask
+	lock *sync.Mutex
 }
 
 func CreateConductor() *Conductor {
-	conductr= Conductor{}
-	conductr.tasks= make(map[id.Identifier]typeTask, 0, 20)
-	return &conductr
+	return &Conductor{
+		tasks: make(map[id.Identifier]typeTask, 0, 20),
+		lock: new (sync.Mutex),
+	}
 }
 
-func (this *Conductor) CreateSession() *Session {
-	return &Session{conductor:this}
+func (this *Conductor) addTask(task *tTask) {
+	path:= task.id.Path()
+	tasks:= this.tasks[path]
+	if tasks == nil {
+		tasks= make([]*tTask, 1)
+		this.tasks[path]= tasks
+	}
+	tasks= append(tasks, task)
 }
-
+		
+func (this *Conductor) Submit(operationType op, id *Identifier, task func()) {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+	
+	addTask(&tTask {
+		operation: op,
+		id: id,
+		pendingTasks: findPendingTasks(op, id),
+	})
+}
  
  
 public class ContrailTaskTracker {
