@@ -4,13 +4,21 @@ import (
 
 )
 
+func GoList(id *Identifier, func() []*Identifer) Future 
+
+children:= tasks.GoList(path, func() { return storageSession.listChildren(path) })
+
+// IdentifierList.Get() panics if error in the func passed to tasks.DoList  
+for i,c:= range []*Identifer(children.Get())) { 
+}
+
+
 /**
  * A <tt>Future</tt> represents the result of an asynchronous
  * computation.  
  * 
- * @param <V> The result type returned by this Future's <tt>get</tt> method
  */
-public interface IResult<V> {
+type Future struct {
 	
     /**
      * Returns <tt>true</tt> if this task completed.
@@ -21,56 +29,50 @@ public interface IResult<V> {
      *
      * @return <tt>true</tt> if this task completed
      */
-    public boolean isDone();
+    func Done() bool
 	
     /**
      * Returns <tt>true</tt> if this task completed successfully.
      */
-    public boolean isSuccess();
+    func Success() bool
 	
     /**
      * Returns <tt>true</tt> if this task was cancelled.
      */
-    public boolean isCancelled();
+    func Cancelled() bool
 	
     /**
      * If this task failed then get the error.
      */
-    public Throwable getError();
+    func Error() error;
 	
     /**
      * If this task completed successfully then get the result.
      */
-    public V getResult();
+    func Result() interface{}
     
     /**
      * Add a callback to be invoked when the result is available.
      */
-	public void addHandler(IResultHandler<V> handler);
+	func onComplete(func handler(future Future))
 
     /**
      * Waits if necessary for the computation to complete, and then
      * retrieves its result.
      * 
-     * This method should never be used in an internal Contrail API.
-     * 
      * This method is provided as a convenience for those users that don't 
      * want to use Contrail asynchronously.  
      *
      * @return the computed result
-     * @throws An unchecked exception if an error occurred while producing the result
+     * @panic if an error occurred while producing the result
      */
-    public V get();
+    func Get() interface{}
 
     /**
      * Waits if necessary for the computation to complete.
-     * Calling this method can block the current thread therefore it's
-     * use should generally be avoided.
-     * 
-     * This method should never be used in an internal Contrail API.
      * 
      * This method is provided as a convenience for those users that don't 
      * want to use Contrail asynchronously.  
      */
-    public void join();
+    func Join()
 }

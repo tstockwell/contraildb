@@ -52,6 +52,7 @@ package tasks
  
  import (
  	"sync"
+ 	"list"
  )
 
 type op int
@@ -64,7 +65,8 @@ const CREATE 	op= 5
 type tTask struct {
 	operation op
 	id *Identifier
-	pendingTasks []*tTask
+	pendingTasks List
+	result Future
 }
 type Conductor struct {
 	tasks map[string][]*tTask
@@ -79,6 +81,8 @@ func CreateConductor() *Conductor {
 }
 
 func (this *Conductor) addTask(task *tTask) {
+
+	// add task to internal list
 	path:= task.id.Path()
 	tasks:= this.tasks[path]
 	if tasks == nil {
@@ -86,6 +90,19 @@ func (this *Conductor) addTask(task *tTask) {
 		this.tasks[path]= tasks
 	}
 	tasks= append(tasks, task)
+	
+	// if there are no pending tasks then just run the given task
+	if tTask.pendingTasks == nil || len(tTask.pendingTasks) <= 0 {
+		this.runTask(tTask)
+		return
+	}
+	
+	// add listeners to pending tasks and fire up this task when they're all done
+	for _,t:= range tTask.pendingTasks {
+		t.result.onComplete(func (future Future) {
+			remove(t.pendingTasks, t)
+		})
+	}
 }
 		
 func (this *Conductor) Submit(operationType op, id *Identifier, task func()) {
