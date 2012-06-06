@@ -16,11 +16,9 @@ import (
  * @author Ted Stockwell
  */
 type IdStorage struct {
-	contents map[string]*tNode
+	contents map[string]*tNode // map to all nodes
+	values map[string]*tNode   // map to nodes with values
 	lock *sync.Mutex
-}
-type Visitor interface {
-	Visit(identifier *Identifier, content interface{})
 }
 
 type tNode struct {
@@ -29,10 +27,12 @@ type tNode struct {
 	parent *tNode
 	content interface{}
 }
+type VisitFunction func(identifier *Identifier, content interface{})
 
 func CreateIdStorage() *IdStorage {
 	this:= new(IdStorage)
 	this.contents= make(map[string]*tNode, 10)
+	this.values= make(map[string]*tNode, 10)
 	this.lock= new(sync.Mutex)
 	return this
 }
@@ -67,7 +67,8 @@ func (this *IdStorage) Store(id *Identifier, content interface{}) {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 	
-	this.store(id, content);
+	node:= this.store(id, content)
+	this.values[id.Path()]= node
 }
 
 func (this *IdStorage) delete(node *tNode) {
@@ -78,6 +79,7 @@ func (this *IdStorage) delete(node *tNode) {
 		if len(node.children) <= 0 {
 			path:= node.identifier.Path()
 			delete(this.contents, path)
+			delete(this.values, path)
 			if node.parent != nil {
 				parent:= node.parent
 				delete(parent.children, path);
@@ -102,6 +104,7 @@ func (this *IdStorage) Clear() {
 
 	// clear the map
 	this.contents= make(map[string]*tNode, 10)
+	this.values= make(map[string]*tNode, 10)
 }
 
 func (this *IdStorage) DeleteAll(paths []*Identifier) {
@@ -117,7 +120,7 @@ func (this *IdStorage) Exists(id *Identifier) bool {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 	
-	return this.contents[id.Path()] != nil
+	return this.values[id.Path()] != nil
 }
 
 func (this *IdStorage) Fetch(id *Identifier) interface{} {
@@ -128,7 +131,7 @@ func (this *IdStorage) Fetch(id *Identifier) interface{} {
 	if node == nil {
 		return nil
 	}
-	return node.content;
+	return node.content
 }
 
 /**
@@ -182,7 +185,7 @@ func (this *IdStorage) FetchChildrenAll(ids []*Identifier) *IdStorage {
 	for _, id:= range ids {
 		results.Store(id, this.FetchChildren(id))
 	}
-	return results;
+	return results
 }
 
 func (this *IdStorage) ListChildren(id *Identifier) []*Identifier {
@@ -195,7 +198,7 @@ func (this *IdStorage) ListChildren(id *Identifier) []*Identifier {
 		for _, node:= range n.children {
 			list= append(list, node.identifier)
 		}
-		return list;
+		return list
 	}
 	return make([]*Identifier, 0)
 }
@@ -213,7 +216,18 @@ func (this *IdStorage) ListChildrenAll(ids []*Identifier) *IdStorage {
 	for _,id:= range ids { 
 		results.Store(id, this.ListChildren(id))
 	}
-	return results;
+	return results
+}
+
+func (this *IdStorage) ListAll() []*Identifier {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+
+	list:= make([]*Identifier, 0, len(this.contents))
+	for _,node:= range this.values { 
+		list= append(list, node.identifier)
+	}
+	return list
 }
 
 func (this *IdStorage) Values() []interface{} {
@@ -221,12 +235,17 @@ func (this *IdStorage) Values() []interface{} {
 	defer this.lock.Unlock()
 	
 	values:= make([]interface{}, 0, len(this.contents))
-	for _, node:= range this.contents {
-		if node.content != nil {
-			values= append(values, node.content)
-		}
+	for _, node:= range this.values {
+		values= append(values, node.content)
 	}
-	return values;
+	return values
+}
+
+func (this *IdStorage) Size() int {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+	
+	return len(this.values)
 }
 
 
@@ -238,11 +257,11 @@ func (this *IdStorage) FetchDescendents(id *Identifier) *IdStorage {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
-	n:= this.contents[id.Path()];		
+	n:= this.contents[id.Path()]
 	items:= CreateIdStorage()
 	if n != nil && n.children != nil && 0 < len(n.children) {
 		todo:= make([]*tNode, 0, 10)
-		todo= append(todo, n);
+		todo= append(todo, n)
 		for ;0 < len(todo); {
 			n= todo[0]
 			todo= todo[1:]
@@ -250,36 +269,36 @@ func (this *IdStorage) FetchDescendents(id *Identifier) *IdStorage {
 				if (node.content != nil) {
 					items.Store(node.identifier, node.content)
 				}
-				todo=append(todo, node);
+				todo=append(todo, node)
 			}
 		}
 	}
-	return items;
+	return items
 }
 
-func (this *IdStorage) VisitNode(id *Identifier, visitor Visitor) {
+func (this *IdStorage) VisitNode(id *Identifier, visit VisitFunction) {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
 	node:= this.contents[id.Path()]
 	if node != nil { 
-		visitor.Visit(node.identifier, node.content)
+		visit(node.identifier, node.content)
 	}
 }
 
-func (this *IdStorage) VisitParents(id *Identifier, visitor Visitor) {
+func (this *IdStorage) VisitParents(id *Identifier, visit VisitFunction) {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
 	node:= this.contents[id.Path()]
 	if node != nil {
 		for n:= node.parent; n != nil; n= n.parent {
-			visitor.Visit(n.identifier, n.content)
+			visit(n.identifier, n.content)
 		}
 	}
 }
 
-func (this *IdStorage) VisitDescendents(id *Identifier, visitor Visitor) {
+func (this *IdStorage) VisitDescendents(id *Identifier, visit VisitFunction) {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
@@ -292,20 +311,20 @@ func (this *IdStorage) VisitDescendents(id *Identifier, visitor Visitor) {
 			todo= todo[1:]
 			for _, node:= range n.children {
 				todo= append(todo, node)
-				visitor.Visit(node.identifier, node.content)
+				visit(node.identifier, node.content)
 			}
 		}
 	}
 }
 
-func (this *IdStorage) VisitChildren(id *Identifier, visitor Visitor) {
+func (this *IdStorage) VisitChildren(id *Identifier, visit VisitFunction) {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
 	n:= this.contents[id.Path()]
 	if n != nil { 
 		for _,node:= range n.children {
-			visitor.Visit(node.identifier, node.content)
+			visit(node.identifier, node.content)
 		}
 	}
 }
