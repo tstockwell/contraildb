@@ -11,10 +11,12 @@ package tasks
  * also allowing for as much parallelization as possible in order to maximize 
  * performance.
  *  
- * Clients of this class call the submit method with an Identifier, an 
+ * Clients of this class call the Submit method with an Identifier, an 
  * associated task type, and a function to execute.
  * The function will be invoked at a future time when this class determines 
  * that the operation is 'safe' to execute.
+ * The Submit method returns a Future that can be used to track the 
+ * progress of the submitted task.
  *
  * Clients can also use the Join method to wait for all submitted tasks to 
  * complete.
@@ -51,323 +53,201 @@ package tasks
  */
  
  import (
+ 	. "contrail/id"
  	"sync"
  	"container/list"
  )
 
-type op int
-const READ 		op= 1 
-const WRITE 	op= 2 
-const DELETE 	op= 3 
-const LIST 		op= 4 
-const CREATE 	op= 5 
+type tOperation int
+const READ 		tOperation= 1 
+const WRITE 	tOperation= 2 
+const DELETE 	tOperation= 3 
+const LIST 		tOperation= 4 
+const CREATE 	tOperation= 5 
 
+type tTaskSet map[*tTask]*tTask
+func newTaskSet() tTaskSet { return make(tTaskSet) }
+func (self tTaskSet) add(task *tTask) { self[task]= task }
+func (self tTaskSet) remove(task *tTask) { delete(self,task) }
+func (self tTaskSet) contains(task *tTask) bool { return self[task] != nil }
+
+
+
+// info for managing/scheduling a single task 
 type tTask struct {
-	operation op
+	op tOperation
 	id *Identifier
-	pendingTasks List
-	result Future
+	pendingTasks tTaskSet
+	result *Future
+	call func() interface{}
 }
+
 type Conductor struct {
-	tasks map[string][]*tTask
+	taskStorage *IdStorage
 	lock *sync.Mutex
 }
 
 func CreateConductor() *Conductor {
 	return &Conductor{
-		tasks: make(map[id.Identifier]typeTask, 0, 20),
+		taskStorage: CreateIdStorage(),
 		lock: new (sync.Mutex),
 	}
 }
 
-func (this *Conductor) addTask(task *tTask) {
+func (self *Conductor) addTask(task *tTask) {
 
 	// add task to internal list
-	path:= task.id.Path()
-	tasks:= this.tasks[path]
+	tasks, ok:= self.taskStorage.Fetch(task.id).(tTaskSet)
 	if tasks == nil {
-		tasks= make([]*tTask, 1)
-		this.tasks[path]= tasks
+		tasks= newTaskSet()
+		self.taskStorage.Store(task.id, tasks)
 	}
-	tasks= append(tasks, task)
+	tasks.add(task)
 	
 	// if there are no pending tasks then just run the given task
-	if tTask.pendingTasks == nil || len(tTask.pendingTasks) <= 0 {
-		this.runTask(tTask)
+	if task.pendingTasks == nil || len(task.pendingTasks) <= 0 {
+		self.runTask(task)
 		return
 	}
 	
 	// add listeners to pending tasks and fire up this task when they're all done
-	for _,t:= range tTask.pendingTasks {
-		t.result.onComplete(func (future Future) {
-			remove(t.pendingTasks, t)
+	for pendingTask,_:= range task.pendingTasks {
+		pt:= pendingTask
+		pendingTask.result.OnComplete(func (future *Future) {
+			delete(task.pendingTasks, pt)
+			if  len(task.pendingTasks) <= 0 {
+				self.lock.Lock()
+				defer self.lock.Unlock()
+				
+				self.runTask(task)
+			}
 		})
 	}
 }
-		
-func (this *Conductor) Submit(operationType op, id *Identifier, task func()) {
-	this.lock.Lock()
-	defer this.lock.Unlock()
+
+func (self *Conductor) runTask(task *tTask) {
+	go func() {
+		// if the task function panics then this function 
+		// complete the associated future with an error
+		defer func() {
+		        if err := recover(); err != nil {
+		        	task.result.SetError(err)
+		        }
+		    }()		
+		    
+		// run the associated function
+		// if no error occurs then successfully complete the associated future
+		// with the returned value 
+		value:= task.call()
+		task.result.SetSuccess(value)
+	}()
+}
 	
-	addTask(&tTask {
-		operation: op,
-		id: id,
-		pendingTasks: findPendingTasks(op, id),
-	})
+func (self *Conductor) findPendingTasks(op tOperation, id *Identifier) tTaskSet {
+
+	pendingTasks:= newTaskSet()
+
+	visitor:= func (nodeId *Identifier, content interface{}) {
+		tasksInProgress, ok:= content.(tTaskSet) 
+		if tasksInProgress != nil {
+			for taskInProgress,_:= range tasksInProgress {
+				if (!taskInProgress.result.Done() && IsDependentTask(op, taskInProgress.op)) {
+					pendingTasks.add(taskInProgress)
+				}
+			}
+		}
+	}
+	self.taskStorage.VisitNode(id, visitor)
+	
+	/*
+	 * optimization
+	 * incoming write tasks can cancel pending write tasks as long as there 
+	 * are no pending READS
+	 */
+	if (op == WRITE) {
+		noReads:= true
+		for pendingTask,_:= range pendingTasks {
+			if (pendingTask.op == READ) {
+				noReads= false
+			}
+		}
+		if noReads {
+			for pendingTask,_:= range pendingTasks {
+				if (pendingTask.op == WRITE) {
+					pendingTask.result.SetCancel()
+				}
+			}
+		}
+	}
+
+	// look down the tree for operations on any children
+	if op == LIST || op == DELETE { 
+		self.taskStorage.VisitDescendents(id, visitor)
+	}
+
+	// look up the tree for deletes
+	self.taskStorage.VisitParents(id, visitor)
+
+	return pendingTasks
+}
+		
+func (self *Conductor) Submit(op tOperation, id *Identifier, task func() interface{}) *Future {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	ttsk:= tTask {
+		op: 			op,
+		id: 			id,
+		pendingTasks: 	self.findPendingTasks(op, id),
+		result: 		CreateFuture(),
+		call:			task,
+	}
+	self.addTask(&ttsk)
+	return ttsk.result
 }
  
- 
-public class ContrailTaskTracker {
-	
-	IdentifierIndexedStorage<Set<ContrailTask>> _tasks= 
-		new IdentifierIndexedStorage<Set<ContrailTask>>();
-	LinkedList<ContrailTask> _tasksToBeRemoved= new LinkedList<ContrailTask>();
-	ContrailAction _taskRemoval= null;
-	
-	public Session beginSession() {
-		return new Session();
+
+func IsDependentTask (incomingOp tOperation, previousOp tOperation) bool {
+	switch incomingOp {
+		case READ: 
+			switch (previousOp) { case DELETE: case WRITE: /*case CREATE:*/ return true }
+		case WRITE: 
+			switch (previousOp) { case READ: case DELETE: case WRITE: case CREATE: return true }
+		case DELETE: 
+			switch (previousOp) { case READ: case DELETE: case WRITE: case LIST: return true }
+		case LIST: 
+			switch (previousOp) { case DELETE: case WRITE: case CREATE: return true }
+		case CREATE:   
+			switch (previousOp) { case READ: case DELETE: case WRITE: case LIST: return true }
 	}
-
-	public boolean contains(ContrailAction action) {
-		Set<ContrailTask> tasks= _tasks.fetch(action.getId());
-		if (tasks == null)
-			return false;
-		return tasks.contains(action);
-	}
-	
-	private List<ContrailTask<?>> findPendingTasks(ContrailTask task) {
-
-		Identifier taskId= task.getId();
-		final Operation op= task.getOperation();
-		final ArrayList<ContrailTask<?>> pendingTasks= new ArrayList<ContrailTask<?>>();
-
-		IdentifierIndexedStorage.Visitor visitor= new IdentifierIndexedStorage.Visitor<Set<ContrailTask>>() {
-			public void visit(Identifier identifier, Set<ContrailTask> list) {
-				if (list != null) {
-					for (ContrailTask task2: list) {
-						if (!task2.isDone() && isDependentTask(op, task2.getOperation())) {
-							pendingTasks.add(task2);
-						}
-					}
-				}
-			}
-		};
-		_tasks.visitNode(taskId, visitor);
-		
-		
-		/*
-		 * optimization
-		 * incoming write tasks can cancel pending write tasks as long as there 
-		 * are no pending READS
-		 */
-		if (task._operation == Operation.WRITE) {
-			boolean noReads= true;
-			for (ContrailTask t: pendingTasks) {
-				if (t._operation == Operation.READ) {
-					noReads= false;
-					break;
-				}
-			}
-			if (noReads) {
-				for (ContrailTask t: pendingTasks) {
-					if (t._operation == Operation.WRITE)
-						t.cancel();
-				}
-			}
-		}
-
-
-		// look down the tree for operations on any children
-		if (op == Operation.LIST || op == Operation.DELETE) 
-			_tasks.visitDescendents(taskId, visitor);
-
-		// look up the tree for deletes
-		_tasks.visitParents(taskId, visitor);
-
-		return pendingTasks;		
-	}
-	
-	private static boolean isDependentTask(Operation incomingOp, Operation previousOp) {
-		switch (incomingOp) {
-			case READ: {
-				switch (previousOp) { case DELETE: case WRITE: /*case CREATE:*/ return true; }
-			} break;
-			case WRITE: {
-				switch (previousOp) { case READ: case DELETE: case WRITE: case CREATE: return true; }
-			} break;
-			case DELETE: {
-				switch (previousOp) { case READ: case DELETE: case WRITE: case LIST: return true; }
-			} break;
-			case LIST: {
-				switch (previousOp) { case DELETE: case WRITE: case CREATE: return true; }
-			} break;
-			case CREATE:  { 
-				switch (previousOp) { case READ: case DELETE: case WRITE: case LIST: return true; }
-			}
-		}
-		return false;
-	}
-
-	public class Session {
-		
-		ContrailTask.CompletionListener _completionListener= new ContrailTask.CompletionListener() {
-			public void done(ContrailTask task) {
-				removeTask(task);
-			}
-		};
-		
-		List<ContrailTask> _sessionTasks= Collections.synchronizedList(new ArrayList<ContrailTask>());
-		
-		public void close() {
-			awaitCompletion();
-			_sessionTasks= null;
-		}
-		
-		@Override
-		protected void finalize() throws Throwable {
-			if (_sessionTasks != null) {
-				try { awaitCompletion(); } catch (Throwable t) { }
-			}
-			super.finalize();
-		}
-		
-		synchronized public Session submit(ContrailTask<?> task) {
-			List<ContrailTask<?>> pendingTasks= null;
-
-			pendingTasks= findPendingTasks(task);
-			addTask(task);
-			task.submit(pendingTasks);
-			
-			
-			return this;
-		}
-		
-		public <X extends Throwable, T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks, Class<X> errorType) 
-		throws X 
-		{
-			for (ContrailTask task : tasks) 
-				submit(task);
-			awaitCompletion(tasks, errorType);
-			return this;
-		}
-		public <T extends ContrailTask<?>> Session invokeAll(Iterable<T> tasks) 
-		{
-			for (ContrailTask task : tasks) 
-				submit(task);
-			awaitCompletion(tasks);
-			return this;
-		}
-		
-		public <T extends ContrailTask<?>> Session invoke(T task) 
-		{
-			invokeAll(ConversionUtils.asList(task));
-			return this;
-		}
-		
-		private void addTask(ContrailTask<?> task) {
-			Identifier taskId= task.getId();
-			synchronized (_tasks) {
-				Set<ContrailTask> tasks= _tasks.fetch(taskId);
-				if (tasks == null) {
-					tasks= new HashSet<ContrailTask>();
-					_tasks.store(taskId, tasks);
-				}
-				tasks.add(task);
-			}
-			_sessionTasks.add(task);
-			task.addCompletionListener(_completionListener);
-		}
-		
-		private void removeTask(ContrailTask<?> task) {
-			// remove the task from internal lists
-			Identifier ti= task.getId();
-			synchronized (_tasks) {
-				Set<ContrailTask> list= _tasks.fetch(ti);
-				if (list != null) {
-					list.remove(task);
-					if (list.isEmpty())
-						_tasks.delete(ti);
-				}
-			}
-			_sessionTasks.remove(task);
-		}
-
-		public CFuture<Void> awaitCompletion() {
-			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
-			while (!_sessionTasks.isEmpty()) {
-				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
-				ArrayList<ContrailTask> todo= new ArrayList<ContrailTask>();
-				for (ContrailTask t: tasks) {
-					if (!done.contains(t)) {
-						todo.add(t);
-						done.add(t);
-					}
-				}
-				if (todo.isEmpty())
-					break;
-				
-				Throwable t= getThrowable(new ArrayList(todo));
-				if (t != null) 
-					TaskUtils.throwSomething(t);
-			}
-		}
-
-		public <X extends Throwable> Session awaitCompletion(Class<X> errorType) throws X {
-			HashSet<ContrailTask> done= new HashSet<ContrailTask>();
-			while (!_sessionTasks.isEmpty()) {
-				ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
-				ArrayList<ContrailTask> todo= new ArrayList<ContrailTask>();
-				for (ContrailTask t: tasks) {
-					if (!done.contains(t)) {
-						todo.add(t);
-						done.add(t);
-					}
-				}
-				if (todo.isEmpty())
-					break;
-				Throwable t= getThrowable(new ArrayList(todo));
-				if (t != null) 
-					TaskUtils.throwSomething(t, errorType);
-			}
-			return this;
-		}
-		
-		public <T extends ContrailTask<?>> Session awaitCompletion(Iterable<T> tasks) {
-			try {
-				Throwable t= getThrowable(tasks);
-				if (t != null) 
-					TaskUtils.throwSomething(t);
-			}
-			finally {
-				for (T t:tasks)
-					_sessionTasks.remove(t);
-			}
-			return this;
-		}
-		public <X extends Throwable, T extends ContrailTask<?>> Session awaitCompletion(Iterable<T> tasks, Class<X> errorType) throws X {
-			Throwable t= getThrowable(tasks);
-			if (t != null) 
-				TaskUtils.throwSomething(t, errorType);
-			return this;
-		}
-
-		public boolean contains(ContrailAction action) {
-			return _sessionTasks.contains(action);
-		}
-
-		private <T extends ContrailTask<?>> Throwable getThrowable(Iterable<T> tasks) {
-			Throwable t= null;
-			for (ContrailTask task : tasks) {
-				
-				if (task.getOperation() == Operation.CREATE && !task.isDone())
-					continue;
-				
-				Throwable t2= task.getThrowable();
-				if (t == null) 
-					t= t2;
-			}
-			return t;
-		}
-	}
-	
+	return false;
 }
+
+func (self *Conductor) Close() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	self.join()
+	self.taskStorage= nil
+}
+
+func (self *Conductor) Join() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	
+	self.join()
+}
+
+func (self *Conductor) join() {
+	for _,id:= range self.taskStorage.ListAll() {
+		tasks:= list.List(self.tasks.Fetch(id))
+		if tasks != nil {
+			element:= tasks.Front()
+			for count,i:= tasks.Len(),0; i < count; i++ {
+				task:= tTask(element.Value)
+				task.Get()
+			}
+		} 
+	}
+}
+
