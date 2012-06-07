@@ -25,55 +25,55 @@ type Future struct {
 	result interface{}
 	success bool
 	cancelled bool
-	err error
+	err interface{}
 	completeHandlers []func(*Future)
 	lock *sync.Mutex
-	doneNotify chan[bool] 
+	doneNotify chan bool 
 }
 
-func *Future CreateFuture() {
+func CreateFuture() *Future {
 	return &Future {
-		lock: sync.Mutex{}
-		doneNotify: make(chan[bool], 1)
+		lock: &sync.Mutex{},
+		doneNotify: make(chan bool, 1),
 	}
 }
 
 /**
  * Called when the associated function has been cancelled
  */	
-func (self *Future) Cancel() {
+func (self *Future) SetCancel() {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	
 	if !self.done {
 		self.cancelled= true
-		self.complete(false, null, null);
+		self.complete(false, nil, nil)
 	}
 }
 
 /**
  * Called when the associated function has completed successfully
  */	
-func (self *Future) Success(result interface{}) {
+func (self *Future) SetSuccess(result interface{}) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	
 	if !self.done {
 		self.cancelled= true
-		self.complete(true, result, null);
+		self.complete(true, result, nil)
 	}
 }
 
 /**
  * Called when the associated function fails
  */	
-func (self *Future) Error(err error) {
+func (self *Future) SetError(err interface{}) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	
 	if !self.done {
 		self.cancelled= true
-		self.complete(false, result, err);
+		self.complete(false, nil, err)
 	}
 }
 	
@@ -113,10 +113,10 @@ func (self *Future) Cancelled() bool {
 /**
  * If this task failed then get the error.
  */
-func (self *Future) Error() error {
+func (self *Future) Error() interface{} {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.error	
+	return self.err
 }
 
 /**
@@ -131,7 +131,7 @@ func (self *Future) Result() interface{} {
 /**
  * Add a callback to be invoked when the result is available.
  */
-func (self *Future) OnComplete(func handler(future Future)) {
+func (self *Future) OnComplete(handler func(future *Future)) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -176,7 +176,7 @@ func (self *Future) Join() {
 	self.doneNotify= nil
 }
 
-func complete(success bool, result interface{}, err error) {
+func (self *Future) complete(success bool, result interface{}, err interface{}) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	
