@@ -19,12 +19,12 @@ package tasks
  * Clients can also use the Join method to wait for all submitted tasks to 
  * complete.
  * 
- * Contrail arranges all objects into a nested hierarchy.  
- * An Identifier indicates an object's location in the hierarchy.
+ * This class contains a list of identifiers.
+ * An Identifier indicates an object's location in Contrails hierarchy.
  * The task manager coordinates operations on objects according to their place in 
  * the hierarchy as well as the type of operation being performed.
  * 
- * Here are the rules...
+ * Here are the rules for scheduling tasks...
  * 
  * A DELETE operation on an object may not proceed until all pending operations 
  * on the associated object or any of its descendants have completed.
@@ -52,7 +52,7 @@ package tasks
  
  import (
  	"sync"
- 	"list"
+ 	"container/list"
  )
 
 type op int
