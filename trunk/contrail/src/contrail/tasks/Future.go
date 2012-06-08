@@ -10,7 +10,7 @@ import (
   children:= tasks.GoList(path, func() { return storageSession.listChildren(path) })
 
   // IdentifierList.Get() panics if error in the func passed to tasks.DoList  
-  for i,c:= range []*Identifer(children.Get())) { 
+  for i,c:= range children.Get().([]*Identifer)) { 
   }
 */
 
@@ -59,7 +59,7 @@ func (self *Future) SetSuccess(result interface{}) {
 	defer self.lock.Unlock()
 	
 	if !self.done {
-		self.cancelled= true
+		self.cancelled= false
 		self.complete(true, result, nil)
 	}
 }
@@ -72,7 +72,7 @@ func (self *Future) SetError(err interface{}) {
 	defer self.lock.Unlock()
 	
 	if !self.done {
-		self.cancelled= true
+		self.cancelled= false
 		self.complete(false, nil, err)
 	}
 }
@@ -107,7 +107,7 @@ func (self *Future) Success() bool {
 func (self *Future) Cancelled() bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.success	
+	return self.cancelled	
 }
 
 /**
@@ -140,10 +140,10 @@ func (self *Future) OnComplete(handler func(future *Future)) {
 		return
 	} 
 
-	if self.completedHandlers == nil {
-		self.completedHandlers= make([]func(*Future), 1)
+	if self.completeHandlers == nil {
+		self.completeHandlers= make([]func(*Future), 0)
 	}
-	append(self.completedHandlers, future)
+	self.completeHandlers= append(self.completeHandlers, handler)
 }
 
 /**
@@ -157,6 +157,23 @@ func (self *Future) OnComplete(handler func(future *Future)) {
  * @panic if an error occurred while producing the result
  */
 func (self *Future) Get() interface{} {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	
+	if self.done {
+		if !self.success && !self.cancelled {
+			panic(self.err)
+		}
+		return self.result 
+	}
+	self.lock.Unlock()
+	<-self.doneNotify // wait for completion
+	self.lock.Lock()
+	self.doneNotify= nil
+	if !self.success && !self.cancelled {
+		panic(self.err)
+	}
+	return self.result
 }
 
 /**
@@ -177,20 +194,17 @@ func (self *Future) Join() {
 }
 
 func (self *Future) complete(success bool, result interface{}, err interface{}) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	
 	if self.done { return }
 	self.done= true
 	self.success= success
-	self.error= err
+	self.err= err
 	self.result= result
 	
-	if self.completedHandlers != nil {
-		for _,handler:= range self.ccompletedHandlers {
+	if self.completeHandlers != nil {
+		for _,handler:= range self.completeHandlers {
 			go handler(self)
 		}
-		self.completedHandlers= nil
+		self.completeHandlers= nil
 	}
 	
 	
