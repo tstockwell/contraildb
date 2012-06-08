@@ -55,7 +55,6 @@ package tasks
  import (
  	. "contrail/id"
  	"sync"
- 	"container/list"
  )
 
 type tOperation int
@@ -97,7 +96,7 @@ func CreateConductor() *Conductor {
 func (self *Conductor) addTask(task *tTask) {
 
 	// add task to internal list
-	tasks, ok:= self.taskStorage.Fetch(task.id).(tTaskSet)
+	tasks, _:= self.taskStorage.Fetch(task.id).(tTaskSet)
 	if tasks == nil {
 		tasks= newTaskSet()
 		self.taskStorage.Store(task.id, tasks)
@@ -148,7 +147,7 @@ func (self *Conductor) findPendingTasks(op tOperation, id *Identifier) tTaskSet 
 	pendingTasks:= newTaskSet()
 
 	visitor:= func (nodeId *Identifier, content interface{}) {
-		tasksInProgress, ok:= content.(tTaskSet) 
+		tasksInProgress, _:= content.(tTaskSet) 
 		if tasksInProgress != nil {
 			for taskInProgress,_:= range tasksInProgress {
 				if (!taskInProgress.result.Done() && IsDependentTask(op, taskInProgress.op)) {
@@ -240,14 +239,12 @@ func (self *Conductor) Join() {
 
 func (self *Conductor) join() {
 	for _,id:= range self.taskStorage.ListAll() {
-		tasks:= list.List(self.tasks.Fetch(id))
-		if tasks != nil {
-			element:= tasks.Front()
-			for count,i:= tasks.Len(),0; i < count; i++ {
-				task:= tTask(element.Value)
-				task.Get()
+		tasksInProgress, _:= self.taskStorage.Fetch(id).(tTaskSet)
+		if tasksInProgress != nil {
+			for taskInProgress,_:= range tasksInProgress {
+				taskInProgress.result.Join()
 			}
-		} 
+		}
 	}
 }
 
