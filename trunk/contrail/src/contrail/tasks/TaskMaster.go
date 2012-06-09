@@ -81,19 +81,19 @@ type tTask struct {
 	call func() interface{}
 }
 
-type Conductor struct {
+type TaskMaster struct {
 	taskStorage *IdStorage
 	lock *sync.Mutex
 }
 
-func CreateConductor() *Conductor {
-	return &Conductor{
+func CreateTaskMaster() *TaskMaster {
+	return &TaskMaster{
 		taskStorage: CreateIdStorage(),
 		lock: new (sync.Mutex),
 	}
 }
 
-func (self *Conductor) addTask(task *tTask) {
+func (self *TaskMaster) addTask(task *tTask) {
 
 	// add task to internal list
 	tasks, _:= self.taskStorage.Fetch(task.id).(tTaskSet)
@@ -124,7 +124,7 @@ func (self *Conductor) addTask(task *tTask) {
 	}
 }
 
-func (self *Conductor) runTask(task *tTask) {
+func (self *TaskMaster) runTask(task *tTask) {
 	go func() {
 		// if the task function panics then this function 
 		// complete the associated future with an error
@@ -142,7 +142,7 @@ func (self *Conductor) runTask(task *tTask) {
 	}()
 }
 	
-func (self *Conductor) findPendingTasks(op tOperation, id *Identifier) tTaskSet {
+func (self *TaskMaster) findPendingTasks(op tOperation, id *Identifier) tTaskSet {
 
 	pendingTasks:= newTaskSet()
 
@@ -189,8 +189,12 @@ func (self *Conductor) findPendingTasks(op tOperation, id *Identifier) tTaskSet 
 
 	return pendingTasks
 }
-		
-func (self *Conductor) Submit(op tOperation, id *Identifier, task func() interface{}) *Future {
+
+/**
+ * Executes the given function at an appropriate time in the future.
+ * The returned Future is bound to the given function.
+ */		
+func (self *TaskMaster) Submit(op tOperation, id *Identifier, task func() interface{}) *Future {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -222,7 +226,7 @@ func IsDependentTask (incomingOp tOperation, previousOp tOperation) bool {
 	return false;
 }
 
-func (self *Conductor) Close() {
+func (self *TaskMaster) Close() {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -230,14 +234,14 @@ func (self *Conductor) Close() {
 	self.taskStorage= nil
 }
 
-func (self *Conductor) Join() {
+func (self *TaskMaster) Join() {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	
 	self.join()
 }
 
-func (self *Conductor) join() {
+func (self *TaskMaster) join() {
 	for _,id:= range self.taskStorage.ListAll() {
 		tasksInProgress, _:= self.taskStorage.Fetch(id).(tTaskSet)
 		if tasksInProgress != nil {
