@@ -74,7 +74,7 @@ func CreateIdentifier(path string) *Identifier {
 */
 func UniqueIdentifier() *Identifier {
 	uuid, err:= uuid.GenUUID()
-	if err != nil {
+	if err == nil {
 		return CreateIdentifier(uuid)
 	}
 	panic(err)
