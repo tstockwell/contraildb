@@ -36,3 +36,24 @@ func TestBasicIdStorage(t *testing.T) {
     storage.Delete(id)
     if storage.Size() != 1 { t.Errorf("Delete failed") }
 }
+
+
+
+
+func TestVisitParents(t *testing.T) {
+    storage:= CreateIdStorage()
+	parent:= UniqueIdentifier()
+    storage.Store(parent, "parent")
+	child:= parent.Child("boogity")
+    //storage.Store(child, "child")
+	
+	var foundParent *Identifier;
+	visitor:= func (nodeId *Identifier, content interface{}) {
+		foundParent= nodeId
+	}
+
+	// look up the tree for deletes
+	storage.VisitParents(child, visitor)
+	if foundParent != parent { t.Errorf("VisitParents failed") }
+}
+

@@ -212,3 +212,13 @@ func (self *Future) complete(success bool, result interface{}, err interface{}) 
 	self.doneNotify<-true // notify the Join() method that results are available
 	self.lock.Lock()
 }
+
+
+/**
+ * Dont return until all the given futures are complete
+ */
+func JoinAll(futures []*Future) {
+	for _,future:= range futures {
+		future.Join()
+	}
+}

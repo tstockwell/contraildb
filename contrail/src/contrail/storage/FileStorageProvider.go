@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"contrail/id"
+	"contrail/tasks"
 )
 
 	
@@ -23,7 +24,7 @@ var content_file string= ".content"
  * 
  * This implementation is only meant for embedded use by a single process.
  * Another class, ServerStorageProvider, implements an HTTP API on top of 
- * this class that provides multi-user, client-server access to a file store. 
+ * self class that provides multi-user, client-server access to a file store. 
  *  
  * @see ServerStorageProvider for client/server access to a file store 
  * 
@@ -35,6 +36,7 @@ type FileStorageProvider struct {
 }
 type FileStorageSession struct {
 	provider *FileStorageProvider
+	taskMaster *tasks.TaskMaster
 }
 
 func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
@@ -55,17 +57,20 @@ func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
 /**
  * Start a storage session. 
  */
-func (this *FileStorageProvider) Connect() StorageSession {
-	return &FileStorageSession { provider:this }
+func (self *FileStorageProvider) Connect() StorageSession {
+	return &FileStorageSession { 
+		provider:self,
+		tasks.CreateTaskMaster(),
+	}
 } 
 
-func (this *FileStorageProvider) Root() string {
-	return this.root.Name()
+func (self *FileStorageProvider) Root() string {
+	return self.root.Name()
 } 
 
-func (this *FileStorageProvider) Close() {
-	this.root.Close() // ignore any error
-	this.root= nil
+func (self *FileStorageProvider) Close() {
+	self.root.Close() // ignore any error
+	self.root= nil
 } 
 
 
@@ -73,16 +78,17 @@ func (this *FileStorageProvider) Close() {
  * MUST be called when the session is no longer needed.
  * Any pending changed are flushed before closing.
  */
-func (this *FileStorageSession) Close() {
-	this.Flush()
+func (self *FileStorageSession) Close() {
+	self.taskMaster.Submit(tasks.DELETE)
+	self.Flush()
 }
 	
 /**
  * Returns the complete paths to all the children of the given path.
  */
-func (this *FileStorageSession) ListChildren(element *id.Identifier) []id.Identifier {
+func (self *FileStorageSession) ListChildren(element *id.Identifier) []id.Identifier {
 	elementPath:= filepath.FromSlash(element.Path())
-	filepath:= filepath.Join(this.provider.root.Name(), elementPath)
+	filepath:= filepath.Join(self.provider.root.Name(), elementPath)
 	
 	dir, err:= os.Open(filepath)
 	if err != nil { panic(err)}
@@ -102,9 +108,9 @@ func (this *FileStorageSession) ListChildren(element *id.Identifier) []id.Identi
 /**
  * @return the contents of of the given path, or null if the file does not exist.
  */
-func (this *FileStorageSession) Fetch(element *id.Identifier) []byte {
+func (self *FileStorageSession) Fetch(element *id.Identifier) []byte {
 	elementPath:= filepath.FromSlash(element.Path())
-	filepath:= filepath.Join(this.provider.root.Name(), elementPath)
+	filepath:= filepath.Join(self.provider.root.Name(), elementPath)
 	
 	bytes, err:= ioutil.ReadFile(filepath)
 	if err != nil { panic(err)}
@@ -116,9 +122,9 @@ func (this *FileStorageSession) Fetch(element *id.Identifier) []byte {
  * Stores the given contents at the given location.
  * The file is created if it does not already exist.
  */
-func (this *FileStorageSession) Store(element *id.Identifier, content []byte) {
+func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
 	elementPath:= filepath.FromSlash(element.Path())
-	filepath:= filepath.Join(this.provider.root.Name(), elementPath)
+	filepath:= filepath.Join(self.provider.root.Name(), elementPath)
 	
 	err:= ioutil.WriteFile(filepath, content, 0/*(os.FileMode(0777)*/)
 	if err != nil { panic(err)}
@@ -127,7 +133,7 @@ func (this *FileStorageSession) Store(element *id.Identifier, content []byte) {
 /**
  * Stores the given contents at the given location if the file 
  * does not already exist.  
- * If the file already exists then this method does nothing.
+ * If the file already exists then self method does nothing.
  * 
  * @param waitMillis
  * 		if the file already exists and parameter is greater than zero   
@@ -138,19 +144,19 @@ func (this *FileStorageSession) Store(element *id.Identifier, content []byte) {
  * 		true if the file was created, false if the file already exists 
  * 		and was not deleted within the wait period.
  */
-func (this *FileStorageSession) Create(path *id.Identifier, content []byte, waitMillis uint64) bool {
+func (self *FileStorageSession) Create(path *id.Identifier, content []byte, waitMillis uint64) bool {
 func Open(name string) (file *File, err error)
 }
 
 /**
  * Deletes the contents stored at the given locations.
  */
-func (this *FileStorageSession) Delete(path *id.Identifier) {
+func (self *FileStorageSession) Delete(path *id.Identifier) {
 }
 
 /**
- * Flush any pending changes made by this session to physical storage.
+ * Flush any pending changes made by self session to physical storage.
  */
-func (this *FileStorageSession) Flush() {
+func (self *FileStorageSession) Flush() {
 }
 

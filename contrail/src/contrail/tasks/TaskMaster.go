@@ -150,7 +150,7 @@ func (self *TaskMaster) findPendingTasks(op tOperation, id *Identifier) tTaskSet
 		tasksInProgress, _:= content.(tTaskSet) 
 		if tasksInProgress != nil {
 			for taskInProgress,_:= range tasksInProgress {
-				if (!taskInProgress.result.Done() && IsDependentTask(op, taskInProgress.op)) {
+				if !taskInProgress.result.Done() && IsDependentTask(op, taskInProgress.op) {
 					pendingTasks.add(taskInProgress)
 				}
 			}
@@ -166,13 +166,13 @@ func (self *TaskMaster) findPendingTasks(op tOperation, id *Identifier) tTaskSet
 	if (op == WRITE) {
 		noReads:= true
 		for pendingTask,_:= range pendingTasks {
-			if (pendingTask.op == READ) {
+			if pendingTask.op == READ {
 				noReads= false
 			}
 		}
 		if noReads {
 			for pendingTask,_:= range pendingTasks {
-				if (pendingTask.op == WRITE) {
+				if pendingTask.op == WRITE {
 					pendingTask.result.SetCancel()
 				}
 			}
@@ -186,7 +186,7 @@ func (self *TaskMaster) findPendingTasks(op tOperation, id *Identifier) tTaskSet
 
 	// look up the tree for deletes
 	self.taskStorage.VisitParents(id, visitor)
-	
+
 	return pendingTasks
 }
 
@@ -198,10 +198,11 @@ func (self *TaskMaster) Submit(op tOperation, id *Identifier, task func() interf
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
+	pendingTasks:= 	self.findPendingTasks(op, id)
 	ttsk:= tTask {
 		op: 			op,
 		id: 			id,
-		pendingTasks: 	self.findPendingTasks(op, id),
+		pendingTasks: 	pendingTasks,
 		result: 		CreateFuture(),
 		call:			task,
 	}
@@ -249,28 +250,29 @@ func IsDependentTask (incomingOp tOperation, previousOp tOperation) bool {
 }
 
 func (self *TaskMaster) Close() {
+	self.Join()
+	
 	self.lock.Lock()
 	defer self.lock.Unlock()
-
-	self.join()
 	self.taskStorage= nil
 }
 
 func (self *TaskMaster) Join() {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	
-	self.join()
+	JoinAll(self.getFutures());
 }
 
-func (self *TaskMaster) join() {
+func (self *TaskMaster) getFutures() []*Future {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	futures:= make([]*Future, 0, self.taskStorage.Size())	
 	for _,id:= range self.taskStorage.ListAll() {
 		tasksInProgress, _:= self.taskStorage.Fetch(id).(tTaskSet)
 		if tasksInProgress != nil {
 			for taskInProgress,_:= range tasksInProgress {
-				taskInProgress.result.Join()
+				futures= append(futures, taskInProgress.result)
 			}
 		}
 	}
+	return futures;
 }
-
