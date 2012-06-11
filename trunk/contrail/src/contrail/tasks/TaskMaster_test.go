@@ -45,6 +45,9 @@ func TestDeletes(t *testing.T) {
 	id:= id.UniqueIdentifier()
 	flag:= ""
 	start:= time.Now()
+	
+	if !IsDependentTask(DELETE, DELETE){ t.Errorf("wrong - since deletes may not proceed until other deletes are completed"); return }
+	
 	future1:= taskMaster.Submit(DELETE, id, func() interface{} {
 		flag= "1"
 		t.Logf("flag = 1\n")
@@ -58,6 +61,10 @@ func TestDeletes(t *testing.T) {
 		t.Logf("flag = 1.1\n")
 		return nil
 	})
+	
+	dependentTasks:= taskMaster.findPendingTasks(DELETE, id)
+	if (len(dependentTasks) <= 0) { t.Errorf("Failed to find dependent tasks"); return }
+	
 	future2:= taskMaster.Submit(DELETE, id, func() interface{} {
 		if flag != "1.1" {
 			msg:= "looks like the 2nd func ran before the first func finished"

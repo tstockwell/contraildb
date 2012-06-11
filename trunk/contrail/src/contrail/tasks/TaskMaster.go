@@ -186,7 +186,7 @@ func (self *TaskMaster) findPendingTasks(op tOperation, id *Identifier) tTaskSet
 
 	// look up the tree for deletes
 	self.taskStorage.VisitParents(id, visitor)
-
+	
 	return pendingTasks
 }
 
@@ -213,15 +213,37 @@ func (self *TaskMaster) Submit(op tOperation, id *Identifier, task func() interf
 func IsDependentTask (incomingOp tOperation, previousOp tOperation) bool {
 	switch incomingOp {
 		case READ: 
-			switch (previousOp) { case DELETE: case WRITE: /*case CREATE:*/ return true }
+			switch (previousOp) { 
+				case DELETE: 	return true
+				case WRITE: 	return true 
+			}
 		case WRITE: 
-			switch (previousOp) { case READ: case DELETE: case WRITE: case CREATE: return true }
+			switch (previousOp) { 
+				case READ: 		return true
+				case DELETE: 	return true
+				case WRITE: 	return true
+				case CREATE: 	return true 
+			}
 		case DELETE: 
-			switch (previousOp) { case READ: case DELETE: case WRITE: case LIST: return true }
+			switch (previousOp) { 
+				case READ: 		return true
+				case DELETE: 	return true
+				case WRITE: 	return true
+				case LIST: 		return true 
+			}
 		case LIST: 
-			switch (previousOp) { case DELETE: case WRITE: case CREATE: return true }
+			switch (previousOp) { 
+				case DELETE: 	return true
+				case WRITE: 	return true
+				case CREATE: 	return true
+			}
 		case CREATE:   
-			switch (previousOp) { case READ: case DELETE: case WRITE: case LIST: return true }
+			switch (previousOp) { 
+				case READ: 		return true
+				case DELETE: 	return true
+				case WRITE: 	return true
+				case LIST: 		return true
+			}
 	}
 	return false;
 }
