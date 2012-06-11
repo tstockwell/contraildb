@@ -290,10 +290,10 @@ func (this *IdStorage) VisitParents(id *Identifier, visit VisitFunction) {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
-	node:= this.contents[id.Path()]
-	if node != nil {
-		for n:= node.parent; n != nil; n= n.parent {
-			visit(n.identifier, n.content)
+	for p:= id.Parent(); p != nil; p= p.Parent() {
+		node:= this.contents[p.Path()]
+		if node != nil {
+			visit(node.identifier, node.content)
 		}
 	}
 }
