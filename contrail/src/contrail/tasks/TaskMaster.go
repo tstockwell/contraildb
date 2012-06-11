@@ -257,6 +257,10 @@ func (self *TaskMaster) Close() {
 	self.taskStorage= nil
 }
 
+func (self *TaskMaster) Wait() {
+	WaitAll(self.getFutures());
+}
+
 func (self *TaskMaster) Join() {
 	JoinAll(self.getFutures());
 }

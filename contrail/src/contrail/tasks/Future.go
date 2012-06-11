@@ -216,6 +216,24 @@ func (self *Future) complete(success bool, result interface{}, err interface{}) 
 
 /**
  * Dont return until all the given futures are complete
+ * Panic if any of the associated goroutines panic'd
+ */
+func WaitAll(futures []*Future) {
+	for _,future:= range futures {
+		future.Join()
+	}
+	for _,future:= range futures {
+		if !future.Success() && !future.Cancelled() {
+			err:= future.Error()
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
+/**
+ * Dont return until all the given futures are complete
  */
 func JoinAll(futures []*Future) {
 	for _,future:= range futures {
