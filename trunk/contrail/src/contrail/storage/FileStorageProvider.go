@@ -22,7 +22,7 @@ var content_file string= ".content"
  * it makes it possible to do incremental backup of the database using  
  * off-the-shelf backup routines.  
  * 
- * This implementation is only meant for embedded use by a single process.
+ * This file system implementation is only meant to be used by a single process.
  * Another class, ServerStorageProvider, implements an HTTP API on top of 
  * self class that provides multi-user, client-server access to a file store. 
  *  
@@ -33,10 +33,10 @@ var content_file string= ".content"
 
 type FileStorageProvider struct {
 	root *os.File // path the root of database file system
+	taskMaster *tasks.TaskMaster
 }
 type FileStorageSession struct {
 	provider *FileStorageProvider
-	taskMaster *tasks.TaskMaster
 }
 
 func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
@@ -50,7 +50,10 @@ func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
 	if err != nil {
 		panic(err)
 	}
-	return &FileStorageProvider{ root:file }
+	return &FileStorageProvider{ 
+		root:		file,
+		taskMasetr: tasks.CreateTaskMaster(),
+	}
 }
 
 
@@ -60,7 +63,6 @@ func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
 func (self *FileStorageProvider) Connect() StorageSession {
 	return &FileStorageSession { 
 		provider:self,
-		tasks.CreateTaskMaster(),
 	}
 } 
 
@@ -79,7 +81,6 @@ func (self *FileStorageProvider) Close() {
  * Any pending changed are flushed before closing.
  */
 func (self *FileStorageSession) Close() {
-	self.taskMaster.Submit(tasks.DELETE)
 	self.Flush()
 }
 	
@@ -87,35 +88,36 @@ func (self *FileStorageSession) Close() {
  * Returns the complete paths to all the children of the given path.
  */
 func (self *FileStorageSession) ListChildren(element *id.Identifier) []id.Identifier {
-	elementPath:= filepath.FromSlash(element.Path())
-	filepath:= filepath.Join(self.provider.root.Name(), elementPath)
-	
-	dir, err:= os.Open(filepath)
-	if err != nil { panic(err)}
-	
-	fi, err:= dir.Readdir(0)
-	if err != nil {	panic(err) }
-	
-	children:= make([]id.Identifier, 0, len(fi))
-	for i:= len(fi)-1; 0 <= i; i-= 1 {
-		if fi[i].IsDir() {
-			children= append(children, *element.Child(fi[i].Name()))
+	return self.provider.taskMaster.Submit(tasks.LIST, element, func() interface{} {
+		elementPath:= filepath.FromSlash(element.Path())
+		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
+		
+		dir, err:= os.Open(filepath)
+		if err != nil { panic(err)}
+		
+		fi, err:= dir.Readdir(0)
+		if err != nil {	panic(err) }
+		
+		children:= make([]id.Identifier, 0, len(fi))
+		for i:= len(fi)-1; 0 <= i; i-= 1 {
+			if fi[i].IsDir() {
+				children= append(children, *element.Child(fi[i].Name()))
+			}
 		}
-	}
-	return children
+	}).Get().([]id.Identifier)
 }
 	
 /**
  * @return the contents of of the given path, or null if the file does not exist.
  */
 func (self *FileStorageSession) Fetch(element *id.Identifier) []byte {
-	elementPath:= filepath.FromSlash(element.Path())
-	filepath:= filepath.Join(self.provider.root.Name(), elementPath)
-	
-	bytes, err:= ioutil.ReadFile(filepath)
-	if err != nil { panic(err)}
-	
-	return bytes
+	return self.provider.taskMaster.Submit(tasks.READ, element, func() interface{} {
+		elementPath:= filepath.FromSlash(element.Path())
+		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
+		
+		bytes, err:= ioutil.ReadFile(filepath)
+		if err != nil { panic(err)}
+	}).Get().([]byte)
 }
 
 /**
@@ -123,11 +125,13 @@ func (self *FileStorageSession) Fetch(element *id.Identifier) []byte {
  * The file is created if it does not already exist.
  */
 func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
-	elementPath:= filepath.FromSlash(element.Path())
-	filepath:= filepath.Join(self.provider.root.Name(), elementPath)
-	
-	err:= ioutil.WriteFile(filepath, content, 0/*(os.FileMode(0777)*/)
-	if err != nil { panic(err)}
+	self.provider.taskMaster.Submit(tasks.WRITE, element, func() interface{} {
+		elementPath:= filepath.FromSlash(element.Path())
+		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
+		
+		err:= ioutil.WriteFile(filepath, content, 0/*(os.FileMode(0777)*/)
+		if err != nil { panic(err)}
+	}).Get();
 }
 
 /**
@@ -145,18 +149,27 @@ func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
  * 		and was not deleted within the wait period.
  */
 func (self *FileStorageSession) Create(path *id.Identifier, content []byte, waitMillis uint64) bool {
-func Open(name string) (file *File, err error)
+	return self.provider.taskMaster.Submit(tasks.CREATE, element, func() interface{} {
+	}).Get().(bool);
 }
 
 /**
  * Deletes the contents stored at the given locations.
  */
 func (self *FileStorageSession) Delete(path *id.Identifier) {
+	self.provider.taskMaster.Submit(tasks.DELETE, element, func() interface{} {
+		elementPath:= filepath.FromSlash(element.Path())
+		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
+		
+		err:= os.Remove(filepath)
+		if err != nil { panic(err)}
+	}).Wait()
 }
 
 /**
  * Flush any pending changes made by self session to physical storage.
  */
 func (self *FileStorageSession) Flush() {
+	self.provider.taskMaster.Wait()
 }
 
