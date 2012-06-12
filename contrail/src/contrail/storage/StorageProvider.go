@@ -1,7 +1,8 @@
 package storage
 
 import (
-	. "contrail/id"
+	"time"
+	cid "contrail/id"
 )
 
 
@@ -52,47 +53,46 @@ type StorageSession interface  {
 	/**
 	 * Returns the complete paths to all the children of the given path.
 	 */
-	ListChildren(path *Identifier) []Identifier
+	ListChildren(path *cid.Identifier) []*cid.Identifier
 	
 	/**
 	 * @return the contents of of the given path, or null if the file does not exist.
 	 */
-	Fetch(path *Identifier) []byte
+	Fetch(path *cid.Identifier) []byte
 
 	/**
 	 * Stores the given contents at the given location.
 	 * The file is created if it does not already exist.
 	 */
-	Store(path *Identifier, content []byte)
+	Store(path *cid.Identifier, content []byte)
 
 	/**
 	 * Stores the given contents at the given location if the file 
 	 * does not already exist.  
 	 * If the file already exists then this method does nothing.
 	 * 
-	 * @param waitMillis
-	 * 		if the file already exists and parameter is greater than zero   
-	 * 		then wait the denoted number of milliseconds for some other 
+	 * @param wait
+	 * 		if the file already exists and wait parameter is greater than 
+	 *      zero then wait the denoted duration for some other 
 	 * 		process to delete the file.
 	 * 
 	 * @return 
 	 * 		true if the file was created, false if the file already exists 
 	 * 		and was not deleted within the wait period.
 	 */
-	Create(path *Identifier, content []byte, waitMillis uint64) bool
+	Create(path *cid.Identifier, content []byte, wait time.Duration) bool
 
 	/**
 	 * Deletes the contents stored at the given locations.
 	 */
-	Delete(path *Identifier)
+	Delete(path *cid.Identifier)
 	
 	/**
 	 * Flush any pending changes made by this session to physical storage.
 	 */
 	Flush()
-
-
 }
+
 type StorageProvider interface {
 	
 	/**

@@ -30,8 +30,6 @@ package tasks
  * 
  * A DELETE operation on an object may not proceed until all pending operations 
  * on the associated object or any of its descendants have completed.
- * However, DELETE operations on an object are NOT blocked by CREATE operations 
- * on the same object.    
  * A DELETE operation blocks any subsequent operations on an object and all its 
  * descendants until the delete has completed.
  * 
@@ -44,10 +42,8 @@ package tasks
  * A WRITE operation on an object may not proceed until all pending READ, WRITE, 
  * and CREATE operations on that object have completed.  
  * 
- * A CREATE operation on an object may not proceed until all pending READ, 
- * and WRITE operations on that object have completed.  Since the purpose of 
- * the StorageProvider.Create method is to coordinate asynchronous CREATE 
- * requests CREATE requests do not have to wait for other CREATE requests.   
+ * A CREATE operation on an object may not proceed until all pending operations 
+ * on that object have completed.     
  * 
  * @author Ted Stockwell
  */
@@ -226,12 +222,7 @@ func IsDependentTask (incomingOp tOperation, previousOp tOperation) bool {
 				case CREATE: 	return true 
 			}
 		case DELETE: 
-			switch (previousOp) { 
-				case READ: 		return true
-				case DELETE: 	return true
-				case WRITE: 	return true
-				case LIST: 		return true 
-			}
+			return true
 		case LIST: 
 			switch (previousOp) { 
 				case DELETE: 	return true
@@ -239,12 +230,7 @@ func IsDependentTask (incomingOp tOperation, previousOp tOperation) bool {
 				case CREATE: 	return true
 			}
 		case CREATE:   
-			switch (previousOp) { 
-				case READ: 		return true
-				case DELETE: 	return true
-				case WRITE: 	return true
-				case LIST: 		return true
-			}
+			return true
 	}
 	return false;
 }

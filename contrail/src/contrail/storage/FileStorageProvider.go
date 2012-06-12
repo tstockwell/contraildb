@@ -2,7 +2,6 @@ package storage
 
 import (
 	"os"
-	"sync"
 	"runtime"
 	"io/ioutil"
 	"path/filepath"
@@ -37,8 +36,6 @@ var content_file string= ".content"
 type FileStorageProvider struct {
 	root *os.File // path the root of database file system
 	taskMaster *tasks.TaskMaster
-	fileLocks map[string]*sync.Mutex
-	lock *sync.Mutex
 }
 type FileStorageSession struct {
 	provider *FileStorageProvider
@@ -57,8 +54,7 @@ func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
 	}
 	return &FileStorageProvider{ 
 		root:		file,
-		taskMasetr: tasks.CreateTaskMaster(),
-		locks:		make(map[string]string)
+		taskMaster: tasks.CreateTaskMaster(),
 	}
 }
 
@@ -93,7 +89,7 @@ func (self *FileStorageSession) Close() {
 /**
  * Returns the complete paths to all the children of the given path.
  */
-func (self *FileStorageSession) ListChildren(element *id.Identifier) []id.Identifier {
+func (self *FileStorageSession) ListChildren(element *id.Identifier) []*id.Identifier {
 	return self.provider.taskMaster.Submit(tasks.LIST, element, func() interface{} {
 		elementPath:= filepath.FromSlash(element.Path())
 		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
@@ -110,7 +106,8 @@ func (self *FileStorageSession) ListChildren(element *id.Identifier) []id.Identi
 				children= append(children, *element.Child(fi[i].Name()))
 			}
 		}
-	}).Get().([]id.Identifier)
+		return children
+	}).Get().([]*id.Identifier)
 }
 	
 /**
@@ -123,6 +120,7 @@ func (self *FileStorageSession) Fetch(element *id.Identifier) []byte {
 		
 		bytes, err:= ioutil.ReadFile(filepath)
 		if err != nil { panic(err)}
+		return bytes
 	}).Get().([]byte)
 }
 
@@ -137,6 +135,7 @@ func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
 		
 		err:= ioutil.WriteFile(filepath, content, 0/*(os.FileMode(0777)*/)
 		if err != nil { panic(err)}
+		return nil
 	}).Get();
 }
 
@@ -154,29 +153,20 @@ func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
  * 		true if the file was created, false if the file already exists 
  * 		and was not deleted within the wait period.
  */
-func (self *FileStorageSession) Create(path *id.Identifier, content []byte, waitMillis uint64) bool {
-	return self.provider.taskMaster.Submit(tasks.CREATE, element, func() interface{} {
-		elementPath:= filepath.FromSlash(element.Path())
+func (self *FileStorageSession) Create(id *id.Identifier, content []byte, wait time.Duration) bool {
+	return self.provider.taskMaster.Submit(tasks.CREATE, id, func() interface{} {
+		elementPath:= filepath.FromSlash(id.Path())
 		filepath:= 	filepath.Join(self.provider.root.Name(), elementPath)
-		hasFileLock:= false
-		
-		defer func() {
-			if hasFileLock {
-				self.releaseFileLock(path)
-			}
-		}()
 	
 		first:= true
 		success:= false
-		for start:= time.Now(); !success && (first || time.Since(start) < waitMillis); {
-			self.getFileLock(path)
-			hasFileLock= true
+		for start:= time.Now(); !success && (first || time.Since(start) < wait); {
 			
 			// check if file exists
 			exists:= 	true
 	        fd, err:= 	os.Open(filepath) 
 	        if err != nil { 
-	            if e, ok := err.(*os.PathError); ok && (e.Error == os.ENOENT || e.Error == os.ENOTDIR) {
+	            if e, ok := err.(*os.PathError); ok && (e.Err == os.ErrNotExist) {
 	            	exists= false
 	            } else {
 	            	panic(err)
@@ -195,8 +185,6 @@ func (self *FileStorageSession) Create(path *id.Identifier, content []byte, wait
 		        runtime.Gosched()
 		    }
 		    
-		    self.releaseFileLock(path)
-		    hasFileLock= false
 		    first= false
 		}
 		
@@ -205,43 +193,24 @@ func (self *FileStorageSession) Create(path *id.Identifier, content []byte, wait
 	}).Get().(bool);
 }
 
-func (self *FileStorageSession) getFileLock(id *id.Identifier) {
-	path:= id.Path()
-	
-	self.provider.lock.Lock()
-		fileLock:= self.provider.fileLocks[path]
-		if lock == nil {
-			fileLock= &sync.Mutex{}
-			self.provider.fileLocks[path]= lock
-		}
-	self.provider.lock.Unlock()
-	
-	fileLock.Lock()
-}
-
-func (self *FileStorageSession) releaseFileLock(id *id.Identifier) {
-	path:= id.Path()
-	
-	fileLock:= self.provider.fileLocks[path]
-	if lock != nil {
-		fileLock= &sync.Mutex{}
-		self.provider.fileLocks[path]= lock
-	}
-	
-	fileLock.Lock()
-}
 
 /**
  * Deletes the contents stored at the given locations.
  */
-func (self *FileStorageSession) Delete(path *id.Identifier) {
-	self.provider.taskMaster.Submit(tasks.DELETE, element, func() interface{} {
-		elementPath:= filepath.FromSlash(element.Path())
+func (self *FileStorageSession) Delete(id *id.Identifier) {
+	self.provider.taskMaster.Submit(tasks.DELETE, id, func() interface{} {
+		elementPath:= filepath.FromSlash(id.Path())
 		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
-		
-		err:= os.Remove(filepath)
-		if err != nil { panic(err)}
-	}).Wait()
+
+		for i:= 0; i < 10; i++ {
+			err:= os.RemoveAll(filepath)
+			if err == nil {
+				break
+			}
+			runtime.Gosched()
+		}
+		return nil
+	}).Get()
 }
 
 /**
