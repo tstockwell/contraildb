@@ -3,6 +3,7 @@
 	<name>contrail</name>
 	<comment></comment>
 	<projects>
+		<project>log4go</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

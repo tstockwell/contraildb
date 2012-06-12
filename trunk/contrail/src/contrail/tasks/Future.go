@@ -188,7 +188,10 @@ func (self *Future) Join() {
 	
 	if self.done { return }
 	self.lock.Unlock()
+	
+	runtime.Gosched()
 	<-self.doneNotify // wait for completion
+	
 	self.lock.Lock()
 	self.doneNotify= nil
 }
