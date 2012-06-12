@@ -2,10 +2,13 @@ package storage
 
 import (
 	"os"
+	"sync"
+	"runtime"
 	"io/ioutil"
 	"path/filepath"
 	"contrail/id"
 	"contrail/tasks"
+	"time"
 )
 
 	
@@ -34,6 +37,8 @@ var content_file string= ".content"
 type FileStorageProvider struct {
 	root *os.File // path the root of database file system
 	taskMaster *tasks.TaskMaster
+	fileLocks map[string]*sync.Mutex
+	lock *sync.Mutex
 }
 type FileStorageSession struct {
 	provider *FileStorageProvider
@@ -53,6 +58,7 @@ func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
 	return &FileStorageProvider{ 
 		root:		file,
 		taskMasetr: tasks.CreateTaskMaster(),
+		locks:		make(map[string]string)
 	}
 }
 
@@ -137,7 +143,7 @@ func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
 /**
  * Stores the given contents at the given location if the file 
  * does not already exist.  
- * If the file already exists then self method does nothing.
+ * If the file already exists then method does nothing.
  * 
  * @param waitMillis
  * 		if the file already exists and parameter is greater than zero   
@@ -150,7 +156,79 @@ func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
  */
 func (self *FileStorageSession) Create(path *id.Identifier, content []byte, waitMillis uint64) bool {
 	return self.provider.taskMaster.Submit(tasks.CREATE, element, func() interface{} {
+		elementPath:= filepath.FromSlash(element.Path())
+		filepath:= 	filepath.Join(self.provider.root.Name(), elementPath)
+		hasFileLock:= false
+		
+		defer func() {
+			if hasFileLock {
+				self.releaseFileLock(path)
+			}
+		}()
+	
+		first:= true
+		success:= false
+		for start:= time.Now(); !success && (first || time.Since(start) < waitMillis); {
+			self.getFileLock(path)
+			hasFileLock= true
+			
+			// check if file exists
+			exists:= 	true
+	        fd, err:= 	os.Open(filepath) 
+	        if err != nil { 
+	            if e, ok := err.(*os.PathError); ok && (e.Error == os.ENOENT || e.Error == os.ENOTDIR) {
+	            	exists= false
+	            } else {
+	            	panic(err)
+	            } 
+	        }
+	        
+	        if !exists {
+	        	// file doesn't exist, so create and write contents 
+	        	fd, err := os.Create(filepath);  if (err != nil) { panic(err) }
+		        _,err= fd.Write(content)
+		        fd.Close()
+		        if (err != nil) { panic(err) }
+		        success= true
+		    } else {
+		        fd.Close()
+		        runtime.Gosched()
+		    }
+		    
+		    self.releaseFileLock(path)
+		    hasFileLock= false
+		    first= false
+		}
+		
+		return success
+		
 	}).Get().(bool);
+}
+
+func (self *FileStorageSession) getFileLock(id *id.Identifier) {
+	path:= id.Path()
+	
+	self.provider.lock.Lock()
+		fileLock:= self.provider.fileLocks[path]
+		if lock == nil {
+			fileLock= &sync.Mutex{}
+			self.provider.fileLocks[path]= lock
+		}
+	self.provider.lock.Unlock()
+	
+	fileLock.Lock()
+}
+
+func (self *FileStorageSession) releaseFileLock(id *id.Identifier) {
+	path:= id.Path()
+	
+	fileLock:= self.provider.fileLocks[path]
+	if lock != nil {
+		fileLock= &sync.Mutex{}
+		self.provider.fileLocks[path]= lock
+	}
+	
+	fileLock.Lock()
 }
 
 /**
