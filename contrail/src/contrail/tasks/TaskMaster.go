@@ -51,6 +51,7 @@ package tasks
  import (
  	. "contrail/id"
  	"sync"
+ 	"contrail/util/errors"
  )
 
 type tOperation int
@@ -126,7 +127,7 @@ func (self *TaskMaster) runTask(task *tTask) {
 		// complete the associated future with an error
 		defer func() {
 		        if err := recover(); err != nil {
-		        	task.result.SetError(err)
+		        	task.result.SetError(errors.CreateError(err))
 		        }
 		    }()		
 		    

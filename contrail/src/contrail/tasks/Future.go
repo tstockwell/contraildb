@@ -3,6 +3,7 @@ package tasks
 import (
 	"sync"
 	"runtime"
+	"contrail/util/errors"
 )
 
 /*
@@ -201,7 +202,7 @@ func (self *Future) complete(success bool, result interface{}, err interface{}) 
 	if self.done { return }
 	self.done= true
 	self.success= success
-	self.err= err
+	self.err= errors.CreateError(err)
 	self.result= result
 	
 	if self.completeHandlers != nil {

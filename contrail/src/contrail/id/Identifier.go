@@ -5,6 +5,7 @@ import (
 	"sync"
 	"contrail/util/uuid"
 	"contrail/util/lru"
+	"contrail/util/errors"
 )
 
 /**
@@ -77,7 +78,7 @@ func UniqueIdentifier() *Identifier {
 	if err == nil {
 		return CreateIdentifier(uuid)
 	}
-	panic(err)
+	panic(errors.CreateError(err))
 }
 
 func (this *Identifier) Path() string {
