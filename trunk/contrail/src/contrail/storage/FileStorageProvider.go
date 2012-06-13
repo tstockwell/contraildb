@@ -3,11 +3,12 @@ package storage
 import (
 	"os"
 	"runtime"
+	"time"
 	"io/ioutil"
 	"path/filepath"
 	"contrail/id"
 	"contrail/tasks"
-	"time"
+	"contrail/util/errors"
 )
 
 	
@@ -46,11 +47,11 @@ func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
 		os.RemoveAll(path)
 	}
 	if err:= os.MkdirAll(path, os.FileMode(0777)); err != nil {
-		panic(err)
+		panic(errors.CreateError(err))
 	}
 	file, err:= os.Open(path)
 	if err != nil {
-		panic(err)
+		panic(errors.CreateError(err))
 	}
 	return &FileStorageProvider{ 
 		root:		file,
@@ -95,10 +96,10 @@ func (self *FileStorageSession) ListChildren(element *id.Identifier) []*id.Ident
 		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
 		
 		dir, err:= os.Open(filepath)
-		if err != nil { panic(err)}
+		if err != nil { panic(errors.CreateError(err))}
 		
 		fi, err:= dir.Readdir(0)
-		if err != nil {	panic(err) }
+		if err != nil {	panic(errors.CreateError(err)) }
 		
 		children:= make([]id.Identifier, 0, len(fi))
 		for i:= len(fi)-1; 0 <= i; i-= 1 {
@@ -119,7 +120,7 @@ func (self *FileStorageSession) Fetch(element *id.Identifier) []byte {
 		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
 		
 		bytes, err:= ioutil.ReadFile(filepath)
-		if err != nil { panic(err)}
+		if err != nil { panic(errors.CreateError(err))}
 		return bytes
 	}).Get().([]byte)
 }
@@ -134,7 +135,7 @@ func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
 		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
 		
 		err:= ioutil.WriteFile(filepath, content, 0/*(os.FileMode(0777)*/)
-		if err != nil { panic(err)}
+		if err != nil { panic(errors.CreateError(err))}
 		return nil
 	}).Get();
 }
@@ -169,16 +170,16 @@ func (self *FileStorageSession) Create(id *id.Identifier, content []byte, wait t
 	            if e, ok := err.(*os.PathError); ok && (e.Err == os.ErrNotExist) {
 	            	exists= false
 	            } else {
-	            	panic(err)
+	            	panic(errors.CreateError(err))
 	            } 
 	        }
 	        
 	        if !exists {
 	        	// file doesn't exist, so create and write contents 
-	        	fd, err := os.Create(filepath);  if (err != nil) { panic(err) }
+	        	fd, err := os.Create(filepath);  if (err != nil) { panic(errors.CreateError(err)) }
 		        _,err= fd.Write(content)
 		        fd.Close()
-		        if (err != nil) { panic(err) }
+		        if (err != nil) { panic(errors.CreateError(err)) }
 		        success= true
 		    } else {
 		        fd.Close()
