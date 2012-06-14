@@ -11,9 +11,9 @@ import (
 	"contrail/util/errors"
 )
 
-	
-var lock_file string= ".lock"
-var content_file string= ".content" 
+const (	
+	content_file= ".content"
+) 
 
 
 /**
@@ -36,7 +36,8 @@ var content_file string= ".content"
 
 type FileStorageProvider struct {
 	root *os.File // path the root of database file system
-	taskMaster *tasks.TaskMaster
+	taskMaster *tasks.TaskMaster // used to control concurrency
+	fileGuards *tasks.TaskMaster // used to control access to files being created/deleted 
 }
 type FileStorageSession struct {
 	provider *FileStorageProvider
@@ -56,6 +57,7 @@ func CreateFileStorageProvider(path string, clean bool) *FileStorageProvider {
 	return &FileStorageProvider{ 
 		root:		file,
 		taskMaster: tasks.CreateTaskMaster(),
+		fileGuards: tasks.CreateTaskMaster(),
 	}
 }
 
@@ -92,22 +94,31 @@ func (self *FileStorageSession) Close() {
  */
 func (self *FileStorageSession) ListChildren(element *id.Identifier) []*id.Identifier {
 	return self.provider.taskMaster.Submit(tasks.LIST, element, func() interface{} {
+	
 		elementPath:= filepath.FromSlash(element.Path())
 		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
 		
 		dir, err:= os.Open(filepath)
 		if err != nil { panic(errors.CreateError(err))}
 		
-		fi, err:= dir.Readdir(0)
-		if err != nil {	panic(errors.CreateError(err)) }
-		
-		children:= make([]id.Identifier, 0, len(fi))
-		for i:= len(fi)-1; 0 <= i; i-= 1 {
-			if fi[i].IsDir() {
-				children= append(children, *element.Child(fi[i].Name()))
+		return func() []*id.Identifier {
+			defer func() {
+				if dir != nil {
+					dir.Close()
+				}
+			}()
+			
+			fi, err:= dir.Readdir(0)
+			if err != nil {	panic(errors.CreateError(err)) }
+			
+			children:= make([]*id.Identifier, 0, len(fi))
+			for i:= len(fi)-1; 0 <= i; i-= 1 {
+				if fi[i].IsDir() {
+					children= append(children, element.Child(fi[i].Name()))
+				}
 			}
-		}
-		return children
+			return children
+		}()
 	}).Get().([]*id.Identifier)
 }
 	
@@ -117,7 +128,8 @@ func (self *FileStorageSession) ListChildren(element *id.Identifier) []*id.Ident
 func (self *FileStorageSession) Fetch(element *id.Identifier) []byte {
 	return self.provider.taskMaster.Submit(tasks.READ, element, func() interface{} {
 		elementPath:= filepath.FromSlash(element.Path())
-		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
+		folderpath:= filepath.Join(self.provider.root.Name(), elementPath)
+		filepath:= filepath.Join(folderpath, content_file)
 		
 		bytes, err:= ioutil.ReadFile(filepath)
 		if err != nil { panic(errors.CreateError(err))}
@@ -131,13 +143,22 @@ func (self *FileStorageSession) Fetch(element *id.Identifier) []byte {
  */
 func (self *FileStorageSession) Store(element *id.Identifier, content []byte) {
 	self.provider.taskMaster.Submit(tasks.WRITE, element, func() interface{} {
-		elementPath:= filepath.FromSlash(element.Path())
-		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
-		
-		err:= ioutil.WriteFile(filepath, content, 0/*(os.FileMode(0777)*/)
-		if err != nil { panic(errors.CreateError(err))}
+		self.doStore(element, content)
 		return nil
 	}).Get();
+}
+func (self *FileStorageSession) doStore(element *id.Identifier, content []byte) {
+	elementPath:= filepath.FromSlash(element.Path())
+	folderpath:= filepath.Join(self.provider.root.Name(), elementPath)
+	
+	if err:= os.MkdirAll(folderpath, 0/*os.FileMode(0777)*/); err != nil {
+		panic(errors.CreateError(err))
+	}
+	
+	contentpath:= filepath.Join(folderpath, content_file)
+	if err:= ioutil.WriteFile(contentpath, content, 0/*(os.FileMode(0777)*/); err != nil { 
+		panic(errors.CreateError(err))
+	}
 }
 
 /**
@@ -162,30 +183,27 @@ func (self *FileStorageSession) Create(id *id.Identifier, content []byte, wait t
 		first:= true
 		success:= false
 		for start:= time.Now(); !success && (first || time.Since(start) < wait); {
-			
-			// check if file exists
-			exists:= 	true
-	        fd, err:= 	os.Open(filepath) 
-	        if err != nil { 
-	            if e, ok := err.(*os.PathError); ok && (e.Err == os.ErrNotExist) {
-	            	exists= false
-	            } else {
-	            	panic(errors.CreateError(err))
-	            } 
-	        }
-	        
-	        if !exists {
-	        	// file doesn't exist, so create and write contents 
-	        	fd, err := os.Create(filepath);  if (err != nil) { panic(errors.CreateError(err)) }
-		        _,err= fd.Write(content)
-		        fd.Close()
-		        if (err != nil) { panic(errors.CreateError(err)) }
-		        success= true
-		    } else {
-		        fd.Close()
-		        runtime.Gosched()
-		    }
-		    
+		
+			self.provider.fileGuards.Submit(tasks.CREATE, id, func() interface{} {
+				// check if file exists
+		        fd, err:= 	os.Open(filepath) 
+		        if err != nil {
+		        	if os.IsNotExist(err) {
+		        	 
+			        	// file doesn't exist, so create and write contents 
+			        	self.doStore(id, content)
+				        success= true
+				        
+		            } else {
+		            	panic(errors.CreateError(err))
+		            } 
+		        } else {
+		        	fd.Close()
+		        }	        
+		        return nil
+			}).Get();
+
+		    runtime.Gosched()
 		    first= false
 		}
 		
@@ -202,14 +220,15 @@ func (self *FileStorageSession) Delete(id *id.Identifier) {
 	self.provider.taskMaster.Submit(tasks.DELETE, id, func() interface{} {
 		elementPath:= filepath.FromSlash(id.Path())
 		filepath:= filepath.Join(self.provider.root.Name(), elementPath)
-
-		for i:= 0; i < 10; i++ {
+		
+		self.provider.fileGuards.Submit(tasks.CREATE, id, func() interface{} {
 			err:= os.RemoveAll(filepath)
-			if err == nil {
-				break
+			if err != nil {
+				panic(errors.CreateError(err))
 			}
-			runtime.Gosched()
-		}
+			return nil
+		}).Get()
+
 		return nil
 	}).Get()
 }
