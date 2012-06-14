@@ -28,10 +28,13 @@ package tasks
  * 
  * Here are the rules for scheduling tasks...
  * 
- * A DELETE operation on an object may not proceed until all pending operations 
- * on the associated object or any of its descendants have completed.
+ * A DELETE operation on an object may not proceed until all pending operations, 
+ * except CREATE operations, on the associated object or any of its descendants 
+ * have completed.
  * A DELETE operation blocks any subsequent operations on an object and all its 
  * descendants until the delete has completed.
+ * DELETE operations are not blocked by CREATE operations since CREATE 
+ * operations may just be waiting for the associated object to be DELETED. 
  * 
  * A READ operation on an object may not proceed until all pending WRITE and 
  * CREATE operations on that object have completed.  
@@ -49,6 +52,7 @@ package tasks
  */
  
  import (
+ 	"fmt"
  	. "contrail/id"
  	"sync"
  	"contrail/util/errors"
@@ -126,10 +130,15 @@ func (self *TaskMaster) runTask(task *tTask) {
 		// if the task function panics then this function 
 		// complete the associated future with an error
 		defer func() {
+			defer func() {
 		        if err := recover(); err != nil {
-		        	task.result.SetError(errors.CreateError(err))
+		        	fmt.Printf("panic within a panic: %v\n", err)
 		        }
-		    }()		
+			}()
+	        if err := recover(); err != nil {
+	        	task.result.SetError(errors.CreateError(err))
+	        }
+		}()		
 		    
 		// run the associated function
 		// if no error occurs then successfully complete the associated future
@@ -223,7 +232,12 @@ func IsDependentTask (incomingOp tOperation, previousOp tOperation) bool {
 				case CREATE: 	return true 
 			}
 		case DELETE: 
-			return true
+			switch (previousOp) { 
+				case READ: 		return true
+				case DELETE: 	return true
+				case WRITE: 	return true
+				case LIST: 		return true
+			}
 		case LIST: 
 			switch (previousOp) { 
 				case DELETE: 	return true

@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 	"time"
+	"strconv"
 	"contrail/id"
 	"sync/atomic"
 )
@@ -36,6 +37,8 @@ func (self *StorageProviderTester) TestSimpleStorage(t *testing.T) {
 	child:= id.Child("huey")
 	session.Store(child, []byte(content))
 	session.Flush()
+	fetched= string(session.Fetch(child))
+	if (content != fetched) { t.Errorf("fetched content != stored content"); return } 
 	
 	children:= session.ListChildren(id)
 	if (len(children) != 1) { t.Errorf("children not listed correctly"); return } 
@@ -45,35 +48,72 @@ func (self *StorageProviderTester) TestSimpleStorage(t *testing.T) {
 	session.Flush()
 	children= session.ListChildren(id)
 	if (len(children) != 0) { t.Errorf("delete didn't work"); return } 
+		
+	session.Create(child, []byte(content), 0)
+	session.Flush()
+	fetched= string(session.Fetch(child))
+	if (content != fetched) { t.Errorf("fetched content != stored content"); return } 
 }
-	
+
 /**
  * Test multiple simultaneous creates/deletes. 
  */
-func (self *StorageProviderTester) TestCreate(t *testing.T) {
-	content:= "hello"
+func (self *StorageProviderTester) TestCreateMulti(t *testing.T) {
+	const ( content= "hello" )
 	
-	// test that only one goroutine can create the same file at a time
-	for f:= 0; f < 10; f++ {			
-		identifier:= id.CreateIdentifier("file-"+string(f))
-		session:= self.provider.Connect()
-		count:= int32(0)
-		done:= make(chan bool,20)
-		for i:= 0; i < 20; i++ {
-			go func() {
-				created:= session.Create(identifier, []byte(content), math.MaxInt16)
-				if !created { t.Errorf("failed to create"); return }
+	identifier:= id.CreateIdentifier("file-create-test")
+	session:= self.provider.Connect()
+	count:= int32(0)
+	done:= make(chan bool,20)
+	for i:= 0; i < 20; i++ {
+		go func() {
+			defer func() { done <- true }()
+
+			created:= session.Create(identifier, []byte(content), math.MaxInt32)
+			if created { 
 				totalCreates:= atomic.AddInt32(&count, 1)
 				if 1 < totalCreates  { t.Errorf("More than one lock was granted"); return }
 				time.Sleep(time.Millisecond*10)
 				atomic.AddInt32(&count, -1)
 				session.Delete(identifier)
-				done <- true
+			}
+		}()
+	}
+	
+	// wait for all routnines to end
+	for i:= 0; i < 20; i++ { <-done }
+	
+	session.Close()
+}
+	
+/**
+ * Test multiple simultaneous creates/deletes. 
+ */
+func (self *StorageProviderTester) TestCreateHardcore(t *testing.T) {
+	const ( content= "hello" )
+	
+	// test that only one goroutine can create the same file at a time
+	for f:= 0; f < 10; f++ {			
+		identifier:= id.CreateIdentifier("file-"+strconv.Itoa(f))
+		session:= self.provider.Connect()
+		count:= int32(0)
+		done:= make(chan bool,20)
+		for i:= 0; i < 20; i++ {
+			go func() {
+				defer func() {done <- true}()
+			
+				created:= session.Create(identifier, []byte(content), math.MaxInt32)
+				if !created { t.Errorf("failed to create "+identifier.Path()); return } 
+				totalCreates:= atomic.AddInt32(&count, 1)
+				if 1 < totalCreates  { t.Errorf("More than one lock was granted"); return }
+				time.Sleep(time.Millisecond*10)
+				atomic.AddInt32(&count, -1)
+				session.Delete(identifier)
 			}()
 		}
 		
 		// wait for all routnines to end
-		for t:= 0; t < 20; t++ { <-done }
+		for i:= 0; i < 20; i++ { <-done }
 		
 		session.Close()
 	}
@@ -88,26 +128,30 @@ func (self *StorageProviderTester) TestConcurrentStoreAPIListChildren(t *testing
 	
 	done:= make(chan bool,100)
 	for f:= 0; f < 10; f++ {			
-		folderId:= id.CreateIdentifier(string(f))
+		folderId:= id.CreateIdentifier(strconv.Itoa(f))
 		for j:= 0; j < 10; j++ {
-			task:= string(j)
+			task:= strconv.Itoa(j)
 			for i:= 0; i < 10; i++ {
-				childName:= task+"-"+string(i)
+				childName:= task+"-"+strconv.Itoa(i)
 				go func() {
+					defer func() {
+						done<-true
+					}()
+				
 					// store an object in a folder
 					id:= folderId.Child(childName)
 					session.Store(id, []byte(childName))
+					session.Flush()
 					
 					// now, list the folder's children and make sure our object is listed
 					children:= session.ListChildren(folderId)
 					
 					foundId:= false
-					for _,childId:= range children { if childId == id { foundId= true; break } }
+					for _,childId:= range children { if childId.Path() == id.Path() { foundId= true; break } }
 					 
 					if !foundId { 
-						t.Errorf("Problem in listChildren.\nFolder does not contain "+id.Path())  
+						t.Errorf("Problem in listChildren.\nFolder does not contain "+id.Path())
 					}
-					done<-true
 				}()
 			}
 		}

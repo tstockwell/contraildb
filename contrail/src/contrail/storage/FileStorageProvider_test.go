@@ -14,8 +14,12 @@ func TestSimpleStorage(t *testing.T) {
 	tester.TestSimpleStorage(t);
 }
 	
-func TestCreate(t *testing.T) {
-	tester.TestCreate(t);
+func TestCreateMulti(t *testing.T) {
+	tester.TestCreateMulti(t);
+}
+	
+func TestCreateHardcore(t *testing.T) {
+	tester.TestCreateHardcore(t);
 }
 	
 func TestConcurrentStoreAPIListChildren(t *testing.T) {
