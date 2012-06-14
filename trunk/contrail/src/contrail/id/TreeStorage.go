@@ -15,6 +15,31 @@ import (
  *  
  * @author Ted Stockwell
  */
+type VisitFunction func(identifier *Identifier, content interface{})
+type TreeStorage interface {
+	Store(id *Identifier, content interface{}) 
+	Delete(id *Identifier) 
+	Clear() 
+	DeleteAll(paths []*Identifier) 
+	Exists(id *Identifier) bool 
+	Fetch(id *Identifier) interface{} 
+	FetchAll(ids []*Identifier) TreeStorage 
+	FetchChildren(id *Identifier) TreeStorage 
+	FetchChildrenAll(ids []*Identifier) TreeStorage 
+	ListChildren(id *Identifier) []*Identifier 
+	ListChildrenAll(ids []*Identifier) TreeStorage 
+	ListAll() []*Identifier 
+	Values() []interface{} 
+	Size() int 
+	FetchDescendents(id *Identifier) TreeStorage 
+	VisitNode(id *Identifier, visit VisitFunction) 
+	VisitParents(id *Identifier, visit VisitFunction) 
+	VisitDescendents(id *Identifier, visit VisitFunction) 
+	VisitChildren(id *Identifier, visit VisitFunction) 
+} 
+ 
+ 
+ 
 type IdStorage struct {
 	contents map[string]*tNode // map to all nodes
 	values map[string]*tNode   // map to nodes with values
@@ -27,14 +52,13 @@ type tNode struct {
 	parent *tNode
 	content interface{}
 }
-type VisitFunction func(identifier *Identifier, content interface{})
 
-func CreateIdStorage() *IdStorage {
+func CreateTreeStorage() TreeStorage {
 	this:= new(IdStorage)
 	this.contents= make(map[string]*tNode, 10)
 	this.values= make(map[string]*tNode, 10)
 	this.lock= new(sync.Mutex)
-	return this
+	return TreeStorage(this)
 }
 
 func (this *IdStorage) store(id *Identifier, content interface{}) *tNode {
@@ -138,11 +162,11 @@ func (this *IdStorage) Fetch(id *Identifier) interface{} {
  * Returns an IdStorage that contains all the found results for the given 
  * identifiers
  */  
-func (this *IdStorage) FetchAll(ids []*Identifier) *IdStorage {
+func (this *IdStorage) FetchAll(ids []*Identifier) TreeStorage {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
-	items:= CreateIdStorage()
+	items:= CreateTreeStorage()
 	for _, id:= range ids {
 		node:= this.contents[id.Path()]
 		if node != nil && node.content != nil {
@@ -156,11 +180,11 @@ func (this *IdStorage) FetchAll(ids []*Identifier) *IdStorage {
  * Returns an IdStorage that contains all the found results for the given 
  * identifier
  */  
-func (this *IdStorage) FetchChildren(id *Identifier) *IdStorage {
+func (this *IdStorage) FetchChildren(id *Identifier) TreeStorage {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
-	items:= CreateIdStorage()
+	items:= CreateTreeStorage()
 	n:= this.contents[id.Path()]
 	if n != nil && n.children != nil && 0 < len(n.children) {
 		for _, node:= range n.children {
@@ -177,11 +201,11 @@ func (this *IdStorage) FetchChildren(id *Identifier) *IdStorage {
  * identifiers.
  * The returned IdStorage has values with type IdStorage
  */  
-func (this *IdStorage) FetchChildrenAll(ids []*Identifier) *IdStorage {
+func (this *IdStorage) FetchChildrenAll(ids []*Identifier) TreeStorage {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
-	results:= CreateIdStorage()
+	results:= CreateTreeStorage()
 	for _, id:= range ids {
 		results.Store(id, this.FetchChildren(id))
 	}
@@ -208,11 +232,11 @@ func (this *IdStorage) ListChildren(id *Identifier) []*Identifier {
  * identifiers.
  * The returned IdStorage has values with type []Identifier
  */  
-func (this *IdStorage) ListChildrenAll(ids []*Identifier) *IdStorage {
+func (this *IdStorage) ListChildrenAll(ids []*Identifier) TreeStorage {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
-	results:= CreateIdStorage()
+	results:= CreateTreeStorage()
 	for _,id:= range ids { 
 		results.Store(id, this.ListChildren(id))
 	}
@@ -253,12 +277,12 @@ func (this *IdStorage) Size() int {
  * Returns an IdStorage that contains all the found results for the given 
  * identifiers.
  */  
-func (this *IdStorage) FetchDescendents(id *Identifier) *IdStorage {
+func (this *IdStorage) FetchDescendents(id *Identifier) TreeStorage {
 	this.lock.Lock()
 	defer this.lock.Unlock()
 
 	n:= this.contents[id.Path()]
-	items:= CreateIdStorage()
+	items:= CreateTreeStorage()
 	if n != nil && n.children != nil && 0 < len(n.children) {
 		todo:= make([]*tNode, 0, 10)
 		todo= append(todo, n)
