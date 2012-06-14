@@ -4,8 +4,8 @@ import (
  "testing"
 )
 
-func TestBasicIdStorage(t *testing.T) {
-    storage:= CreateIdStorage()
+func TestBasicTreeStorage(t *testing.T) {
+    storage:= CreateTreeStorage()
 	if storage == nil { t.Errorf("Failed to generate storage") }
     
     id:= CreateIdentifier("group/name")
