@@ -1,6 +1,10 @@
 package storage
 
-
+import (
+	"time"
+	"contrail/id"
+	"contrail/tasks"
+)
 
 /**
  * An API for storing objects to a raw storage instance.
@@ -19,144 +23,119 @@ package storage
  *		Each client should call the ObjectStorage.Connect method to create its 
  *		own session.  
  * 		It is safe to use an instance of ObjectStorage from multiple threads. 
- * 		It is also safe to use an instance of ObjectStorage.Session from multiple threads. 
+ * 		It is also safe to use an instance of ObjectStorage.Session from 
+ * 		multiple threads. 
  * 
- * 	...is parallel.  This implementation manages the order in which 
- * 		its internal tasks are executed so that operations are performed in a 
- * 		way that allows for as much parallelization as possible in order to 
- * 		maximize performance.  
+ * 	...is parallel.  Each session manages the order in which its internal tasks 
+ *		are executed so that operations are performed in a way that allows for 
+ *		as much parallelization as possible in order to maximize performance.  
  *   
  * @author Ted Stockwell
  */
 type ObjectStorage struct {
 	storageProvider *StorageProvider
-	cache *LRUIdentifierIndexedStorage
-	tracker *TaskMaster
+}
+
+type ObjectStorageSession struct {
+	owner *ObjectStorage
+	storageSession *StorageSession
+	cache TreeStorage
+	taskMaster *TaskMaster
 }
 
 func CreateObjectStorage (storageProvider *StorageProvider) *ObjectStorage {
-	return &ObjectStorage {
-		storageProvider: storageProvider,
-		cache: 
-	}
-}
-public ObjectStorage(IStorageProvider storageProvider, EntityStorage outerStorage) {
-	_storageProvider= storageProvider;
+	return &ObjectStorage { storageProvider: storageProvider }
 }
 
-public class ObjectStorage {
-	
-
-
-	public Session connect() throws IOException {
-		return new Session(_tracker.beginSession(), _storageProvider.connect());
+func (self *ObjectStorage) Connect() *ObjectStorageSession {
+	return &ObjectStorageSession {
+		owner: self
+		storageSession: self.storageProvider.Connect()
+		cache:  id.CreateLRUTreeStorage(),
+		taskMaster: tasks.CreateTaskManager(),
 	}
-	public Session connect(EntityStorage.Session entitySession) throws IOException {
-		return new Session(_tracker.beginSession(), _storageProvider.connect(), entitySession);
-	}
-	public IStorageProvider getStorageProvider() {
-		return _storageProvider;
-	}
+}
+
+
+func (self *ObjectStorageSession) Store(identifier *id.Identifier, item interface{}) {
+
+	serializeTask:= tasks.GoResult(func() { return SerializeObject(item) }
 	
+	lifecycle:= item.(Lifecycle)
+	if lifecycle != nil {
+		lifecycle.setStorage(self)
+	}
+
+	taskMaster.Submit(identifier, WRITE, func() interface{} {
+		self.cache.Store(identifier, item);
+		if (lifecycle != nil) {
+			lifecycle.OnInsert(identifier)
+		}
+		self.storageSession.Store(identifier, serializeTask.Get().([]byte))
+		return nil
+	})
+}
+
+func (self *ObjectStorageSession) Delete(path *Identifier) {
+	fetchTask:= tasks.GoResult(func() { return self.Fetch(path) }
+	taskMaster.Submit(path, DELETE, func() interface{} {
+		self.cache.Delete(path)
+		self.storageSession.Delete(path)
+		lifecycle:= item.(Lifecycle)
+		if lifecycle != nil {
+			lifecycle.OnDelete()
+		}
+		return nil
+	})
+}
+
+func (self *ObjectStorageSession) Fetch(path *Identifier) interface{} 
+{
+	return taskMaster.Submit(path, READ, func() interface{} {
+		storable:= self.cache.Fetch(path)
+		if storable == nil {
+			bytes:= self.storageSession.Fetch(path)
+			if bytes != nil { 
+				storable= readStorable(path, bytes);
+			}
+		}
+		return storable
+	}).Get()
+}
+
+func (self *ObjectStorageSession) readStorable(Identifier id, byte[] contents) interface{}
+{
+	if contents == nil { return nil }
+
+	storable:= DeserializeObject(contents)
+	if storable == nil {  return nil }
 	
-	public class Session {
-		
-		private IStorageProvider.Session _storageSession;
-		private EntityStorage.Session _outerStorage;
-		private ContrailTaskTracker.Session _trackerSession;
+	lifecycle:= storable.(Lifecycle)
+	if lifecycle != nil { lifecycle.SetStorage(self) }
+	
+	self.cache.Store(id, storable)
+	
+	if lifecycle != nil { lifecycle.OnLoad() }
+	return storable
+}
 
-		public Session(ContrailTaskTracker.Session tracker, IStorageProvider.Session storageProvider) {
-			this(tracker, storageProvider, null);
+func (self *ObjectStorageSession) FetchChildren(Identifier path) TreeStorage
+{
+	return taskMaster.Submit(path, LIST, func() interface{} {
+		results:= CreateTreeStorage()
+		children:= self.storageSession.ListChildren(path).Get().([]*id.Identifier)
+		todo:= make([]Future, 0, len(children))
+		for _,childId:= range children {
+			todo= append(todo, tasks.GoResult(func() interface{} {
+				bytes:= self.storageSession.Fetch(childId)
+				object:= self.readStorable(childId, bytes)
+				results.Store(childId, object)
+			})
 		}
-		public Session(ContrailTaskTracker.Session tracker, IStorageProvider.Session storageProvider, EntityStorage.Session outerStorage) {
-			_trackerSession= tracker;
-			_storageSession= storageProvider;
-			_outerStorage= outerStorage; 
-		}
-		public <T extends Serializable> void store(final Identifier identifier, final T item) 
-		{
-			final ExternalizationTask  serializeTask= new ExternalizationTask(item).submit();
-
-			final ILifecycle lifecycle= (item instanceof ILifecycle) ? (ILifecycle)item : null;
-			if (lifecycle != null)
-				lifecycle.setStorage(_outerStorage);
-
-			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void run() throws IOException {
-					_cache.store(identifier, item);
-					if (lifecycle != null)
-						lifecycle.onInsert(identifier);
-					_storageSession.store(identifier, serializeTask);
-
-				}
-			});
-		}
-
-		public void delete(final Identifier path) {
-			final Object item= fetch(path).get();
-			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void run() throws IOException {
-					_cache.delete(path);
-					_storageSession.delete(path);
-					if (item instanceof ILifecycle) 
-						((ILifecycle)item).onDelete();
-				}
-			});
-		}
-
-		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
-		{
-			ContrailTask<T> task= new ContrailTask<T>(path, Operation.READ) {
-				protected void run() throws IOException {
-					T storable= (T)_cache.fetch(path);
-					if (storable == null) {
-						IResult<byte[]> content= _storageSession.fetch(path);
-						if (content != null) 
-							storable= readStorable(path, content.get());
-					}
-					setResult(storable);
-				}
-			};
-			_trackerSession.submit(task);
-			return task;
-		}
-		
-		private <T extends Serializable> T readStorable(Identifier id, byte[] contents)
-		throws IOException
-		{
-			if (contents == null)
-				return null;
-
-			T s= ExternalizationManager.readExternal(new DataInputStream(new ByteArrayInputStream(contents)));
-			boolean isStorable= s instanceof ILifecycle;
-			if (isStorable)
-				((ILifecycle)s).setStorage(_outerStorage);
-			_cache.store(id, s);
-			if (isStorable)
-				((ILifecycle)s).onLoad(id);
-			return s;
-		}
-
-		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path)
-		{
-			ContrailTask<Map<Identifier, T>> task= new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
-				protected void run() throws IOException {
-					Collection<Identifier> children= _storageSession.listChildren(path).get();
-					HashMap<Identifier, IResult<byte[]>> fetched= new HashMap<Identifier, IResult<byte[]>>();
-					for (Identifier childId:children) 
-						fetched.put(childId, _storageSession.fetch(childId));
-					HashMap<Identifier, T> results= new HashMap<Identifier, T>();
-					for (Identifier childId:children) {
-						IResult<byte[]> result= fetched.get(childId);
-						T t= readStorable(childId, result.get());
-						results.put(childId, t);
-					}
-					setResult(results);
-				}
-			};
-			_trackerSession.submit(task);
-			return task;
-		}
+		tasks.JoinAll(todo)
+		return results
+	}.Get().(TreeStorage)
+}
 
 
 /*
@@ -167,83 +146,73 @@ public class ObjectStorage {
  * However, while caching stored objects is not a problem, caching lists of children is,
  * since obviously other processes are adding children. 
  */
-		public IResult<Collection<Identifier>> listChildren(final Identifier path)
-		{
-			ContrailTask<Collection<Identifier>> task= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected void run() {
-					Collection<Identifier> list= _storageSession.listChildren(path).get();
-					setResult(list);
-				}
-			};
-			_trackerSession.submit(task);
-			return task;
-		}
-		
-		public void flush() throws IOException {
-			_trackerSession.awaitCompletion(IOException.class);
-			_storageSession.flush();
-		}
-		
-		public void close() throws IOException {
-			flush();
-			try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
-			try { _storageSession.close(); } catch (Throwable t) {  Logging.warning(t); }
-			_trackerSession= null;
-			_storageSession= null;
-			_outerStorage= null;
-		}
-		
-		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
-		{
-			ContrailTask<Boolean> action= new ContrailTask<Boolean>(identifier, Operation.CREATE) {
-				protected void run() throws IOException {
+func (self *ObjectStorageSession) ListChildren(path *Identifier) []*id.Identifier
+{
+	return taskMaster.Submit(path, LIST, func() interface{} {
+		return self.storageSession.ListChildren(path)
+	}.Get().([]*id.Identifier)
+}
 
-					ExternalizationTask  serializeTask= new ExternalizationTask(item);
-					serializeTask.submit();
+func (self *ObjectStorageSession) Flush() {
+	taskMaster.Join()
+	self.storageSession.Flush()
+}
 
-					boolean created= false;
-					if (_storageSession.create(identifier, serializeTask, waitMillis).get()) {
-						boolean isStorable= item instanceof ILifecycle;
-						if (isStorable)
-							((ILifecycle)item).setStorage(_outerStorage);
-						_cache.store(identifier, item);
-						if (isStorable) 
-							((ILifecycle)item).onInsert(identifier);
-						created= true;
-					}
-					setResult(created);
-				}
-			};
-			_trackerSession.submit(action);
-			return action;
-		}
-		
-		
-		public void delete(Identifier... paths) throws IOException {
-			for (Identifier identifier:paths)
-					delete(identifier);
-		}
+func (self *ObjectStorageSession) Close() {
+	self.Flush()
+	taskMaster.Close()
+	storageSession.Close()
+	
+	storageSession= nil
+	taskMaster= nil
+	cache= nil
+}
 
-		public void deleteAllChildren(Identifier... paths) throws IOException {
-			deleteAllChildren(Arrays.asList(paths));
+func (self *ObjectStorageSession) Create(identifier *Identifier, item interface{}, wait time.Duration) interface{} bool {
+	serializeTask:= tasks.GoResult(func() { return SerializeObject(item) })
+	return taskMaster.Submit(path, LIST, func() interface{} {
+		created:= false;
+		if self.storageSession.Create(identifier, serializeTask.Get().([]byte), wait) {
+			lifecycle:= item.(Lifecycle)
+			if lifecycle != nil {
+				lifecycle.SetStorage(self)
+			}
+			self.cache.Store(identifier, item)
+			if lifecycle != nil {
+				lifecycle.OnInsert(identifier)
+			}
+			created= true;
 		}
+		return created
+	}.Get().(bool)
+}
 
-		public void deleteAllChildren(Iterable<Identifier> paths) throws IOException {
-			for (Identifier identifier:paths)
-				deleteAllChildren(identifier);
-		}
 
-		public void deleteAllChildren(Identifier path) {
-			final IResult<Collection<Identifier>> children= listChildren(path);
-			ContrailAction action= new ContrailAction(path, Operation.LIST) {
-				protected void run() {
-					for (Identifier identifier: children.get()) {
-						delete(identifier);
-					}
-				}
-			};
-			_trackerSession.submit(action);
+public void delete(Identifier... paths) throws IOException {
+	for (Identifier identifier:paths)
+			delete(identifier);
+}
+
+public void deleteAllChildren(Identifier... paths) throws IOException {
+	deleteAllChildren(Arrays.asList(paths));
+}
+
+public void deleteAllChildren(Iterable<Identifier> paths) throws IOException {
+	for (Identifier identifier:paths)
+		deleteAllChildren(identifier);
+}
+
+public void deleteAllChildren(Identifier path) {
+	final IResult<Collection<Identifier>> children= listChildren(path);
+	ContrailAction action= new ContrailAction(path, Operation.LIST) {
+		protected void run() {
+			for (Identifier identifier: children.get()) {
+				delete(identifier);
+			}
 		}
+	};
+	_trackerSession.submit(action);
+}
 
 
 	}

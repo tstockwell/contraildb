@@ -2,6 +2,7 @@ package id
 
 import (
  "testing"
+ "strconv"
  ct "contrail/util/testing"
 )
 
@@ -18,3 +19,11 @@ func TestBasicIdentifiers(t *testing.T) {
     ct.AssertEquals(t, id.Path()+"/giggity", id3.Path(), "Incorrect path")
   
 }
+
+func TestMultiIdentifiers(t *testing.T) {
+
+	for i:= 0; i< 10000; i++ {
+    	CreateIdentifier("id-"+strconv.Itoa(i))
+	}
+}
+
