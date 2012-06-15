@@ -83,13 +83,13 @@ type tTask struct {
 }
 
 type TaskMaster struct {
-	taskStorage *IdStorage
+	taskStorage TreeStorage
 	lock *sync.Mutex
 }
 
 func CreateTaskMaster() *TaskMaster {
 	return &TaskMaster{
-		taskStorage: CreateIdStorage(),
+		taskStorage: CreateTreeStorage(),
 		lock: new (sync.Mutex),
 	}
 }
@@ -126,26 +126,7 @@ func (self *TaskMaster) addTask(task *tTask) {
 }
 
 func (self *TaskMaster) runTask(task *tTask) {
-	go func() {
-		// if the task function panics then this function 
-		// complete the associated future with an error
-		defer func() {
-			defer func() {
-		        if err := recover(); err != nil {
-		        	fmt.Printf("panic within a panic: %v\n", err)
-		        }
-			}()
-	        if err := recover(); err != nil {
-	        	task.result.SetError(errors.CreateError(err))
-	        }
-		}()		
-		    
-		// run the associated function
-		// if no error occurs then successfully complete the associated future
-		// with the returned value 
-		value:= task.call()
-		task.result.SetSuccess(value)
-	}()
+	go RunResult(task.result, task.call) 
 }
 	
 func (self *TaskMaster) findPendingTasks(op tOperation, id *Identifier) tTaskSet {

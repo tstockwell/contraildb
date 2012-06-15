@@ -41,7 +41,7 @@ func TestBasicTreeStorage(t *testing.T) {
 
 
 func TestVisitParents(t *testing.T) {
-    storage:= CreateIdStorage()
+    storage:= CreateTreeStorage()
 	parent:= UniqueIdentifier()
     storage.Store(parent, "parent")
 	child:= parent.Child("boogity")
