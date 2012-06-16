@@ -1,5 +1,28 @@
 package tasks
 
+ 
+import (
+ 	. "contrail/id"
+ 	"sync"
+ )
+
+type tTaskSet map[*tTask]*tTask
+func newTaskSet() tTaskSet { return make(tTaskSet) }
+func (self tTaskSet) add(task *tTask) { self[task]= task }
+func (self tTaskSet) remove(task *tTask) { delete(self,task) }
+func (self tTaskSet) contains(task *tTask) bool { return self[task] != nil }
+
+
+
+// info for managing/scheduling a single task 
+type tTask struct {
+	op tOperation
+	id *Identifier
+	pendingTasks tTaskSet
+	result *Future
+	call func() interface{}
+}
+
 /**
  * A convenient task scheduler for Contrail that coordinates tasks according 
  * to an associated Identifier and operation type (READ, WRITE, DELETE, LIST, 
@@ -50,38 +73,6 @@ package tasks
  * 
  * @author Ted Stockwell
  */
- 
- import (
- 	"fmt"
- 	. "contrail/id"
- 	"sync"
- 	"contrail/util/errors"
- )
-
-type tOperation int
-const READ 		tOperation= 1 
-const WRITE 	tOperation= 2 
-const DELETE 	tOperation= 3 
-const LIST 		tOperation= 4 
-const CREATE 	tOperation= 5 
-
-type tTaskSet map[*tTask]*tTask
-func newTaskSet() tTaskSet { return make(tTaskSet) }
-func (self tTaskSet) add(task *tTask) { self[task]= task }
-func (self tTaskSet) remove(task *tTask) { delete(self,task) }
-func (self tTaskSet) contains(task *tTask) bool { return self[task] != nil }
-
-
-
-// info for managing/scheduling a single task 
-type tTask struct {
-	op tOperation
-	id *Identifier
-	pendingTasks tTaskSet
-	result *Future
-	call func() interface{}
-}
-
 type TaskMaster struct {
 	taskStorage TreeStorage
 	lock *sync.Mutex

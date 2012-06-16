@@ -1,10 +1,14 @@
 package storage
 
 import (
+	"bytes"
 	"time"
+	"encoding/gob"
 	"contrail/id"
 	"contrail/tasks"
 )
+
+const cacheSize int= 5000 // # of objects in cache 
 
 /**
  * An API for storing objects to a raw storage instance.
@@ -33,40 +37,39 @@ import (
  * @author Ted Stockwell
  */
 type ObjectStorage struct {
-	storageProvider *StorageProvider
+	storageProvider StorageProvider
 }
 
 type ObjectStorageSession struct {
 	owner *ObjectStorage
-	storageSession *StorageSession
-	cache TreeStorage
-	taskMaster *TaskMaster
+	storageSession StorageSession
+	cache id.TreeStorage
+	taskMaster *tasks.TaskMaster
 }
 
-func CreateObjectStorage (storageProvider *StorageProvider) *ObjectStorage {
+func CreateObjectStorage (storageProvider StorageProvider) *ObjectStorage {
 	return &ObjectStorage { storageProvider: storageProvider }
 }
 
 func (self *ObjectStorage) Connect() *ObjectStorageSession {
 	return &ObjectStorageSession {
-		owner: self
-		storageSession: self.storageProvider.Connect()
-		cache:  id.CreateLRUTreeStorage(),
-		taskMaster: tasks.CreateTaskManager(),
+		owner: self,
+		storageSession: self.storageProvider.Connect(),
+		cache:  id.CreateLRUTreeStorage(cacheSize),
+		taskMaster: tasks.CreateTaskMaster(),
 	}
 }
 
-
 func (self *ObjectStorageSession) Store(identifier *id.Identifier, item interface{}) {
 
-	serializeTask:= tasks.GoResult(func() { return SerializeObject(item) }
+	serializeTask:= tasks.GoResult(func() interface{} { return SerializeObject(item) })
 	
 	lifecycle:= item.(Lifecycle)
 	if lifecycle != nil {
-		lifecycle.setStorage(self)
+		lifecycle.SetStorage(self)
 	}
 
-	taskMaster.Submit(identifier, WRITE, func() interface{} {
+	self.taskMaster.Submit(tasks.WRITE, identifier, func() interface{} {
 		self.cache.Store(identifier, item);
 		if (lifecycle != nil) {
 			lifecycle.OnInsert(identifier)
@@ -76,9 +79,9 @@ func (self *ObjectStorageSession) Store(identifier *id.Identifier, item interfac
 	})
 }
 
-func (self *ObjectStorageSession) Delete(path *Identifier) {
-	fetchTask:= tasks.GoResult(func() { return self.Fetch(path) }
-	taskMaster.Submit(path, DELETE, func() interface{} {
+func (self *ObjectStorageSession) Delete(path *id.Identifier) {
+	self.taskMaster.Submit(tasks.DELETE, path, func() interface{} {
+		item:= self.Fetch(path)
 		self.cache.Delete(path)
 		self.storageSession.Delete(path)
 		lifecycle:= item.(Lifecycle)
@@ -89,22 +92,20 @@ func (self *ObjectStorageSession) Delete(path *Identifier) {
 	})
 }
 
-func (self *ObjectStorageSession) Fetch(path *Identifier) interface{} 
-{
-	return taskMaster.Submit(path, READ, func() interface{} {
+func (self *ObjectStorageSession) Fetch(path *id.Identifier) interface{} {
+	return self.taskMaster.Submit(tasks.READ, path, func() interface{} {
 		storable:= self.cache.Fetch(path)
 		if storable == nil {
 			bytes:= self.storageSession.Fetch(path)
 			if bytes != nil { 
-				storable= readStorable(path, bytes);
+				storable= self.readStorable(path, bytes)
 			}
 		}
 		return storable
 	}).Get()
 }
 
-func (self *ObjectStorageSession) readStorable(Identifier id, byte[] contents) interface{}
-{
+func (self *ObjectStorageSession) readStorable(path *id.Identifier, contents []byte) interface{} {
 	if contents == nil { return nil }
 
 	storable:= DeserializeObject(contents)
@@ -113,28 +114,27 @@ func (self *ObjectStorageSession) readStorable(Identifier id, byte[] contents) i
 	lifecycle:= storable.(Lifecycle)
 	if lifecycle != nil { lifecycle.SetStorage(self) }
 	
-	self.cache.Store(id, storable)
+	self.cache.Store(path, storable)
 	
-	if lifecycle != nil { lifecycle.OnLoad() }
+	if lifecycle != nil { lifecycle.OnLoad(path) }
 	return storable
 }
 
-func (self *ObjectStorageSession) FetchChildren(Identifier path) TreeStorage
-{
-	return taskMaster.Submit(path, LIST, func() interface{} {
-		results:= CreateTreeStorage()
-		children:= self.storageSession.ListChildren(path).Get().([]*id.Identifier)
-		todo:= make([]Future, 0, len(children))
-		for _,childId:= range children {
-			todo= append(todo, tasks.GoResult(func() interface{} {
+func (self *ObjectStorageSession) FetchChildren(path *id.Identifier) id.TreeStorage {
+	return self.taskMaster.Submit(tasks.LIST, path, func() interface{} {
+		results:= id.CreateTreeStorage()
+		children:= self.storageSession.ListChildren(path)
+		todo:= make([]*tasks.Future, len(children))
+		for i,childId:= range children {
+			todo[i]= tasks.Go(func() {
 				bytes:= self.storageSession.Fetch(childId)
 				object:= self.readStorable(childId, bytes)
 				results.Store(childId, object)
 			})
 		}
-		tasks.JoinAll(todo)
+		tasks.WaitAll(todo)
 		return results
-	}.Get().(TreeStorage)
+	}).Get().(id.TreeStorage)
 }
 
 
@@ -146,74 +146,82 @@ func (self *ObjectStorageSession) FetchChildren(Identifier path) TreeStorage
  * However, while caching stored objects is not a problem, caching lists of children is,
  * since obviously other processes are adding children. 
  */
-func (self *ObjectStorageSession) ListChildren(path *Identifier) []*id.Identifier
-{
-	return taskMaster.Submit(path, LIST, func() interface{} {
+func (self *ObjectStorageSession) ListChildren(path *id.Identifier) []*id.Identifier {
+	return self.taskMaster.Submit(tasks.LIST, path, func() interface{} {
 		return self.storageSession.ListChildren(path)
-	}.Get().([]*id.Identifier)
+	}).Get().([]*id.Identifier)
 }
 
 func (self *ObjectStorageSession) Flush() {
-	taskMaster.Join()
+	self.taskMaster.Join()
 	self.storageSession.Flush()
 }
 
 func (self *ObjectStorageSession) Close() {
 	self.Flush()
-	taskMaster.Close()
-	storageSession.Close()
+	self.taskMaster.Close()
+	self.storageSession.Close()
 	
-	storageSession= nil
-	taskMaster= nil
-	cache= nil
+	self.storageSession= nil
+	self.taskMaster= nil
+	self.cache= nil
 }
 
-func (self *ObjectStorageSession) Create(identifier *Identifier, item interface{}, wait time.Duration) interface{} bool {
-	serializeTask:= tasks.GoResult(func() { return SerializeObject(item) })
-	return taskMaster.Submit(path, LIST, func() interface{} {
+func (self *ObjectStorageSession) Create(path *id.Identifier, item interface{}, wait time.Duration) bool {
+	serializeTask:= tasks.GoResult(func() interface{} { return SerializeObject(item) })
+	return self.taskMaster.Submit(tasks.LIST, path, func() interface{} {
 		created:= false;
-		if self.storageSession.Create(identifier, serializeTask.Get().([]byte), wait) {
+		if self.storageSession.Create(path, serializeTask.Get().([]byte), wait) {
 			lifecycle:= item.(Lifecycle)
 			if lifecycle != nil {
 				lifecycle.SetStorage(self)
 			}
-			self.cache.Store(identifier, item)
+			self.cache.Store(path, item)
 			if lifecycle != nil {
-				lifecycle.OnInsert(identifier)
+				lifecycle.OnInsert(path)
 			}
 			created= true;
 		}
 		return created
-	}.Get().(bool)
+	}).Get().(bool)
 }
 
 
-public void delete(Identifier... paths) throws IOException {
-	for (Identifier identifier:paths)
-			delete(identifier);
-}
-
-public void deleteAllChildren(Identifier... paths) throws IOException {
-	deleteAllChildren(Arrays.asList(paths));
-}
-
-public void deleteAllChildren(Iterable<Identifier> paths) throws IOException {
-	for (Identifier identifier:paths)
-		deleteAllChildren(identifier);
-}
-
-public void deleteAllChildren(Identifier path) {
-	final IResult<Collection<Identifier>> children= listChildren(path);
-	ContrailAction action= new ContrailAction(path, Operation.LIST) {
-		protected void run() {
-			for (Identifier identifier: children.get()) {
-				delete(identifier);
-			}
-		}
-	};
-	_trackerSession.submit(action);
-}
-
-
+func (self *ObjectStorageSession) DeleteAll(paths []*id.Identifier) {
+	todo:= make([]*tasks.Future, len(paths))
+	for i,path:= range paths {
+		todo[i]= tasks.Go(func() { self.Delete(path) })
 	}
+	tasks.WaitAll(todo)
+}
+
+func (self *ObjectStorageSession) DeleteAllChildren(path *id.Identifier) {
+	children:= self.ListChildren(path);
+	todo:= make([]*tasks.Future, len(children))
+	for i,path:= range children {
+		todo[i]= tasks.Go(func(){ self.Delete(path) })
+	}
+	tasks.WaitAll(todo)
+}
+
+func SerializeObject(item interface{}) []byte {
+    buffer:= new(bytes.Buffer)
+    enc := gob.NewEncoder(buffer) 
+    err := enc.Encode(item)
+    if err != nil {
+        panic(err)
+    }
+    return buffer.Bytes()
+}
+
+
+func DeserializeObject(data []byte) interface{} {
+    buffer:= bytes.NewBuffer(data)
+    dec := gob.NewDecoder(buffer) 
+    var item interface{}
+    err:= dec.Decode(item)
+    if err != nil {
+        panic(err)
+    }
+    return item	
 }
