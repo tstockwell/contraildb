@@ -8,8 +8,6 @@ import (
 	"contrail/tasks"
 )
 
-const cacheSize int= 5000 // # of objects in cache 
-
 /**
  * An API for storing objects to a raw storage instance.
  * This storage API...

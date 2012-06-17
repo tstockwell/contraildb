@@ -11,10 +11,6 @@ import (
 	"contrail/util/errors"
 )
 
-const (	
-	content_file= ".content"
-) 
-
 
 /**
  * An of the StorageProvider interface that stores items in files 
