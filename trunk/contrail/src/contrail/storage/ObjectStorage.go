@@ -58,6 +58,10 @@ func (self *ObjectStorage) Connect() *ObjectStorageSession {
 	}
 }
 
+func (self *ObjectStorage) Close() {
+	self.storageProvider.Close()
+}
+
 func (self *ObjectStorageSession) Store(identifier *id.Identifier, item interface{}) {
 
 	serializeTask:= tasks.GoResult(func() interface{} { return SerializeObject(item) })
