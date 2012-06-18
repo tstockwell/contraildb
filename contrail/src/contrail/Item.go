@@ -32,6 +32,9 @@ type PropertyChangeListener func(source Item, propertyName string, oldValue inte
  * @author Ted Stockwell
  */
 type Item interface {
+	/**
+	 * @return a unique identifier used to locate an IEntity in storage.
+	 */
 	Identifier() *id.Identifier 
 	Copy() Item 
 	
@@ -58,11 +61,6 @@ type Item interface {
 	SetProperty(propertyName string, value interface{})
 	SetUnindexedProperty(propertyName string, value interface{})
 
-	/**
-	 * @return a unique identifier used to locate an IEntity in storage.
-	 */
-	GetId() *id.Identifier
-	
     /**
      * Add a PropertyChangeListener to the listener list.
      * The listener is registered for all properties.
