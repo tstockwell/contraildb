@@ -6,53 +6,34 @@ import (
 
 
 /**
- * An object that can be stored in a Contrail database.
- * An Item is a collection of property values indexed by property names.
- * All items have an identifier that denotes a unique path to the item's 
- * location in the database.
- * An Item is just a collection of properties.
- * Property values must be one of the following:
- * 	string,
- *  time.Time, 
- * 	int64, float64, byte, math.Int, math.Rat
- * 	bool,
- * 	contrail.id.Identifier,
- * 	contrail.Item,
- *  Go Slice, where items in slice are other valid property values
- *  Go Map, where keys are string, int64, float64, byte, or bool 
- *  	and values are other valid property values     
- *
- *  Item has methods for tracking changes to properties.
- *  @see ***PropertyChangeListener
- * 
- *  Items are thread-safe.
+ * Basic implementation of Item interface
  * 
  * @author Ted Stockwell
  */
-type Item struct {
+type ItemImpl struct {
 	indexedProperties map[string]interface{} 
 	unindexedProperties map[string]interface{} 
 }
-func CreateItem() *Item {
-	self:= new(Item)
+func CreateItemImpl() *ItemImpl {
+	self:= new(ItemImpl)
 	self.indexedProperties= make(map[string]interface{})
 	self.unindexedProperties= make(map[string]interface{})
 	return self
 }
 
-func (self *Item) Identifier() *id.Identifier {
+func (self *ItemImpl) Identifier() *id.Identifier {
 	return self.getProperty(KEY_ID)
 }
 
-func CreateCopy(item *Item) *Item {
-	self:= CreateItem()
-	for k,v:= range item.indexedProperties {
-		self.indexedProperties[k]= v
+func (self *ItemImpl) Copy() Item {
+	item:= CreateItemImpl()
+	for k,v:= range self.indexedProperties {
+		item.indexedProperties[k]= v
 	}
-	for k,v:= range item.unindexedProperties {
-		self.unindexedProperties[k]= v
+	for k,v:= range self.unindexedProperties {
+		item.unindexedProperties[k]= v
 	}
-	return self
+	return item
 }
 	
 	public BigDecimal getBigDecimal(String propertyName) {
