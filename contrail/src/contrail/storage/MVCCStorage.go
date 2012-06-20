@@ -1,16 +1,19 @@
 package storage
 
 import (
-
+	"time"
 )
+
+const LEASE_TIMEOUT= time.Minute*15
+
 
 /**
  * This class uses Multiversion concurrency control (MVCC) to implement a versioned, 
  * transactional, object storage facility.
  * Any process that wants to access storage creates an instance of MVCCStorage 
  * using a reference to a raw StorageProvider.
- * MVCCStorage implements distributed, file-based consensus protocols that enable 
- * many processes to safely access the same underlying simple storage system.  
+ * MVCCStorage uses a distributed, file-based consensus protocol to enable 
+ * many processes to safely share the same storage system.  
  * 
  * A MVCCStorage system is anchored at a 'root' node in the raw storage system.
  * A MVCCStorage system creates folders underneath this root node that contains 
@@ -47,25 +50,22 @@ import (
  *  
  * @author Ted Stockwell
  */
- type MVCCStorage struct {
- } 
- 
- 
- 
-public class StorageSystem {
-	
-
-	public static int LEASE_TIMEOUT= 1000*60*30; // approximately 30 minutes
-
-	EntityStorage _entityStorage;
-	IEntityStorage.Session _entitySession;
-	RootFolder _root;
+type MVCCStorage struct {
+	objectStorage *ObjectStorage
+	objectSession *ObjectStorageSession
+	root RootFolder;
 	List<StorageSession> _activeSessions= Collections.synchronizedList(new ArrayList<StorageSession>());
 	long _lastKnownDeletedRevision= -1;
 	List<Long> _knownUncommittedRevisions= Collections.synchronizedList(new ArrayList<Long>());
 	ContrailTaskTracker _tracker= new ContrailTaskTracker();
 	ContrailTaskTracker.Session _trackerSession= _tracker.beginSession();
 
+} 
+ 
+ 
+ 
+public class StorageSystem {
+	
 
 	public StorageSystem(IStorageProvider rawStorage) 
 	throws IOException 
