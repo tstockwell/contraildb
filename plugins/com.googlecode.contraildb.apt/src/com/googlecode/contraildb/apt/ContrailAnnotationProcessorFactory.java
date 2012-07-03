@@ -14,7 +14,7 @@ import com.sun.mirror.apt.AnnotationProcessorFactory;
 import com.sun.mirror.apt.AnnotationProcessors;
 import com.sun.mirror.declaration.AnnotationTypeDeclaration;
 
-public class MeteorAnnotationProcessorFactory 
+public class ContrailAnnotationProcessorFactory 
 implements AnnotationProcessorFactory
 {
 	public Collection<String> supportedOptions() {
