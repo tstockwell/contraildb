@@ -20,7 +20,7 @@ import com.sun.mirror.declaration.Modifier;
 import com.sun.mirror.declaration.PackageDeclaration;
 import com.sun.mirror.declaration.TypeDeclaration;
 
-public class MeteorInfoBuilder {
+public class ContrailInfoBuilder {
 	
 	EclipseAnnotationProcessorEnvironment _env;
 	PackageDeclaration _declaration;
@@ -29,7 +29,7 @@ public class MeteorInfoBuilder {
 	ArrayList<TypeDeclaration> _classDeclarations= new ArrayList<TypeDeclaration>();
 	String _bundleName;
 
-	public MeteorInfoBuilder(EclipseAnnotationProcessorEnvironment env, PackageDeclaration packageDeclaration) {
+	public ContrailInfoBuilder(EclipseAnnotationProcessorEnvironment env, PackageDeclaration packageDeclaration) {
 		_env= env;
 		_declaration= packageDeclaration;
 		_classDeclarations.addAll(_declaration.getInterfaces());

@@ -27,7 +27,7 @@ import com.sun.mirror.declaration.Declaration;
 import com.sun.mirror.declaration.PackageDeclaration;
 import com.sun.mirror.declaration.TypeDeclaration;
 
-public class MeteorAnnotationProcessor 
+public class ContrailAnnotationProcessor 
 implements AnnotationProcessor
 {
 
@@ -35,7 +35,7 @@ implements AnnotationProcessor
 	private EclipseAnnotationProcessorEnvironment	_env;
 	private AnnotationTypeDeclaration _modelDeclaration;
 	
-	public MeteorAnnotationProcessor(EclipseAnnotationProcessorEnvironment env)
+	public ContrailAnnotationProcessor(EclipseAnnotationProcessorEnvironment env)
 	{
 		_env = env;
 		_modelDeclaration= (AnnotationTypeDeclaration)

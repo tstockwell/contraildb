@@ -8,7 +8,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /*
- * Denotes a method that should be executed in a pa 
+ * Denotes a method that should be executed in a parallel manner
  */
 @Documented
 @Retention(value=RetentionPolicy.CLASS)
