@@ -18,41 +18,42 @@ import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jdt.apt.core.env.EclipseAnnotationProcessorEnvironment;
 import org.eclipse.jdt.core.IJavaProject;
 
-import com.googlecode.meteorframework.core.annotation.ModelElement;
 import com.sun.mirror.apt.AnnotationProcessor;
 import com.sun.mirror.apt.AnnotationProcessorEnvironment;
 import com.sun.mirror.apt.Filer;
 import com.sun.mirror.declaration.AnnotationTypeDeclaration;
 import com.sun.mirror.declaration.Declaration;
 import com.sun.mirror.declaration.PackageDeclaration;
-import com.sun.mirror.declaration.TypeDeclaration;
+import com.sun.mirror.declaration.MethodDeclaration;
 
 public class ContrailAnnotationProcessor 
 implements AnnotationProcessor
 {
 
-	private static final String METEOR_MANIFEST_HEADER = "# Meteor Content Providers";
 	private EclipseAnnotationProcessorEnvironment	_env;
-	private AnnotationTypeDeclaration _modelDeclaration;
+	private AnnotationTypeDeclaration _parallelDeclaration;
 	
 	public ContrailAnnotationProcessor(EclipseAnnotationProcessorEnvironment env)
 	{
 		_env = env;
-		_modelDeclaration= (AnnotationTypeDeclaration)
-			env.getTypeDeclaration(ModelElement.class.getName());
+		_parallelDeclaration= (AnnotationTypeDeclaration)
+			env.getTypeDeclaration(Parallel.class.getName());
 	}
 
 	public void process()
 	{		
-		Collection<Declaration> declarations= _env.getDeclarationsAnnotatedWith(_modelDeclaration);
+		Collection<Declaration> declarations= _env.getDeclarationsAnnotatedWith(_parallelDeclaration);
 		HashSet<String> completed= new HashSet<String>();
 		for (Declaration declaration : declarations) {
-			
-			if ((declaration instanceof TypeDeclaration) == false) {
+
+			// the @parallel annotation can only be applied to methods, so we should never 
+			// be given anything other than a MethodDeclaration, but just in case...
+			if ((declaration instanceof MethodDeclaration) == false) {
+				System.err.println("WARNING:")
 				continue;
 			}
 			
-			TypeDeclaration classDeclaration= (TypeDeclaration)declaration;
+			MethodDeclaration methodDeclaration= (MethodDeclaration)declaration;
 			PackageDeclaration packageDeclaration= classDeclaration.getPackage();
 			String packageName= packageDeclaration.getQualifiedName();
 			if (!completed.contains(packageName)) {

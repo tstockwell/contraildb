@@ -21,9 +21,8 @@ come up with a strategy that avoided deadlock for executing tasks on a limited #
 A second version of Contrail was written that used continuation passing.
 Unfortunately, code that uses continuation passing is *very* difficult to read.
 It turned out that porting Contrail to use continuation passing was so difficult 
-that I (Ted Stockwell) could not successfully port some of the code in Contrail.
-I literally would get through half of a method to port and the code became so hard to 
-follow that I couldn't finish.  
+that some of the code in Contrail could not successfully ported.
+
 A third version of Contrail was started using the Go language. 
 The lightweight processes in Go, called goroutines, made it possible to avoid the deadlocking 
 problems of the first version and the code hairball problems associated with continuation passing.
