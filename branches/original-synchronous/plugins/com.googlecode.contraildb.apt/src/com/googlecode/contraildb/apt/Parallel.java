@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  */
 @Documented
 @Retention(value=RetentionPolicy.CLASS)
-@Target({ElementType.TYPE, ElementType.METHOD})
+@Target(ElementType.METHOD)
 public @interface Parallel {
 
 }
