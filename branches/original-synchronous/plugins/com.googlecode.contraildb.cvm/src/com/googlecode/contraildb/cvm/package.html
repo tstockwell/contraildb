@@ -1,0 +1,23 @@
+<h1>com.googlecode.contraildb.cvm</h1>
+
+<h1>A Java Virtual Machine for Automatically Parallelizing Java</h1>
+This package implements a tiny Java Virtual Machine (JVM) that can load and 
+execute standard Java class files.
+However, this virtual machine, the Plazma Virtual Machine (PVM), automatically parallelizes
+Java using a method that is very similar to <a href="http://en.wikipedia.org/wiki/Actor_model">Actor-based concurrency</a>.
+Plazma automatically parallelizes Java in the following way...
+<li>Every method call is executed in its own lightweight thread, called a continuation.<li>
+<li>Every method call immediately returns a <b>Future</b>.  
+ A Future represents the result of an asynchronous computation. 
+ A Future has methods to check if the computation is complete, to wait for its 
+ completion, and to retrieve the result of the computation.
+ <p>
+ All references to the original value returned from a method call are essentially 
+ replaced with a call to Future.get(). 
+ </p>
+</li>
+<li>When a call is made to Future.get() and the result of the associated method 
+is not yet available then execution of the current continuation is suspended until 
+the associated method completes.
+</li>
+
