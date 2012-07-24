@@ -104,7 +104,7 @@ public class LockFolder extends Entity {
 		final Identifier lockId= Identifier.create(id, "lock");
 		final IResult<Lock> lockResult= storage.fetch(lockId);
 		new ContrailAction() {
-			protected void run() {
+			protected void action() {
 				try {
 					Lock lock= lockResult.get();
 					if (lock == null || !lock.processId.equals(processId))

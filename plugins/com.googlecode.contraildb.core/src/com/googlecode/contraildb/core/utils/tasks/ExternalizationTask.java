@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.googlecode.contraildb.core.utils.ClosableByteArrayOutputStream;
 import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
@@ -22,29 +23,28 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 	}
 	
 	@Override
-	public ExternalizationTask submit() {
-		super.submit();
-		return this;
+	public IResult<byte[]>  submit() {
+		return super.submit();
 	}
 	
 	@Override
-	public ExternalizationTask submit(List<ContrailTask<?>> dependentTasks) {
-		super.submit(dependentTasks);
-		return this;
+	public IResult<byte[]> submit(List<ContrailTask<?>> dependentTasks) {
+		return super.submit(dependentTasks);
 	}
 	
-	protected void run() throws IOException {
+	protected byte[] run() throws IOException {
 		try {
 			ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
 			outputStream.writeObject(_item);
 			outputStream.flush();
-			setResult(_byteStream.toByteArray());
+			return _byteStream.toByteArray();
 		}
 		catch (Throwable x) {
-			if (!isCancelled()) { // if task was canceled then we can ignore the error.
+			if (!getResult().isCancelled()) { // if task was canceled then we can ignore the error.
 				x.printStackTrace();
 				TaskUtils.throwSomething(x, IOException.class);
 			}
+			return null;
 		}
 	}
 	

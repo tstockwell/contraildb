@@ -66,7 +66,7 @@ public class StorageCleanupAction extends ContrailAction {
 						_storageSession.flush();
 
 						new ContrailAction(revision.getId(), Operation.DELETE) {
-							protected void run() throws Exception {
+							protected void action() throws Exception {
 								try {
 									cleanupFiles(revision);
 

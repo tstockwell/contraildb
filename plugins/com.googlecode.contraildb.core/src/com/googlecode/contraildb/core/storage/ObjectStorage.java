@@ -99,14 +99,14 @@ public class ObjectStorage {
 		}
 		public <T extends Serializable> void store(final Identifier identifier, final T item) 
 		{
-			final ExternalizationTask  serializeTask= new ExternalizationTask(item).submit();
+			final IResult<byte[]>  serializeTask= new ExternalizationTask(item).submit();
 
 			final ILifecycle lifecycle= (item instanceof ILifecycle) ? (ILifecycle)item : null;
 			if (lifecycle != null)
 				lifecycle.setStorage(_outerStorage);
 
 			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					_cache.store(identifier, item);
 					if (lifecycle != null)
 						lifecycle.onInsert(identifier);
@@ -119,7 +119,7 @@ public class ObjectStorage {
 		public void delete(final Identifier path) {
 			final Object item= fetch(path).get();
 			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					_cache.delete(path);
 					_storageSession.delete(path);
 					if (item instanceof ILifecycle) 
@@ -131,18 +131,17 @@ public class ObjectStorage {
 		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
 		{
 			ContrailTask<T> task= new ContrailTask<T>(path, Operation.READ) {
-				protected void run() throws IOException {
+				protected T run() throws IOException {
 					T storable= (T)_cache.fetch(path);
 					if (storable == null) {
 						IResult<byte[]> content= _storageSession.fetch(path);
 						if (content != null) 
 							storable= readStorable(path, content.get());
 					}
-					setResult(storable);
+					return storable;
 				}
 			};
-			_trackerSession.submit(task);
-			return task;
+			return _trackerSession.submit(task);
 		}
 		
 		private <T extends Serializable> T readStorable(Identifier id, byte[] contents)
@@ -164,7 +163,7 @@ public class ObjectStorage {
 		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path)
 		{
 			ContrailTask<Map<Identifier, T>> task= new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
-				protected void run() throws IOException {
+				protected Map<Identifier, T> run() throws IOException {
 					Collection<Identifier> children= _storageSession.listChildren(path).get();
 					HashMap<Identifier, IResult<byte[]>> fetched= new HashMap<Identifier, IResult<byte[]>>();
 					for (Identifier childId:children) 
@@ -175,28 +174,31 @@ public class ObjectStorage {
 						T t= readStorable(childId, result.get());
 						results.put(childId, t);
 					}
-					setResult(results);
+					return results;
 				}
 			};
-			_trackerSession.submit(task);
-			return task;
+			return _trackerSession.submit(task);
 		}
 
 		public IResult<Collection<Identifier>> listChildren(final Identifier path)
 		{
 			ContrailTask<Collection<Identifier>> task= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected void run() {
+				protected Collection<Identifier> run() {
 					Collection<Identifier> list= _storageSession.listChildren(path).get();
-					setResult(list);
+					return list;
 				}
 			};
-			_trackerSession.submit(task);
-			return task;
+			return _trackerSession.submit(task);
 		}
 		
 		public void flush() throws IOException {
-			_trackerSession.awaitCompletion(IOException.class);
-			_storageSession.flush();
+			try {
+				_trackerSession.complete().get();
+				_storageSession.flush();
+			}
+			catch (Throwable t) {
+				
+			}
 		}
 		
 		public void close() throws IOException {
@@ -251,7 +253,7 @@ public class ObjectStorage {
 		public void deleteAllChildren(Identifier path) {
 			final IResult<Collection<Identifier>> children= listChildren(path);
 			ContrailAction action= new ContrailAction(path, Operation.LIST) {
-				protected void run() {
+				protected void action() {
 					for (Identifier identifier: children.get()) {
 						delete(identifier);
 					}

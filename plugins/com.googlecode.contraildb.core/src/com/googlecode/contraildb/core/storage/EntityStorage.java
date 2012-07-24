@@ -80,12 +80,12 @@ public class EntityStorage implements IEntityStorage {
 		{
 			return new ContrailTask<Collection<E>>() {
 				@SuppressWarnings("unchecked")
-				protected void run() throws IOException {
+				protected Collection<E> run() throws IOException {
 					Map<Identifier, Serializable> children= _objectSession.fetchChildren(path).get();
 					ArrayList<E> list= new ArrayList<E>(children.size());
 					for (Serializable e:children.values())
 						list.add((E)e);
-					setResult(list);
+					return list;
 				}
 			}.submit();
 		}

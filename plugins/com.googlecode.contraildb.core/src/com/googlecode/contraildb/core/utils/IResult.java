@@ -50,11 +50,6 @@ public interface IResult<V> {
      * Waits if necessary for the computation to complete, and then
      * retrieves its result.
      * 
-     * This method should never be used in an internal Contrail API.
-     * 
-     * This method is provided as a convenience for those users that don't 
-     * want to use Contrail asynchronously.  
-     *
      * @return the computed result
      * @throws An unchecked exception if an error occurred while producing the result
      */
@@ -65,10 +60,6 @@ public interface IResult<V> {
      * Calling this method can block the current thread therefore it's
      * use should generally be avoided.
      * 
-     * This method should never be used in an internal Contrail API.
-     * 
-     * This method is provided as a convenience for those users that don't 
-     * want to use Contrail asynchronously.  
      */
     public void join();
 }
