@@ -45,7 +45,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  * 
  * @author ted stockwell
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked","rawtypes"})
 public class IndexSearcher {
 	
 	StorageSession  _storageSession;
@@ -75,7 +75,7 @@ public class IndexSearcher {
 		ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
 		for (final Map.Entry<String, Collection<T>> e: entitiesByProperty.entrySet()) {
 			tasks.add(new ContrailAction() {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					final String propertyName= e.getKey();
 					PropertyIndex var= getPropertyIndex(propertyName);
 					if (var == null)
@@ -85,7 +85,7 @@ public class IndexSearcher {
 					ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
 					for (final T t: e.getValue()) {
 						tasks.add(new ContrailAction() {
-							protected void run() throws IOException {
+							protected void action() throws IOException {
 								Object propertyValue= t.getProperty(propertyName);
 								if (propertyValue instanceof Comparable || propertyValue == null) {
 									propertyIndex.insert((Comparable<?>) propertyValue, t.getId());
@@ -146,19 +146,19 @@ public class IndexSearcher {
 			}
 		}
 		
-		ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (final Map.Entry<String, Collection<T>> e: entitiesByProperty.entrySet()) {
 			tasks.add(new ContrailAction() {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					final String propertyName= e.getKey();
 					final PropertyIndex propertyIndex= getPropertyIndex(propertyName);
 					if (propertyIndex == null) 
 						throw new ContrailException("Missing index for property "+propertyName);
 					
-					ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+					ArrayList<IResult> results= new ArrayList<IResult>();
 					for (final T t: e.getValue()) {
-						tasks.add(new ContrailAction() {
-							protected void run() throws IOException {
+						results.add(new ContrailAction() {
+							protected void action() throws IOException {
 								Object propertyValue= t.getProperty(propertyName);
 								if (propertyValue instanceof Comparable || propertyValue == null) {
 									propertyIndex.remove((Comparable<?>) propertyValue, t.getId());
@@ -171,13 +171,13 @@ public class IndexSearcher {
 								else
 									throw new ContrailException("Cannot store property value. A value must be one of the basic types supported by Contrail or a collection supported types:"+propertyValue);
 							}
-						});
+						}.submit());
 					}
-					TaskUtils.invokeAll(tasks, IOException.class);
+					TaskUtils.joinAll(results, IOException.class);
 				}
-			});
+			}.submit());
 		}
-		TaskUtils.invokeAll(tasks, IOException.class);
+		TaskUtils.joinAll(tasks, IOException.class);
 	}
 	
 

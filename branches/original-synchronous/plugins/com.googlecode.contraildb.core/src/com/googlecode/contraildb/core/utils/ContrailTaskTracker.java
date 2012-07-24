@@ -220,7 +220,7 @@ public class ContrailTaskTracker {
 		}
 		
 		/**
-		 * Returns all result that completes when all the current tasks are complete.
+		 * Returns a result that completes when all the current tasks are complete.
 		 */
 		public IResult<Void> complete() {
 			List<ContrailTask> tasks;

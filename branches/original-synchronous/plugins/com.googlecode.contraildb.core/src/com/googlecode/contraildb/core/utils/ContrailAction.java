@@ -13,7 +13,7 @@ abstract public class ContrailAction extends ContrailTask<Void> {
 	
 	protected abstract void action() throws Exception;
 	
-	protected Void run() throws Exception {
+	final protected Void run() throws Exception {
 		action();
 		return null;
 	}

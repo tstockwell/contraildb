@@ -50,7 +50,7 @@ public class FileStorageProvider extends AbstractStorageProvider {
 			_file= file;
 		}
 		@Override
-		protected void run() {
+		protected void action() {
 			File[] files= _file.listFiles();
 			if (files != null) {
 				ArrayList<ContrailTask<?>> tasks= new ArrayList<ContrailTask<?>>();

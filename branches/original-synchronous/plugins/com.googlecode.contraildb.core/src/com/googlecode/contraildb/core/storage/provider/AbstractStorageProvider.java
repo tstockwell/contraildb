@@ -92,7 +92,7 @@ implements IStorageProvider
 		@Override
 		public void store(final Identifier identifier, final IResult<byte[]> content) {
 			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void run() {
+				protected void action() {
 					try {
 						doStore(identifier, content.get());
 					}
@@ -106,7 +106,7 @@ implements IStorageProvider
 		@Override
 		public void delete(final Identifier path) {
 			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					try {
 						doDelete(path);
 					}

@@ -336,7 +336,7 @@ public class StorageSystem {
 		while (!_activeSessions.isEmpty()) {
 			final StorageSession session= _activeSessions.remove(0);
 			_trackerSession.submit(new ContrailAction(Identifier.create(session.getSessionId()), Operation.DELETE) {
-				protected void run() throws IOException {
+				protected void action() throws IOException {
 					session.close();
 				}
 			});
