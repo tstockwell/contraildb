@@ -72,7 +72,7 @@ public class IndexSearcher {
 			idIndex.insert(t.getId());
 		}
 		
-		ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (final Map.Entry<String, Collection<T>> e: entitiesByProperty.entrySet()) {
 			tasks.add(new ContrailAction() {
 				protected void action() throws IOException {
@@ -82,7 +82,7 @@ public class IndexSearcher {
 						var= createPropertyIndex(propertyName);
 					final PropertyIndex propertyIndex= var;
 					
-					ArrayList<ContrailTask> tasks= new ArrayList<ContrailTask>();
+					ArrayList<IResult> tasks= new ArrayList<IResult>();
 					for (final T t: e.getValue()) {
 						tasks.add(new ContrailAction() {
 							protected void action() throws IOException {
@@ -98,13 +98,13 @@ public class IndexSearcher {
 								else
 									throw new ContrailException("Cannot store property value. A value must be one of the basic types supported by Contrail or a collection supported types:"+propertyValue);
 							}
-						});
+						}.submit());
 					}
-					TaskUtils.invokeAll(tasks, IOException.class);
+					TaskUtils.getAll(tasks, IOException.class);
 				}
-			});
+			}.submit());
 		}
-		TaskUtils.invokeAll(tasks, IOException.class);
+		TaskUtils.getAll(tasks, IOException.class);
 	}
 	
 	private BTree<Identifier> getIdIndex() throws IOException {
@@ -173,11 +173,11 @@ public class IndexSearcher {
 							}
 						}.submit());
 					}
-					TaskUtils.joinAll(results, IOException.class);
+					TaskUtils.getAll(results, IOException.class);
 				}
 			}.submit());
 		}
-		TaskUtils.joinAll(tasks, IOException.class);
+		TaskUtils.getAll(tasks, IOException.class);
 	}
 	
 

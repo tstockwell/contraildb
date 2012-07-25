@@ -12,7 +12,7 @@ import java.util.Collection;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.ContrailTask;
+import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
@@ -53,10 +53,10 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		protected void action() {
 			File[] files= _file.listFiles();
 			if (files != null) {
-				ArrayList<ContrailTask<?>> tasks= new ArrayList<ContrailTask<?>>();
+				ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
 				for (final File file2: files)
 					tasks.add(new DeleteAction(Identifier.create(getId(), file2.getName()), file2).submit());
-				TaskUtils.joinAll(tasks);
+				TaskUtils.combineResults(tasks).join();
 			}
 			for (int i= 0; i < 10; i++) {
 				if (_file.delete()) {
@@ -76,12 +76,17 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		_root= root;		
 	}
 	public FileStorageProvider(File root, boolean clean) throws IOException {
-		if (clean) {
-			if (root.exists())
-				new DeleteAction(Identifier.create(""), root).submit().join(IOException.class);
+		try {
+			if (clean) {
+				if (root.exists())
+					new DeleteAction(Identifier.create(""), root).submit().get();
+			}
+			root.mkdirs();
+			_root= root;
 		}
-		root.mkdirs();
-		_root= root;
+		catch (Throwable t) {
+			TaskUtils.throwSomething(t, IOException.class);
+		}
 	}
 	
 	public File getRoot() {
@@ -144,7 +149,12 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		
 		@Override
 		protected void doDelete(Identifier path) throws IOException {
-			new DeleteAction(path, new File(_root, path.toString())).invoke(IOException.class);
+			try {
+				new DeleteAction(path, new File(_root, path.toString())).submit().get();
+			}
+			catch (Throwable t) {
+				TaskUtils.throwSomething(t, IOException.class);
+			}
 		}
 		
 		@Override

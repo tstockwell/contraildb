@@ -60,6 +60,8 @@ public interface IResult<V> {
      * Calling this method can block the current thread therefore it's
      * use should generally be avoided.
      * 
+     * Does NOT throw an exception if an error occurred in the associated task.
+     * 
      */
     public void join();
 }

@@ -1,6 +1,5 @@
 package com.googlecode.contraildb.core.utils;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -133,12 +132,15 @@ public class TaskUtils {
 		};
 	}
 
-	public static <T extends Throwable> void joinAll(ArrayList<IResult> results, Class<T> errorType) throws T {
+	public static <X extends Throwable, T extends IResult<?>> void getAll(Collection<T> results, Class<X> errorType) throws X {
+		get(combineResults(results), errorType);
+	}
+	public static <T extends Throwable> void get(IResult results, Class<T> errorType) throws T {
 		try {
-			TaskUtils.combineResults(results).join();
+			results.join();
 		}
 		catch (Throwable t) {
-			TaskUtils.throwSomething(t, errorType);
+			throwSomething(t, errorType);
 		}
 	}
 }
