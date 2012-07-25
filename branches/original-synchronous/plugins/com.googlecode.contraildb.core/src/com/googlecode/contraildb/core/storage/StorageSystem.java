@@ -14,6 +14,7 @@ import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
+import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
@@ -165,7 +166,7 @@ public class StorageSystem {
 	 * @throws IOException
 	 */
 	public void cleanup() throws IOException {
-		_trackerSession.invoke(new StorageCleanupAction(this));
+		_trackerSession.submit(new StorageCleanupAction(this));
 	}
 
 	
@@ -250,11 +251,11 @@ public class StorageSystem {
 			}
 			
 			// validate transaction
-			ArrayList<ContrailAction> validateActions= new ArrayList<ContrailAction>(revisions.size());
+			ArrayList<IResult<Void>> validateActions= new ArrayList<IResult<Void>>(revisions.size());
 			final List<RevisionFolder> conflictingRevisions= Collections.synchronizedList(new ArrayList<RevisionFolder>(1));  
 			for (final RevisionFolder r: revisions) {
 				validateActions.add(new ContrailAction() {
-					protected void run() throws IOException {
+					protected void action() throws IOException {
 						if (r.getFinalCommitNumber() <= startingCommit)
 							return; // we're done
 						if (!conflictingRevisions.isEmpty())
@@ -265,7 +266,7 @@ public class StorageSystem {
 					}
 				}.submit());
 			}
-			TaskUtils.joinAll(validateActions);
+			TaskUtils.getAll(validateActions, IOException.class);
 			if (!conflictingRevisions.isEmpty())
 				throw new ConflictingCommitException();
 			
@@ -343,7 +344,7 @@ public class StorageSystem {
 		}
 		
 		// wait for all sessions to close and for any cleanup tasks in progress
-		_trackerSession.awaitCompletion();
+		_trackerSession.complete().join();
 	}
 
 }

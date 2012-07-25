@@ -18,6 +18,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
 import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -217,7 +218,7 @@ public class StorageSession implements IEntityStorage.Session {
 	public <C extends IEntity> IResult<C> fetch(final Identifier path) {
 		return new ContrailTask<C>() {
 			@SuppressWarnings("unchecked")
-			protected void run() throws IOException {
+			protected C run() throws IOException {
 				Identifier contrailPath= Identifier.create(path, CONTRAIL_FOLDER);
 				IResult<Collection<Identifier>> childrenResult= _storage.listChildren(contrailPath);
 				Collection<Identifier> children= childrenResult.get();
@@ -241,7 +242,7 @@ public class StorageSession implements IEntityStorage.Session {
 				if (mostRecentRevision != null)
 					if (!mostRecentRevision.getName().startsWith("delete-")) 
 						c= (C)_storage.fetch(mostRecentRevision).get();
-				setResult(c);
+				return c;
 			}
 		}.submit();
 	}
@@ -250,14 +251,14 @@ public class StorageSession implements IEntityStorage.Session {
 	public IResult<Collection<Identifier>> listChildren(final Identifier path)
 	{
 		return new ContrailTask<Collection<Identifier>>() {
-			protected void run() throws IOException {
+			protected Collection<Identifier> run() throws IOException {
 				
 				ArrayList<Identifier> children= _listChildren(path);
 				ArrayList<Identifier> results = new ArrayList<Identifier>();
 				for (Identifier identifier:children)
 					results.add(identifier.getParent());
 				
-				setResult(results);
+				return results;
 			}
 		}.submit();
 	}
@@ -301,20 +302,20 @@ public class StorageSession implements IEntityStorage.Session {
 	{
 		return new ContrailTask<Collection<C>>() {
 			@SuppressWarnings("unchecked")
-			protected void run() throws IOException {
+			protected Collection<C> run() throws IOException {
 				
 				ArrayList<Identifier> children= _listChildren(path);
 				ArrayList<C> results = new ArrayList<C>();
 				for (Identifier identifier:children) {
 					results.add((C)_storage.fetch(identifier));
 				}
-				setResult(results);
+				return results;
 			}
 		}.submit();
 	}
 
 	public void flush() throws IOException {
-		_trackerSession.awaitCompletion(IOException.class);
+		TaskUtils.get(_trackerSession.complete(), IOException.class);
 		_storage.flush();
 	}
 

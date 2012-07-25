@@ -213,13 +213,12 @@ public class ObjectStorage {
 		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
 		{
 			ContrailTask<Boolean> action= new ContrailTask<Boolean>(identifier, Operation.CREATE) {
-				protected void run() throws IOException {
+				protected Boolean run() throws IOException {
 
-					ExternalizationTask  serializeTask= new ExternalizationTask(item);
-					serializeTask.submit();
+					IResult<byte[]> bytes= new ExternalizationTask(item).submit();
 
 					boolean created= false;
-					if (_storageSession.create(identifier, serializeTask, waitMillis).get()) {
+					if (_storageSession.create(identifier, bytes, waitMillis).get()) {
 						boolean isStorable= item instanceof ILifecycle;
 						if (isStorable)
 							((ILifecycle)item).setStorage(_outerStorage);
@@ -228,11 +227,10 @@ public class ObjectStorage {
 							((ILifecycle)item).onInsert(identifier);
 						created= true;
 					}
-					setResult(created);
+					return created;
 				}
 			};
-			_trackerSession.submit(action);
-			return action;
+			return _trackerSession.submit(action);
 		}
 		
 		

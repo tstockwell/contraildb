@@ -34,7 +34,7 @@ public class StorageCleanupAction extends ContrailAction {
 
 
 	@Override
-	protected void run() throws Exception {
+	protected void action() throws Exception {
 		
 		final String sessionId= "cleanup."+UUID.randomUUID().toString();
 
