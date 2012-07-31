@@ -161,6 +161,17 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		protected boolean exists(Identifier path) throws IOException {
 			return new File(_root, path.toString()).exists();
 		}
+
+		@Override
+		protected boolean doCreate(Identifier path, byte[] byteArray) throws IOException {
+			File folder= new File(_root, path.toString());
+			folder.mkdirs();
+			File file= new File(folder, CONTENT_FILE);
+			if (!file.createNewFile())
+				return false;
+			doStore(path, byteArray);
+			return true;
+		}
 	}
 	
 	

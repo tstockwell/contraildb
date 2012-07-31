@@ -228,4 +228,11 @@ public class IdentifierIndexedStorage<T> {
 		}
 		return Collections.emptySet();
 	}
+
+	synchronized public boolean create(Identifier path, T byteArray) {
+		if (exists(path))
+			return false;
+		store(path, byteArray);
+		return true;
+	}
 }
