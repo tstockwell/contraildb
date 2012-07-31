@@ -59,6 +59,11 @@ public class RamStorageProvider extends AbstractStorageProvider {
 		protected boolean exists(Identifier path) throws IOException {
 			return _storage.exists(path);
 		}
+
+		@Override
+		protected boolean doCreate(Identifier path, byte[] byteArray) throws IOException {
+			return _storage.create(path, byteArray);
+		}
 	}
 	
 }
