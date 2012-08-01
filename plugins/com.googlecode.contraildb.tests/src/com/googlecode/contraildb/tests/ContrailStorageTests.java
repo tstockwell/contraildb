@@ -31,8 +31,8 @@ import junit.framework.TestCase;
 
 import com.google.appengine.tools.development.ApiProxyLocalFactory;
 import com.google.apphosting.api.ApiProxy;
-import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
@@ -40,7 +40,6 @@ import com.googlecode.contraildb.core.storage.LockFolder;
 import com.googlecode.contraildb.core.storage.ObjectStorage;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageSystem;
-import com.googlecode.contraildb.core.storage.provider.FileStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
@@ -53,6 +52,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  * 
  * @author Ted Stockwell
  */
+@SuppressWarnings("rawtypes")
 public class ContrailStorageTests extends TestCase {
 	
 	StorageSystem _storage;
@@ -87,6 +87,37 @@ public class ContrailStorageTests extends TestCase {
 			storage.store(object_0_1);
 			assertNotNull(storage.fetch(object_0_1.getId()));
 			storage.flush();
+			
+	}
+	
+	public void testSimpleCreate() throws Exception {
+		final IStorageProvider.Session storage= _rawStorage.connect();
+		for (int f= 0; f < 10; f++) {			
+			final Identifier folderId= Identifier.create(Integer.toString(f));
+			IResult<Boolean> result= storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0);
+			assertTrue(result.get());
+		}
+		
+	}
+	
+	/**
+	 * Verify that the create method works correctly when invoked by many 
+	 * threads at once.
+	 */
+	public void testConcurrentFileCreation() throws Exception {
+		final IStorageProvider.Session storage= _rawStorage.connect();
+		for (int f= 0; f < 10; f++) {			
+			final Identifier folderId= Identifier.create(Integer.toString(f));
+			ArrayList<IResult<Boolean>> results= new ArrayList<IResult<Boolean>>();
+			for (int t= 0; t < 20; t++) 
+				results.add(storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0));
+			int count= 0;
+			for (IResult<Boolean> result: results)
+				if (result.get())
+					count++;
+			assertEquals(1, count);
+		}
+		
 	}
 	
 	/**
@@ -94,7 +125,7 @@ public class ContrailStorageTests extends TestCase {
 	 * @throws IOException
 	 */
 	@SuppressWarnings("unchecked")
-	public void testCreate() throws Throwable {
+	public void testConcurrentCreateAndDelete() throws Throwable {
 		final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
 		
 		// test that only thread can create the same file at a time
@@ -138,11 +169,59 @@ public class ContrailStorageTests extends TestCase {
 	}
 	
 	/**
+	 * Just verify that storage-based locks basically work and dont barf. 
+	 */
+	public void testSimplestLocks() throws Throwable {
+		
+		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
+		for (int f= 0; f < 10; f++) {			
+			Entity rootFolder= new Entity(Identifier.create());
+			storage.store(rootFolder);
+			final LockFolder lockFolder= new LockFolder(rootFolder);
+			storage.store(lockFolder);
+			storage.flush();
+			
+			for (int t= 0; t < 20; t++) {
+				String processId= Identifier.create().toString();
+				boolean lockd= lockFolder.lock(processId, true);
+				assertTrue(lockd);
+				IResult<Void> unlockd= lockFolder.unlock(processId);
+				unlockd.join(); // wait for folder to be unlocked
+			}
+		}
+	}
+	
+	/**
+	 * Like testSimplestLocks but doesn't call IResult.join on the result from LockFolder.unlock.
+	 * This causes more concurrency contention and can possibly results in bugs that wont appear when . 
+	 * Once upon a time there were bugs that would appear when the call to IResult.join was excluded. 
+	 */
+	public void testSimplerLocks() throws Throwable {
+		
+		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
+		for (int f= 0; f < 10; f++) {			
+			Entity rootFolder= new Entity(Identifier.create());
+			storage.store(rootFolder);
+			final LockFolder lockFolder= new LockFolder(rootFolder);
+			storage.store(lockFolder);
+			storage.flush();
+			
+			for (int t= 0; t < 20; t++) {
+				String processId= Identifier.create().toString();
+				boolean lockd= lockFolder.lock(processId, true);
+				assertTrue(lockd);
+				IResult<Void> unlockd= lockFolder.unlock(processId);
+				//unlockd.join(); // wait for folder to be unlocked
+			}
+		}
+	}
+	
+	/**
 	 * Verify that storage-based locks work across threads. 
 	 * @throws IOException
 	 */
 	@SuppressWarnings("unchecked")
-	public void testLocks() throws Throwable {
+	public void testConcurrentLocks() throws Throwable {
 		
 		// test that only one lock is ever granted at a time
 		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
@@ -182,26 +261,6 @@ public class ContrailStorageTests extends TestCase {
 			if (error[0] != null)
 				throw error[0];
 		}
-	}
-	
-	/**
-	 * Verify that the create method works correctly when invoked by many 
-	 * threads at once.
-	 */
-	public void testConcurrentFileCreation() throws Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect();
-		for (int f= 0; f < 10; f++) {			
-			final Identifier folderId= Identifier.create(Integer.toString(f));
-			ArrayList<IResult<Boolean>> results= new ArrayList<IResult<Boolean>>();
-			for (int t= 0; t < 20; t++) 
-				results.add(storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0));
-			int count= 0;
-			for (IResult<Boolean> result: results)
-				if (result.get())
-					count++;
-			assertEquals(1, count);
-		}
-		
 	}
 	
 	public void testBasicTransaction() throws Exception {
@@ -359,13 +418,13 @@ public class ContrailStorageTests extends TestCase {
 	public void testConcurrentObjectStoreListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
 		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect();
-		ArrayList<ContrailAction> tasks= new ArrayList<ContrailAction>();
+		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			for (int t= 0; t < 10; t++) {
 				final int task= t; 
 				tasks.add(new ContrailAction() {
-					protected void run() throws Exception {
+					protected void action() throws Exception {
 						for (int i= 0; i < 10; i++) {
 							
 							// store an object in a folder
@@ -379,10 +438,10 @@ public class ContrailStorageTests extends TestCase {
 						}
 						
 					}
-				});
+				}.submit());
 			}
 		}
-		TaskUtils.invokeAll(tasks);
+		TaskUtils.combineResults(tasks).get();
 		
 	}
 	/**
@@ -391,13 +450,13 @@ public class ContrailStorageTests extends TestCase {
 	public void testConcurrentStoreAPIListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
 		final IStorageProvider.Session storage= _rawStorage.connect();
-		ArrayList<ContrailAction> tasks= new ArrayList<ContrailAction>();
+		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			for (int t= 0; t < 10; t++) {
 				final int task= t; 
 				tasks.add(new ContrailAction() {
-					protected void run() throws Exception {
+					protected void action() throws Exception {
 						for (int i= 0; i < 10; i++) {
 							
 							// store an object in a folder
@@ -414,10 +473,10 @@ public class ContrailStorageTests extends TestCase {
 							}
 						}
 					}
-				});
+				}.submit());
 			}
 		}
-		TaskUtils.invokeAll(tasks);
+		TaskUtils.combineResults(tasks).get();
 		
 	}
 	

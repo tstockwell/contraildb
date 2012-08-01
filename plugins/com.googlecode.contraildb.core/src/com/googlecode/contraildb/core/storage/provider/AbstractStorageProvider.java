@@ -123,11 +123,14 @@ implements IStorageProvider
 					long startMillis= System.currentTimeMillis();
 					boolean success= false;
 					while(true) {
-						success= doCreate(path_, source_.get());
-						if (!success && 0 < waitMillis_) {
-							if (waitMillis_ < System.currentTimeMillis() - startMillis)
-								break;
+						if (doCreate(path_, source_.get())) { 
+							success= true;
+							break;
 						}
+						if (waitMillis_ <= 0) 
+							break;
+						if (waitMillis_ < System.currentTimeMillis() - startMillis)
+							break;
 						yield();
 					}
 					return success;
