@@ -99,14 +99,13 @@ public class LockFolder extends Entity {
 	}
 
 
-	public void unlock(final String processId)  
+	public IResult<Void> unlock(final String processId)  
 	{
-		final Identifier lockId= Identifier.create(id, "lock");
-		final IResult<Lock> lockResult= storage.fetch(lockId);
-		new ContrailAction() {
+		return new ContrailAction() {
 			protected void action() {
+				Identifier lockId= Identifier.create(id, "lock");
 				try {
-					Lock lock= lockResult.get();
+					Lock lock= (Lock) storage.fetch(lockId).get();
 					if (lock == null || !lock.processId.equals(processId))
 						throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
 					storage.delete(lock.getId());

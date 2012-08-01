@@ -32,6 +32,8 @@ import com.googlecode.contraildb.core.Identifier;
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 abstract public class ContrailTask<T> {
+	
+	public static final String CONTRAIL_THREAD_COUNT= "contrail.thread.count";
 
 
 
@@ -77,7 +79,24 @@ abstract public class ContrailTask<T> {
 	}
 	
 	static {
-		for (int count= Runtime.getRuntime().availableProcessors() * 2; 0 < count--;) { 
+		// fire up threads for running tasks
+		int count= Runtime.getRuntime().availableProcessors() * 2;  
+		String value= System.getProperty(CONTRAIL_THREAD_COUNT);
+		if (value != null) {
+			try {
+				int i= Integer.parseInt(value);
+				if (0 < i) {
+					count= i;
+				}
+				else {
+					Logging.warning("Invalid value for "+CONTRAIL_THREAD_COUNT+":"+value);
+				}
+			}
+			catch (Throwable t) {
+				Logging.warning("Invalid value for "+CONTRAIL_THREAD_COUNT+":"+value, t);
+			}
+		}
+		for (; 0 < count--;) { 
 			new ContrailThread().start();
 		}
 	}
@@ -132,11 +151,11 @@ abstract public class ContrailTask<T> {
 	 * Returns true if the current thread is running a ContrailTask that has yielded.  
 	 */
 	public static final boolean isTaskYielded() {
-//		Thread thread= Thread.currentThread();
-//		synchronized (__yielded) {
-//			if (__yielded.contains(thread))
-//				return true;
-//		}
+		Thread thread= Thread.currentThread();
+		synchronized (__yielded) {
+			if (__yielded.contains(thread))
+				return true;
+		}
 		return false;
 	}
 	
@@ -320,7 +339,7 @@ if (__logger.isLoggable(Level.FINER))
 	protected boolean yield(long waitMillis) {
 		boolean taskWasRun= false;
 		
-		if (!isTaskYielded()) { // no nested yields for now
+		//if (!isTaskYielded()) { // no nested yields for now
 			if (!yieldToDependent()) {
 				/*
 				 * If this task has no dependencies then choose a random task to run.  
@@ -341,7 +360,7 @@ if (__logger.isLoggable(Level.FINER))
 				if (nextTask != null) 
 					taskWasRun= yieldToTask(nextTask);
 			}
-		}
+		//}
 		
 		if (!taskWasRun && 0 < waitMillis) {
 			synchronized (this) {
@@ -361,8 +380,8 @@ if (__logger.isLoggable(Level.FINER))
 	 * @return true if a task was run
 	 */
 	protected boolean yieldToDependent() {
-		if (isTaskYielded())
-			return false; // no nested yields for now
+//		if (isTaskYielded())
+//			return false; // no nested yields for now
 		
 		ContrailTask nextTask= null;
 		synchronized (__done) {
@@ -436,8 +455,8 @@ if (__logger.isLoggable(Level.FINER))
 	protected boolean yieldToTask(ContrailTask task) {
 		Thread thread= Thread.currentThread();
 		synchronized (__yielded) {
-			if (isTaskYielded())
-				return false; // no nested yields for now
+//			if (isTaskYielded())
+//				return false; // no nested yields for now
 			
 			__yielded.add(thread);
 		}
