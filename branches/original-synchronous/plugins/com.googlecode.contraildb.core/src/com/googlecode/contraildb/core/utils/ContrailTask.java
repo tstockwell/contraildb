@@ -166,7 +166,7 @@ abstract public class ContrailTask<T> {
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
 	private volatile List<ContrailTask<?>> _pendingTasks;
-	private final Result<T> _result= new Result<T>(); 
+	private final Result<T> _result= new Result<T>(new Object[] { this }); 
 	
 	
 	public ContrailTask(Identifier id, Operation operation) {
@@ -262,19 +262,21 @@ abstract public class ContrailTask<T> {
 		return _result;
 	}
 	
-	private synchronized void runTask() {
+	private synchronized boolean runTask() {
 if (__logger.isLoggable(Level.FINER))
 	__logger.finer("run task "+hashCode()+", id "+_id+", op "+_operation+", thread "+Thread.currentThread().getName() );		
-		if (!_done) { 
-			try {
-				T result= run();
-				if (!_result.isCancelled())
-					success(result); 
-			}
-			catch (Throwable x) {
-				error(x);
-			}
+		if (_done) { 
+			return false;
 		}
+		try {
+			T result= run();
+			if (!_result.isCancelled())
+				success(result); 
+		}
+		catch (Throwable x) {
+			error(x);
+		}
+		return true;
 	}
 	
 	synchronized public IResult<T> submit() {
@@ -327,20 +329,37 @@ if (__logger.isLoggable(Level.FINER))
 	
 	/**
 	 * Run other tasks in this thread while waiting for other things to happen
+	 * 
+	 * @param result A result that the caller is waiting on 
 	 * @return true if another task was run 
 	 */
-	protected boolean yield() {
-		return yield(0);
+	protected boolean yield(IResult result) {
+		return yield(result, 0);
 	}
 	/**
 	 * Yields to some other task.
 	 * If there are no other tasks to run then wait the given number of milliseconds.
+	 * 
+	 * @param result A result that the caller is waiting on
+	 * @param waitMillis the # of milliseconds to wait  
 	 */
-	protected boolean yield(long waitMillis) {
+	protected boolean yield(IResult result, long waitMillis) {
 		boolean taskWasRun= false;
 		
+		if (result != null) {
+			Object[] priorityTasks= result.getDependentTasks();
+			for (Object priorityTask: priorityTasks) {
+				if (priorityTask instanceof ContrailTask) {
+					if (yieldToTask((ContrailTask)priorityTask)) {
+						taskWasRun= true;
+						break;
+					}
+				}
+			}
+		}
+		
 		//if (!isTaskYielded()) { // no nested yields for now
-			if (!yieldToDependent()) {
+			if (!taskWasRun && !yieldToDependent()) {
 				/*
 				 * If this task has no dependencies then choose a random task to run.  
 				 * DONT mess with a task that has any dependencies, choose something nice and simple.
@@ -461,8 +480,7 @@ if (__logger.isLoggable(Level.FINER))
 			__yielded.add(thread);
 		}
 		try {
-			task.runTask();
-			return true;
+			return task.runTask();
 		}
 		finally {
 			synchronized (__yielded) {

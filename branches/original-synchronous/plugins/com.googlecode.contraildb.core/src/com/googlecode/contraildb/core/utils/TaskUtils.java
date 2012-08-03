@@ -14,7 +14,9 @@ public class TaskUtils {
 	public static final IResult<Boolean> TRUE= asResult(true); 
 	public static final IResult<Boolean> FALSE= asResult(false); 
 	public static final IResult NULL= asResult(null); 
-	public static final <T> IResult<T> NULL() { return NULL; } 
+	public static final <T> IResult<T> NULL() { return NULL; }
+	
+	private static final Object[] EMPTY_TASKS= new Object[0]; 
 	
 	public static final <T> IResult<T> run(Handler<?,T> handler) {
 		handler.handleResult(DONE);
@@ -30,7 +32,14 @@ public class TaskUtils {
 	public static final <T extends IResult<?>> IResult<Void> combineResults(Collection<T> tasks) {
 		if (tasks == null || tasks.isEmpty())
 			return DONE;
-		final Result<Void> result= new Result<Void>();
+		ArrayList dependentTasks= new ArrayList();
+		for (T r: tasks) {
+			Object[] depTasks= r.getDependentTasks();
+			for (Object dep:depTasks) {
+				dependentTasks.add(dep);
+			}
+		}
+		final Result<Void> result= new Result<Void>(dependentTasks.toArray());
 		final int[] count= new int[] { tasks.size() };
 		final IResult[] error= new IResult[] { null };
 		IResultHandler handler= new IResultHandler() {
@@ -92,6 +101,8 @@ public class TaskUtils {
 			task.submit();
 		return tasks;
 	}
+
+	
 	
 	/**
 	 * Convert a static value to a Result
@@ -128,6 +139,10 @@ public class TaskUtils {
 				catch (Throwable t) {
 					Logging.warning("Error while handling completion", t);
 				}
+			}
+			@Override
+			public Object[] getDependentTasks() {
+				return EMPTY_TASKS;
 			}
 		};
 	}

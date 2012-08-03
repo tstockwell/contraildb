@@ -18,6 +18,18 @@ public class Result<V> implements IResult<V>{
 	private boolean _cancelled= false;
 	private Throwable _error= null;
 	private List<IResultHandler> _completedHandlers= null;
+	final private Object[] _dependentTasks;
+	
+	public Result(Object[] dependentTask) { 
+		_dependentTasks= dependentTask;
+	}
+	
+	/**
+	 * Returns objects that represents the task(s) associated with this result.  
+	 */
+	public Object[] getDependentTasks() {
+		return _dependentTasks;
+	}
 
 	@Override public synchronized boolean isDone() {
 		return _done;
@@ -64,7 +76,7 @@ public class Result<V> implements IResult<V>{
 		if (ContrailTask.isContrailTask()) {
 			ContrailTask task= ContrailTask.getContrailTask();
 			while (!_done) {
-				task.yield();
+				task.yield(this);
 			}
 		}
 		else {
@@ -142,14 +154,12 @@ public class Result<V> implements IResult<V>{
 
 	@Override
 	synchronized public void addHandler(IResultHandler<V> handler) {
-		Result<Void> result= new Result<Void>();
 		if (_done) {
 			try {
 				handler.onComplete(this);
-				result.success(null);
 			}
 			catch (Throwable t) {
-				result.error(t);
+				Logging.warning("Error in result handler", t);
 			}
 			return;
 		}

@@ -22,7 +22,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
- * A storage session is like an EntityStroage.Session except it implements 
+ * A storage session is like an EntityStorage.Session except it implements 
  * versioning on top of the EntityStorage API.
  * 
  * Either the commit method or the close method MUST be called by the client 

@@ -131,7 +131,7 @@ implements IStorageProvider
 							break;
 						if (waitMillis_ < System.currentTimeMillis() - startMillis)
 							break;
-						yield();
+						yield(null);
 					}
 					return success;
 				}
