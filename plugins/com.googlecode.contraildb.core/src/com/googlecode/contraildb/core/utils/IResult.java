@@ -64,4 +64,11 @@ public interface IResult<V> {
      * 
      */
     public void join();
+    
+	/**
+	 * Returns objects that represents the task(s) associated with this result.  
+	 * May return an empty array if there are no dependents (for instance, if the result simply wraps a value).
+	 */
+	public Object[] getDependentTasks();
+    
 }
