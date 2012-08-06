@@ -7,7 +7,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
-import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
+import com.googlecode.contraildb.core.utils.TaskDomain;
 import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -25,12 +25,12 @@ implements IStorageProvider
 {
 	
 	// list of items for which we want notification of changes
-	private ContrailTaskTracker _tracker= new ContrailTaskTracker();
+	private TaskDomain _tracker= new TaskDomain();
 	
 	abstract public class Session
 	implements IStorageProvider.Session
 	{
-		private ContrailTaskTracker.Session _trackerSession= _tracker.beginSession();
+		private TaskDomain.Session _trackerSession= _tracker.beginSession();
 		
 		abstract protected boolean exists(Identifier path) throws IOException;
 		abstract protected void doStore(Identifier path, byte[] byteArray) throws IOException;

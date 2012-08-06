@@ -13,7 +13,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
+import com.googlecode.contraildb.core.utils.TaskDomain;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
@@ -60,7 +60,7 @@ public class ObjectStorage {
 	
 	private IStorageProvider _storageProvider;
 	private LRUIdentifierIndexedStorage _cache= new LRUIdentifierIndexedStorage();
-	private ContrailTaskTracker _tracker= new ContrailTaskTracker();
+	private TaskDomain _tracker= new TaskDomain();
 
 	/**
 	 * @param storageProvider a raw storage provider
@@ -87,12 +87,12 @@ public class ObjectStorage {
 		
 		private IStorageProvider.Session _storageSession;
 		private EntityStorage.Session _outerStorage;
-		private ContrailTaskTracker.Session _trackerSession;
+		private TaskDomain.Session _trackerSession;
 
-		public Session(ContrailTaskTracker.Session tracker, IStorageProvider.Session storageProvider) {
+		public Session(TaskDomain.Session tracker, IStorageProvider.Session storageProvider) {
 			this(tracker, storageProvider, null);
 		}
-		public Session(ContrailTaskTracker.Session tracker, IStorageProvider.Session storageProvider, EntityStorage.Session outerStorage) {
+		public Session(TaskDomain.Session tracker, IStorageProvider.Session storageProvider, EntityStorage.Session outerStorage) {
 			_trackerSession= tracker;
 			_storageSession= storageProvider;
 			_outerStorage= outerStorage; 

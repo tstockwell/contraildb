@@ -13,7 +13,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
+import com.googlecode.contraildb.core.utils.TaskDomain;
 import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -71,8 +71,8 @@ public class StorageSystem {
 	List<StorageSession> _activeSessions= Collections.synchronizedList(new ArrayList<StorageSession>());
 	long _lastKnownDeletedRevision= -1;
 	List<Long> _knownUncommittedRevisions= Collections.synchronizedList(new ArrayList<Long>());
-	ContrailTaskTracker _tracker= new ContrailTaskTracker();
-	ContrailTaskTracker.Session _trackerSession= _tracker.beginSession();
+	TaskDomain _tracker= new TaskDomain();
+	TaskDomain.Session _trackerSession= _tracker.beginSession();
 
 
 	public StorageSystem(IStorageProvider rawStorage) 

@@ -12,7 +12,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 
 
 /**
- * A convenient task scheduler for Contrail that coordinates tasks according 
+ * A task scheduler for Contrail that coordinates tasks according 
  * to an associated Identifier and operation type (READ, WRITE, DELETE, LIST, 
  * or CREATE).
  * The purpose of this class is to manage the order in which asynchronous 
@@ -53,7 +53,7 @@ import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
  * @author Ted Stockwell
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
-public class ContrailTaskTracker {
+public class TaskDomain {
 	
 	IdentifierIndexedStorage<Set<ContrailTask>> _tasks= 
 		new IdentifierIndexedStorage<Set<ContrailTask>>();
@@ -138,7 +138,7 @@ public class ContrailTaskTracker {
 				switch (previousOp) { case DELETE: case WRITE: case CREATE: return true; }
 			} break;
 			case CREATE:  { 
-				switch (previousOp) { case READ: case DELETE: case WRITE: case LIST: return true; }
+				return true; 
 			}
 		}
 		return false;
