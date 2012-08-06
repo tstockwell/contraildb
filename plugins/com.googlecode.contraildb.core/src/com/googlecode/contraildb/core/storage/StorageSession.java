@@ -15,7 +15,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.impl.PathUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.ContrailTaskTracker;
+import com.googlecode.contraildb.core.utils.TaskDomain;
 import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.TaskUtils;
@@ -39,7 +39,7 @@ public class StorageSession implements IEntityStorage.Session {
 	private final long _startingCommitNumber;
 	private final Mode _mode;
 	private final ObjectStorage.Session _storage;
-	private final ContrailTaskTracker.Session _trackerSession;
+	private final TaskDomain.Session _trackerSession;
 	
 	HashSet<Identifier> _reads= new HashSet<Identifier>();
 	HashSet<Identifier> _inserts= new HashSet<Identifier>();

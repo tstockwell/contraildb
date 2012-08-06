@@ -13,7 +13,23 @@ import com.googlecode.contraildb.core.Identifier;
 
 /**
  * A base task class for Contrail related tasks.
+ * 
+ * All concurrency in the Contrail database is implemented via the ContrailTask facility.
+ * In order for the ContrailTask scheduler to appropriately schedule the execute of tasks 
+ * it is required that ContrailTasks expose the relationships between the tasks, essentially 
+ * denoting the parallelism in the application.  This approach is similar to that of the 
+ * <a href="http://en.wikipedia.org/wiki/Cilk">Cilk language</a> except that ContrailTasks 
+ * denote more information about parallel relationships (an identifier and an operation) 
+ * and can therefore achieve greater parallelism. 
+ * Contrails approach to controlling concurrency is based on the concept of 
+ * <a href="http://en.wikipedia.org/wiki/Serializability">Serializability</a>.
+ * An set of operation s executed concurrently is serializable if the result of executing 
+ * those operations is the same as executing the operation sequentially.
+ * Contrail allows as much concurrency as possible while preserving the serializability 
+ * of operations. 
+ *  
  * In Contrail a task is considered to be some operation on a resource.
+ * A resources have a unique identifier.
  * The operations are considered to be one of:
  * 	 	Operation.READ,
  * 		Operation.WRITE,
@@ -22,13 +38,27 @@ import com.googlecode.contraildb.core.Identifier;
  * 		Operation.CREATE
  * 
  * Subclasses need to implement the run method.
+ *
+ * All tasks are associated with a 'domain' that controls the execution of tasks in that domain.
+ * To execute a task a ContrailTask must be submitted to a TaskDomain for execution.
+ * The ContrailTask.submit may be used to execute a ContrailTask without specifying a TaskDomain.
+ * In this case the task will be associated with the domain associated with the current thread.
+ * If the current thread is not executing a ContrailTask (thus there is no associated domain) then 
+ * an error will occur.
+ * 
+ * Contrail's concurrency facility employs a tactic known as 'work-stealing'.
+ * That is, when a task needs to wait for some other task to complete the thread 
+ * running the waiting task will execute some other tasks while waiting.  
+ * Work-stealing ensures that the system will not become deadlocked because all 
+ * available threads need to wait, thus making it impossible to execute any other 
+ * tasks and make progress towards a computational goal.  
  * 
  * This class uses a fixed pool of threads to run tasks.
  *
  * @param <T> The result type returned by the <tt>getResult</tt> method
  * 
  * @author Ted Stockwell
- * @see ContrailTaskTracker
+ * @see TaskDomain
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 abstract public class ContrailTask<T> {
