@@ -12,7 +12,7 @@ import java.util.Collection;
 public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 
 	IResult<I> _incoming;
-	Result<O> _outgoing= new Result(new Object[] { this }) {
+	Result<O> _outgoing= new Result() {
 		public synchronized Object getResult() {
 			checkForHandler();
 			return super.getResult();
@@ -212,9 +212,5 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
     }
 	public void addHandler(IResultHandler<O> handler) {
 		_outgoing.addHandler(handler);
-	}
-	@Override
-	public Object[] getDependentTasks() {
-		return _outgoing.getDependentTasks();
 	}
 }

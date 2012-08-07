@@ -18,19 +18,10 @@ public class Result<V> implements IResult<V>{
 	private boolean _cancelled= false;
 	private Throwable _error= null;
 	private List<IResultHandler> _completedHandlers= null;
-	final private Object[] _dependentTasks;
 	
-	public Result(Object[] dependentTask) { 
-		_dependentTasks= dependentTask;
+	public Result() { 
 	}
 	
-	/**
-	 * Returns objects that represents the task(s) associated with this result.  
-	 */
-	public Object[] getDependentTasks() {
-		return _dependentTasks;
-	}
-
 	@Override public synchronized boolean isDone() {
 		return _done;
 	}
