@@ -73,7 +73,6 @@ abstract public class ContrailTask<T> {
 	private static HashedLinkedList<ContrailTask> __tasks= new ConcurrentHashedLinkedList<ContrailTask>();
 	private static Object __done= new Object(); // used to wait/notify when tasks are completed
 	private static Object __arrive= new Object(); // used to wait/notify when new tasks arrive
-	private static ArrayList<ContrailTask> __deferred= new ArrayList<ContrailTask>();
 	private static ArrayList<Thread> __yielded= new ArrayList<Thread>();
 	private static int __THREAD_COUNT= 0;
 	
@@ -268,20 +267,6 @@ abstract public class ContrailTask<T> {
 						try { stop(); } catch (Throwable t) { Logging.warning("Error while trying to stop a task", t); } 
 					}
 					_done= true;
-					
-					// check for deferred tasks that can be run now
-					for (int i= __deferred.size(); 0 < i--;) {
-						ContrailTask deferredTask= __deferred.get(i);
-						for (int p= deferredTask._pendingTasks.size(); 0 < p--;) { 
-							ContrailTask pending= (ContrailTask) deferredTask._pendingTasks.get(p);
-							if (pending._done) 
-								deferredTask._pendingTasks.remove(p);
-						}
-						if (deferredTask._pendingTasks.isEmpty()) 
-							if (__deferred.remove(deferredTask)) 
-								deferredTask.submit();
-					}
-					
 					__done.notifyAll();
 				}
 			}
@@ -326,31 +311,6 @@ if (__logger.isLoggable(Level.FINER))
 	
 	public boolean isDone() {
 		return _done;
-	}
-	
-	/**
-	 * Submit this task for execution but don't run the task until the given tasks have completed
-	 */
-	public IResult<T> submit(List<ContrailTask<?>> dependentTasks) {
-		if (dependentTasks != null)  {
-			dependentTasks= new ArrayList<ContrailTask<?>>(dependentTasks); 
-			synchronized (__done) {
-				for (int i= dependentTasks.size(); 0 < i--;) {
-					ContrailTask task= dependentTasks.get(i);
-					if (task._done) 
-						dependentTasks.remove(i);
-				}
-				if (!dependentTasks.isEmpty()) {
-					_pendingTasks= dependentTasks;
-					__deferred.add(this);
-				}
-				else
-					dependentTasks= null;
-			}
-		}
-		if (dependentTasks == null) 
-			submit();
-		return _result;
 	}
 	
 	public T get() {

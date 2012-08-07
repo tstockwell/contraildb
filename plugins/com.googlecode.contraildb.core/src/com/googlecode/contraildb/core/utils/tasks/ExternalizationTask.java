@@ -27,11 +27,6 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 		return super.submit();
 	}
 	
-	@Override
-	public IResult<byte[]> submit(List<ContrailTask<?>> dependentTasks) {
-		return super.submit(dependentTasks);
-	}
-	
 	protected byte[] run() throws IOException {
 		try {
 			ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
