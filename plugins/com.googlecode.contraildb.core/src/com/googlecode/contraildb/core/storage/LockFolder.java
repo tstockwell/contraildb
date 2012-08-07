@@ -6,10 +6,9 @@ import java.io.IOException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Magic;
-import com.googlecode.contraildb.core.utils.ContrailAction;
+import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
 /**
@@ -43,7 +42,7 @@ public class LockFolder extends Entity {
 
 
 		public static final Serializer<Lock> SERIALIZER= new Serializer<Lock>() {
-			private final int typeCode= Lock.class.getName().hashCode();
+			private final String typeCode= Lock.class.getName();
 			public Lock readExternal(java.io.DataInput in) 
 			throws IOException {
 				Lock journal= new Lock();
@@ -60,7 +59,7 @@ public class LockFolder extends Entity {
 				Entity.SERIALIZER.readExternal(in, journal);
 				journal.processId= in.readUTF();
 			}
-			public int typeCode() {
+			public String typeCode() {
 				return typeCode;
 			}
 		};
@@ -99,28 +98,24 @@ public class LockFolder extends Entity {
 	}
 
 
-	public IResult<Void> unlock(final String processId)  
+	public void unlock(final String processId)  
 	{
-		return new ContrailAction() {
-			protected void action() {
-				Identifier lockId= Identifier.create(id, "lock");
-				try {
-					Lock lock= (Lock) storage.fetch(lockId).get();
-					if (lock == null || !lock.processId.equals(processId))
-						throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
-					storage.delete(lock.getId()).get();
-				} 
-				catch (Throwable e) {
-					Logging.warning("Error while unlocking folder "+lockId, e);
-				}
+			Identifier lockId= Identifier.create(id, "lock");
+			try {
+				Lock lock= (Lock) storage.fetch(lockId).get();
+				if (lock == null || !lock.processId.equals(processId))
+					throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
+				storage.delete(lock.getId()).get();
+			} 
+			catch (Throwable e) {
+				Logging.warning("Error while unlocking folder "+lockId, e);
 			}
-		}.submit();
 	}
 	
 
 
 	public static final Serializer<LockFolder> SERIALIZER= new Serializer<LockFolder>() {
-		private final int typeCode= LockFolder.class.getName().hashCode();
+		private final String typeCode= LockFolder.class.getName();
 		public LockFolder readExternal(java.io.DataInput in) 
 		throws IOException {
 			LockFolder journal= new LockFolder();
@@ -135,7 +130,7 @@ public class LockFolder extends Entity {
 		throws IOException {
 			Entity.SERIALIZER.readExternal(in, journal);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

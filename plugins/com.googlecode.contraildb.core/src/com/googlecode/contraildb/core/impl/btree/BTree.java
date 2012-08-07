@@ -74,7 +74,7 @@ extends BPlusTree<T, Serializable>
 	
 
 	public static final Serializer<BTree> SERIALIZER= new Serializer<BTree>() {
-		private final int typeCode= BTree.class.getName().hashCode();
+		private final String typeCode= BTree.class.getName();
 		public BTree readExternal(java.io.DataInput in) 
 		throws IOException {
 			BTree journal= new BTree();
@@ -89,7 +89,7 @@ extends BPlusTree<T, Serializable>
 		throws IOException {
 			BPlusTree.SERIALIZER.readExternal(in, journal);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

@@ -143,7 +143,7 @@ public class RevisionFolder extends Entity {
 
 
 	public static final Serializer<RevisionFolder> SERIALIZER= new Serializer<RevisionFolder>() {
-		private final int typeCode= RevisionFolder.class.getName().hashCode();
+		private final String typeCode= RevisionFolder.class.getName();
 		public RevisionFolder readExternal(java.io.DataInput in) 
 		throws IOException {
 			RevisionFolder journal= new RevisionFolder();
@@ -162,7 +162,7 @@ public class RevisionFolder extends Entity {
 			journal.startCommitNumber= in.readLong();
 			journal.revisionNumber= in.readLong();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

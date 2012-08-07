@@ -152,7 +152,7 @@ extends Node<K>
 	
 
 	public static final Serializer<InnerNode> SERIALIZER= new Serializer<InnerNode>() {
-		private final int typeCode= InnerNode.class.getName().hashCode();
+		private final String typeCode= InnerNode.class.getName();
 		public InnerNode readExternal(java.io.DataInput in) 
 		throws IOException {
 			InnerNode journal= new InnerNode();
@@ -167,7 +167,7 @@ extends Node<K>
 		throws IOException {
 			Node.SERIALIZER.readExternal(in, journal);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

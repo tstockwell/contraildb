@@ -41,7 +41,7 @@ final public class Identifier implements Comparable<Identifier>, Serializable {
 
 
 	public static final Serializer<Identifier> SERIALIZER= new Serializer<Identifier>() {
-		private final int typeCode= Identifier.class.getName().hashCode();
+		private final String typeCode= Identifier.class.getName();
 		public Identifier readExternal(java.io.DataInput in) 
 		throws IOException {
 			String id= in.readUTF();
@@ -55,7 +55,7 @@ final public class Identifier implements Comparable<Identifier>, Serializable {
 		throws IOException {
 			throw new UnsupportedOperationException();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

@@ -281,7 +281,7 @@ implements Iterable<T>
 
 
 	public static final Serializer<BPlusTree> SERIALIZER= new Serializer<BPlusTree>() {
-		private final int typeCode= BPlusTree.class.getName().hashCode();
+		private final String typeCode= BPlusTree.class.getName();
 		public BPlusTree readExternal(java.io.DataInput in) 
 		throws IOException {
 			BPlusTree journal= new BPlusTree();
@@ -300,7 +300,7 @@ implements Iterable<T>
 			journal._rootId= ExternalizationManager.readExternal(in, Identifier.SERIALIZER);
 			journal._pageSize= in.readInt();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};
