@@ -29,18 +29,17 @@ public class Result<V> implements IResult<V>{
 	
 	public synchronized void cancel() {
 		if (!_done) {
-			_cancelled= true;
-			complete(false, null, null);
+			complete(false, true, null, null);
 		}
 	}
 	public synchronized void success(V result) {
 		if (!_done) {
-			complete(true, result, null);
+			complete(true, false, result, null);
 		}
 	}
 	public synchronized void error(Throwable t) {
 		if (!_done) {
-			complete(false, null, t);
+			complete(false, false, null, t);
 		}
 	}
 
@@ -86,15 +85,16 @@ public class Result<V> implements IResult<V>{
 	synchronized public void complete(final IResult<V> result) {
 		result.addHandler(new Handler() {
 			public void onComplete() throws Exception {
-				complete(result.isSuccess(), result.getResult(), result.getError());
+				complete(result.isSuccess(), result.isCancelled(), result.getResult(), result.getError());
 			}
 		});
 	}
-	synchronized public void complete(boolean success, V result, Throwable error) {
+	synchronized public void complete(boolean success, boolean cancelled, V result, Throwable error) {
 		if (_done)
 			return;
 		_done= true;
 		_success= success;
+		_cancelled= cancelled;
 		_error= error;
 		_result= result;
 		
@@ -129,8 +129,8 @@ public class Result<V> implements IResult<V>{
 	synchronized public Throwable getError() {
 		if (!_done)
 			throw new IllegalStateException("This method cannot be called before the associated task has completed");
-		if (_success)
-			throw new IllegalStateException("This method cannot be called if the associated task successfully completed");
+//		if (_success)
+//			throw new IllegalStateException("This method cannot be called if the associated task successfully completed");
 		return _error;
 	}
 
@@ -138,8 +138,8 @@ public class Result<V> implements IResult<V>{
 	synchronized public V getResult() {
 		if (!_done)
 			throw new IllegalStateException("This method cannot be called before the associated task has completed");
-		if (!_success)
-			throw new IllegalStateException("This method cannot be called if the associated task has not successfully completed");
+//		if (!_success)
+//			throw new IllegalStateException("This method cannot be called if the associated task has not successfully completed");
 		return _result;
 	}
 

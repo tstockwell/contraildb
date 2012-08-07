@@ -55,17 +55,17 @@ public class EntityStorage implements IEntityStorage {
 			_objectSession.close();
 		}
 		
-		public void delete(Identifier path) {
-			_objectSession.delete(path);
+		public IResult<Void> delete(Identifier path) {
+			return _objectSession.delete(path);
 		}
 		
 		public void delete(Entity entity) {
 			_objectSession.delete(entity.getId());
 		}
 
-		public void deleteAllChildren(Identifier path)
+		public IResult<Void> deleteAllChildren(Identifier path)
 		{
-			_objectSession.deleteAllChildren(path);
+			return _objectSession.deleteAllChildren(path);
 		}
 
 		public void flush() throws IOException {
@@ -90,8 +90,8 @@ public class EntityStorage implements IEntityStorage {
 			}.submit();
 		}
 
-		public <E extends IEntity> void store(E entity) {
-			_objectSession.store(entity.getId(), entity);
+		public <E extends IEntity> IResult<Void> store(E entity) {
+			return _objectSession.store(entity.getId(), entity);
 		}
 
 		public IResult<Collection<Identifier>> listChildren(Identifier path) 

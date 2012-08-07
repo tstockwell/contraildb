@@ -14,6 +14,7 @@ import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.impl.PathUtils;
+import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.ContrailTask;
 import com.googlecode.contraildb.core.utils.TaskDomain;
 import com.googlecode.contraildb.core.utils.IResult;
@@ -30,6 +31,7 @@ import com.googlecode.contraildb.core.utils.TaskUtils;
  *  
  * @author ted stockwell
  */
+@SuppressWarnings("rawtypes")
 public class StorageSession implements IEntityStorage.Session {
 	
 	private static final String CONTRAIL_FOLDER = ".contrail";
@@ -164,20 +166,23 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 
-	public <E extends IEntity> void store(E entity) {
+	public <E extends IEntity> IResult<Void> store(final E entity) {
 		if (_mode == Mode.READONLY)
 			throw new ContrailException("Session is read only: "+_revisionNumber);
-		
-		// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
-		Identifier originalPath= entity.getId();
-		_storage.store(originalPath, new Entity(originalPath));
-		
-		Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
-		_storage.store(contrailFolder, new Entity(contrailFolder));
-		
-		// we then insert revisions as children
-		Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
-		_storage.store(revisionPath, entity);
+		return _trackerSession.submit(new ContrailAction() {
+			protected void action() throws Exception {
+				// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
+				Identifier originalPath= entity.getId();
+				_storage.store(originalPath, new Entity(originalPath));
+				
+				Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
+				_storage.store(contrailFolder, new Entity(contrailFolder));
+				
+				// we then insert revisions as children
+				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
+				_storage.store(revisionPath, entity);
+			}
+		});
 	}
 	
 	public void update(Identifier path, IEntity item) throws IOException {
@@ -205,13 +210,13 @@ public class StorageSession implements IEntityStorage.Session {
 		}
 	}
 
-	public void delete(Identifier  path) {
+	public IResult<Void> delete(Identifier  path) {
 		if (_mode == Mode.READONLY)
 			throw new ContrailException("Revision is read only: "+_revisionNumber);
 
 		Identifier contrailFolder= Identifier.create(path, CONTRAIL_FOLDER);
 		Identifier revisionPath= Identifier.create(contrailFolder, "delete-"+_revisionNumber);
-		_storage.store(revisionPath, new Entity(revisionPath));
+		return _storage.store(revisionPath, new Entity(revisionPath));
 	}
 
 
@@ -325,12 +330,14 @@ public class StorageSession implements IEntityStorage.Session {
 	}
 
 	@Override
-	public void deleteAllChildren(Identifier path) {
+	public IResult<Void> deleteAllChildren(Identifier path) {
 		if (_mode == Mode.READONLY)
 			throw new ContrailException("Revision is read only: "+_revisionNumber);
 		
+		ArrayList<IResult> allResults= new ArrayList<IResult>();
 		IResult<Collection<Identifier>> children= listChildren(path);
 		for (Identifier child: children.get())
-			delete(child);
+			allResults.add(delete(child));
+		return TaskUtils.combineResults(allResults);
 	}
 }
