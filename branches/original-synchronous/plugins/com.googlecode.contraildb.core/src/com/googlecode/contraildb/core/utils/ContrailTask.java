@@ -196,7 +196,7 @@ abstract public class ContrailTask<T> {
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
 	private volatile List<ContrailTask<?>> _pendingTasks;
-	private final Result<T> _result= new Result<T>(new Object[] { this }); 
+	private final Result<T> _result= new Result<T>(); 
 	
 	
 	public ContrailTask(Identifier id, Operation operation) {
@@ -375,18 +375,6 @@ if (__logger.isLoggable(Level.FINER))
 	 */
 	protected boolean yield(IResult result, long waitMillis) {
 		boolean taskWasRun= false;
-		
-		if (result != null) {
-			Object[] priorityTasks= result.getDependentTasks();
-			for (Object priorityTask: priorityTasks) {
-				if (priorityTask instanceof ContrailTask) {
-					if (yieldToTask((ContrailTask)priorityTask)) {
-						taskWasRun= true;
-						break;
-					}
-				}
-			}
-		}
 		
 		//if (!isTaskYielded()) { // no nested yields for now
 			if (!taskWasRun && !yieldToDependent()) {

@@ -146,6 +146,10 @@ public class TaskDomain {
 
 	public class Session {
 		
+		/**
+		 * This result handler is added to every task.
+		 * When a task completes this handler removes the task from the domain.
+		 */
 		IResultHandler _completionListener= new Handler() {
 			@Override public void onComplete() {
 				IResult incoming= incoming();
@@ -180,14 +184,26 @@ public class TaskDomain {
 			super.finalize();
 		}
 		
-		synchronized public <T> IResult<T> submit(ContrailTask<T> task) {
+		synchronized public <T> IResult<T> submit(final ContrailTask<T> task) {
 			if (_closed)
 				throw new IllegalStateException("The session has already been closed");
-			List<ContrailTask<?>> pendingTasks= null;
-
-			pendingTasks= findPendingTasks(task);
+			List<ContrailTask<?>> pendingTasks= findPendingTasks(task);
 			addTask(task);
-			return task.submit(pendingTasks);
+			if (pendingTasks.isEmpty())
+				return task.submit();
+
+			// submit task *after* pending tasks have completed
+			final Result<T> result= new Result<T>();
+			ArrayList<IResult> pendingResults= new ArrayList<IResult>(pendingTasks.size());
+			for (ContrailTask t:pendingTasks) {
+				pendingResults.add(t.getResult());
+			}
+			TaskUtils.combineResults(pendingResults).addHandler(new Handler() {
+				public void handleResult(IResult pendingResult) {
+					result.complete(task.submit());
+				}
+			});
+			return result;
 		}
 		
 		
