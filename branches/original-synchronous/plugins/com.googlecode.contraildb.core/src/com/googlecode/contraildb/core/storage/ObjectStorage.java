@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.LRUIdentifierIndexedStorage;
 import com.googlecode.contraildb.core.utils.Logging;
+import com.googlecode.contraildb.core.utils.TaskUtils;
 import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
 import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
 
@@ -97,7 +99,7 @@ public class ObjectStorage {
 			_storageSession= storageProvider;
 			_outerStorage= outerStorage; 
 		}
-		public <T extends Serializable> void store(final Identifier identifier, final T item) 
+		public <T extends Serializable> IResult<Void> store(final Identifier identifier, final T item) 
 		{
 			final IResult<byte[]>  serializeTask= new ExternalizationTask(item).submit();
 
@@ -105,7 +107,7 @@ public class ObjectStorage {
 			if (lifecycle != null)
 				lifecycle.setStorage(_outerStorage);
 
-			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
+			return _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
 				protected void action() throws IOException {
 					_cache.store(identifier, item);
 					if (lifecycle != null)
@@ -116,9 +118,9 @@ public class ObjectStorage {
 			});
 		}
 
-		public void delete(final Identifier path) {
+		public IResult<Void> delete(final Identifier path) {
 			final Object item= fetch(path).get();
-			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
+			return _trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
 				protected void action() throws IOException {
 					_cache.delete(path);
 					_storageSession.delete(path);
@@ -234,30 +236,31 @@ public class ObjectStorage {
 		}
 		
 		
-		public void delete(Identifier... paths) throws IOException {
+		public IResult<Void> delete(Identifier... paths) {
+			ArrayList<IResult> all= new ArrayList<IResult>();
 			for (Identifier identifier:paths)
-					delete(identifier);
+					all.add(delete(identifier));
+			return TaskUtils.combineResults(all);
 		}
 
-		public void deleteAllChildren(Identifier... paths) throws IOException {
-			deleteAllChildren(Arrays.asList(paths));
+		public IResult<Void> deleteAllChildren(Identifier... paths) throws IOException {
+			return deleteAllChildren(Arrays.asList(paths));
 		}
 
-		public void deleteAllChildren(Iterable<Identifier> paths) throws IOException {
+		public IResult<Void> deleteAllChildren(Iterable<Identifier> paths) throws IOException {
+			ArrayList<IResult> all= new ArrayList<IResult>();
 			for (Identifier identifier:paths)
-				deleteAllChildren(identifier);
+				all.add(deleteAllChildren(identifier));
+			return TaskUtils.combineResults(all);
 		}
 
-		public void deleteAllChildren(Identifier path) {
-			final IResult<Collection<Identifier>> children= listChildren(path);
-			ContrailAction action= new ContrailAction(path, Operation.LIST) {
-				protected void action() {
-					for (Identifier identifier: children.get()) {
-						delete(identifier);
-					}
-				}
-			};
-			_trackerSession.submit(action);
+		public IResult<Void> deleteAllChildren(Identifier path) {
+			ArrayList<IResult> all= new ArrayList<IResult>();
+			IResult<Collection<Identifier>> children= listChildren(path);
+			for (Identifier identifier: children.get()) {
+				all.add(delete(identifier));
+			}
+			return TaskUtils.combineResults(all);
 		}
 
 

@@ -108,8 +108,7 @@ public class LockFolder extends Entity {
 					Lock lock= (Lock) storage.fetch(lockId).get();
 					if (lock == null || !lock.processId.equals(processId))
 						throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
-					storage.delete(lock.getId());
-					storage.flush();
+					storage.delete(lock.getId()).get();
 				} 
 				catch (Throwable e) {
 					Logging.warning("Error while unlocking folder "+lockId, e);

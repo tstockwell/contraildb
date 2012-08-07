@@ -199,7 +199,7 @@ public class TaskDomain {
 				pendingResults.add(t.getResult());
 			}
 			TaskUtils.combineResults(pendingResults).addHandler(new Handler() {
-				public void handleResult(IResult pendingResult) {
+				protected void onComplete() throws Exception {
 					result.complete(task.submit());
 				}
 			});

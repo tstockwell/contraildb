@@ -64,6 +64,9 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 		return TaskUtils.combineResults(tasks);
 	}
 	
+	/**
+	 * Set result to handle.
+	 */
 	public void handleResult(IResult result) {
 		if (_incoming != null)
 			throw new IllegalStateException("This handler is already associated with a result");

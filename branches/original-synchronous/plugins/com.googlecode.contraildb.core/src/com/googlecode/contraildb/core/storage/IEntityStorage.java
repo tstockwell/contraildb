@@ -51,15 +51,15 @@ public interface IEntityStorage {
 		 */
 		public void flush() throws IOException;
 		
-		public void delete(Identifier path);
+		public IResult<Void> delete(Identifier path);
 		
-		public void deleteAllChildren(Identifier path);
+		public IResult<Void> deleteAllChildren(Identifier path);
 
 		public <E extends IEntity> IResult<E> fetch(Identifier path);
 
 		public <E extends IEntity> IResult<Collection<E>> fetchChildren(final Identifier path);
 
-		public <E extends IEntity> void store(E entity);
+		public <E extends IEntity> IResult<Void> store(E entity);
 
 		public IResult<Collection<Identifier>> listChildren(Identifier path);
 

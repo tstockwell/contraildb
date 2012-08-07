@@ -56,7 +56,7 @@ implements IStorageProvider
 		@Override
 		public void close() throws IOException {
 			try {
-				TaskUtils.get(_trackerSession.complete(), IOException.class);
+				flush();
 			}
 			finally {
 				try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
