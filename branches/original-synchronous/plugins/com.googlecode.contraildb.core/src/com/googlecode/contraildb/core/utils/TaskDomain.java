@@ -192,7 +192,7 @@ public class TaskDomain {
 			if (pendingTasks.isEmpty())
 				return task.submit();
 
-			// submit task *after* pending tasks have completed
+			// submit task for execution *after* pending tasks have completed
 			final Result<T> result= new Result<T>();
 			ArrayList<IResult> pendingResults= new ArrayList<IResult>(pendingTasks.size());
 			for (ContrailTask t:pendingTasks) {
