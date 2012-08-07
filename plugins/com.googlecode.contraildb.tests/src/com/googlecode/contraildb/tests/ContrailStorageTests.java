@@ -35,6 +35,7 @@ import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
+import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.storage.LockFolder;
 import com.googlecode.contraildb.core.storage.ObjectStorage;
@@ -83,9 +84,11 @@ public class ContrailStorageTests extends TestCase {
 			IEntityStorage.Session storage= 
 				new EntityStorage(_storage.getStorageProvider()).connect();
 		
-			Entity object_0_1= new Entity("person-0.1");
+			Identifier id= Identifier.create("person-0.1");
+			Entity object_0_1= new Entity(id);
 			storage.store(object_0_1);
-			assertNotNull(storage.fetch(object_0_1.getId()));
+			IEntity fetched= storage.fetch(id).get();
+			assertNotNull(fetched);
 			storage.flush();
 			
 	}
