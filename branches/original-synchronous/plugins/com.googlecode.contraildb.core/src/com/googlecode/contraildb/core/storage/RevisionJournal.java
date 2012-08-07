@@ -96,7 +96,7 @@ public class RevisionJournal extends Entity {
 
 
 	public static final Serializer<RevisionJournal> SERIALIZER= new Serializer<RevisionJournal>() {
-		private final int typeCode= RevisionJournal.class.getName().hashCode();
+		private final String typeCode= RevisionJournal.class.getName();
 		public RevisionJournal readExternal(java.io.DataInput in) 
 		throws IOException {
 			RevisionJournal journal= new RevisionJournal();
@@ -147,7 +147,7 @@ public class RevisionJournal extends Entity {
 			for (int i= size; 0 < i--;)
 				journal.updates.add(Identifier.SERIALIZER.readExternal(in));
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

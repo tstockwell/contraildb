@@ -347,9 +347,15 @@ if (__logger.isLoggable(Level.FINER))
 				for (Iterator<ContrailTask> i= __tasks.iterator(); i.hasNext();) {
 					ContrailTask t= i.next();
 					if (t._pendingTasks == null || t._pendingTasks.isEmpty()) {
-						if (__tasks.remove(t)) {
-							nextTask= t;
-							break;
+						// MUST guarantee that task is not done when choosing a task to yield to 
+						synchronized (__done) { 
+							if (_done) 
+								break;
+							
+							if (__tasks.remove(t)) {
+								nextTask= t;
+								break;
+							}
 						}
 					}
 				}

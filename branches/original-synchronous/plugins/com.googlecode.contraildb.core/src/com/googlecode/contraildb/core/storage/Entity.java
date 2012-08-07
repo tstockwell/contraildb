@@ -26,7 +26,7 @@ public class Entity implements IEntity, ILifecycle {
 
 
 	public static Serializer<Entity> SERIALIZER= new Serializer<Entity>() {
-		private final int typeCode= Entity.class.getName().hashCode();
+		private final String typeCode= Entity.class.getName();
 		public Entity readExternal(java.io.DataInput in) 
 		throws IOException {
 			Entity entity= new Entity();
@@ -41,7 +41,7 @@ public class Entity implements IEntity, ILifecycle {
 		throws IOException {
 			object.id= Identifier.SERIALIZER.readExternal(in);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

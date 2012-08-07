@@ -144,7 +144,7 @@ public class RootFolder extends Entity  {
 
 
 	public static final Serializer<RootFolder> SERIALIZER= new Serializer<RootFolder>() {
-		private final int typeCode= RootFolder.class.getName().hashCode();
+		private final String typeCode= RootFolder.class.getName();
 		public RootFolder readExternal(java.io.DataInput in) 
 		throws IOException {
 			RootFolder journal= new RootFolder();
@@ -159,7 +159,7 @@ public class RootFolder extends Entity  {
 		throws IOException {
 			Entity.SERIALIZER.readExternal(in, journal);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

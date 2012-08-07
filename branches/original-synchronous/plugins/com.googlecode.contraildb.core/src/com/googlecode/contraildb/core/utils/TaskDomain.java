@@ -156,9 +156,10 @@ public class TaskDomain {
 				for (ContrailTask task:_sessionTasks) {
 					if (task.getResult() == incoming) {
 						removeTask(task);
-						break;
+						return;
 					}
 				}
+				throw new RuntimeException("Internal Error: should have found result");
 			}
 		};
 		

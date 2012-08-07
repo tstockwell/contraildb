@@ -224,7 +224,7 @@ implements Cloneable
 
 	@SuppressWarnings("rawtypes")
 	public static final Serializer<Node> SERIALIZER= new Serializer<Node>() {
-		private final int typeCode= Node.class.getName().hashCode();
+		private final String typeCode= Node.class.getName();
 		public Node<?> readExternal(java.io.DataInput in) 
 		throws IOException {
 			Node<?> journal= new Node();
@@ -261,7 +261,7 @@ implements Cloneable
 				node._values[i]= ExternalizationManager.readExternal(in);
 			}
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};
