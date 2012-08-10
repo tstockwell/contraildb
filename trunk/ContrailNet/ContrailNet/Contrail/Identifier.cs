@@ -20,6 +20,14 @@ namespace Contrail {
 
 	
 
+class IdentifierReference : WeakReference {
+	String _path;
+	public IdentifierReference(Identifier referent) {
+		super(referent, __referenceQueue);
+		_path= referent._completePath;
+	}
+}
+
 
 /**
  * Identifies an item in a hierarchy of items.
@@ -30,26 +38,13 @@ namespace Contrail {
  * @author Ted Stockwell
  */
 [Serializable]
-sealed public class Identifier : Comparable {
+sealed public class Identifier : IComparable {
 	
 	readonly private static Identifier[] EMPTY_ANCESTORS= new Identifier[0];
 
 	[NonSerialized]
-	readonly static private Dictionary<String, Reference<Identifier>> __cache= 
-			new TreeMap<String, Reference<Identifier>>(); 
-
-	[NonSerialized]
-	readonly static private ReferenceQueue<Identifier> __referenceQueue= 
-			new ReferenceQueue<Identifier>();
-
-	private static class IdentifierReference : WeakReference<Identifier> {
-		String _path;
-		public IdentifierReference(Identifier referent) {
-			super(referent, __referenceQueue);
-			_path= referent._completePath;
-		}
-	}
-
+	readonly static private Dictionary<String, WeakReference> __cache= 
+			new Dictionary<String, WeakReference<Identifier>>(); 
 
 	[NonSerialized] private Identifier[] _ancestors;
 	[NonSerialized] private String _name;
@@ -58,7 +53,7 @@ sealed public class Identifier : Comparable {
 	
 	public static Identifier create(String path) {
 		Identifier identifier= null;
-		synchronized (__cache) {
+		lock (__cache) {
 			Reference<Identifier> ref= __cache.get(path);
 			if (ref != null && (identifier= ref.get()) != null)
 				return identifier;
@@ -141,26 +136,31 @@ sealed public class Identifier : Comparable {
 		return _completePath;
 	}
 	
-	public Object getProperty(String propertyName) {
-		if (_properties == null)
-			return null;
-		return _properties.get(propertyName);
+	public Object getProperty (String propertyName)
+	{
+		lock (this) {
+			if (_properties == null)
+				return null;
+			return _properties.get (propertyName);
+		}
 	}
 	
-	synchronized public void setProperty(String propertyName, Object value) {
-		if (_properties == null)
-			_properties= new Properties();
-		_properties.put(propertyName, value);
+	public void setProperty (String propertyName, Object value)	{		
+		lock (this) {
+			
+			if (_properties == null)
+				_properties = new Properties ();
+			_properties.put (propertyName, value);
+		}
 	}
 	
 	
-	@Override
 	/**
 	 * @return 
 	 * 	 	a negative integer, zero, or a positive integer as this object is less 
 	 * 		than, equal to, or greater than the specified object.
 	 */
-	public int compareTo(Identifier o) {
+	override public int CompareTo(Identifier o) {
 		if (o == this)
 			return 0;
 		Identifier[] a1= _ancestors;
