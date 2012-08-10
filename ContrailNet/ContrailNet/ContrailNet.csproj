@@ -48,10 +48,33 @@
     <Compile Include="Contrail\IPreparedQuery.cs" />
     <Compile Include="Contrail\IContrailService.cs" />
     <Compile Include="Contrail\IContrailSession.cs" />
+    <Compile Include="Contrail\Storage\Provider\AbstractStorageProvider.cs" />
+    <Compile Include="Contrail\Storage\Provider\FileStorageProvider.cs" />
+    <Compile Include="Contrail\Storage\Provider\IStorageProvider.cs" />
+    <Compile Include="Contrail\Storage\Provider\RamStorageProvider.cs" />
+    <Compile Include="Contrail\Storage\CommitMarker.cs" />
+    <Compile Include="Contrail\Storage\Entity.cs" />
+    <Compile Include="Contrail\Storage\EntityStorage.cs" />
+    <Compile Include="Contrail\Storage\IEntity.cs" />
+    <Compile Include="Contrail\Storage\IEntityStorage.cs" />
+    <Compile Include="Contrail\Storage\ILifecycle.cs" />
+    <Compile Include="Contrail\Storage\LockFolder.cs" />
+    <Compile Include="Contrail\Storage\ObjectStorage.cs" />
+    <Compile Include="Contrail\Storage\RevisionFolder.cs" />
+    <Compile Include="Contrail\Storage\RevisionJournal.cs" />
+    <Compile Include="Contrail\Storage\RootFolder.cs" />
+    <Compile Include="Contrail\Storage\StorageCleanupAction.cs" />
+    <Compile Include="Contrail\Storage\StorageException.cs" />
+    <Compile Include="Contrail\Storage\StorageSession.cs" />
+    <Compile Include="Contrail\Storage\StorageSystem.cs" />
+    <Compile Include="Contrail\Storage\StorageUtils.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
     <Folder Include="ContrailNet\" />
     <Folder Include="Contrail\" />
+    <Folder Include="Contrail\Storage\" />
+    <Folder Include="Contrail\Storage\Provider\" />
+    <Folder Include="Contrail\Storage\Remote\" />
   </ItemGroup>
 </Project>

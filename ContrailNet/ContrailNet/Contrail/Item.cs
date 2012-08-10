@@ -2,23 +2,6 @@ using System;
 
 namespace Contrail {
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-
-import com.googlecode.contraildb.core.storage.Entity;
-import com.googlecode.contraildb.core.utils.ConversionUtils;
-import com.googlecode.contraildb.core.utils.ExternalizationManager;
-
 
 /**
  * An object that can be stored in a Contrail database.
@@ -39,20 +22,17 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager;
  * 
  * @author Ted Stockwell
  */
-public class Item 
-extends Entity
-implements Cloneable, Externalizable
+public class Item : Entity, ICloneable
 {
-	private static final long serialVersionUID = 1L;
 	
 	/**
 	 * A reserved property name used to refer to the ID of an item. 
 	 */
-	public static final String KEY_ID= "__ID__";
+	public static readonly String KEY_ID= "__ID__";
 	/**
 	 * A reserved property name used to refer to the ID of an item. 
 	 */
-	public static final String KEY_KIND = "__KIND__";
+	public static readonly String KEY_KIND = "__KIND__";
 	
 	private TreeMap<String, Object> _indexedProperties= new TreeMap<String, Object>(); 
 	private TreeMap<String, Object> _unindexedProperties= new TreeMap<String, Object>(); 
@@ -87,7 +67,7 @@ implements Cloneable, Externalizable
 		return ConversionUtils.toBigInteger(getProperty(propertyName));
 	}
 
-	public boolean getBoolean(String propertyName) {
+	public bool getBoolean(String propertyName) {
 		return ConversionUtils.toBoolean(getProperty(propertyName));
 	}
 
@@ -115,8 +95,7 @@ implements Cloneable, Externalizable
 		return ConversionUtils.toInteger(getProperty(propertyName));
 	}
 
-	@SuppressWarnings("unchecked")
-	public <T> List<T> getList(String propertyName) {
+	public List<T> getList<T>(String propertyName) {
 		return (List<T>)getProperty(propertyName);
 	}
 
@@ -124,8 +103,7 @@ implements Cloneable, Externalizable
 		return ConversionUtils.toLong(getProperty(propertyName));
 	}
 
-	@SuppressWarnings("unchecked")
-	public <K, V> Map<K, V> getMap(String propertyName) {
+	public Map<K, V> getMap<K, V>(String propertyName) {
 		return (Map<K, V>)getProperty(propertyName);
 	}
 
@@ -143,16 +121,14 @@ implements Cloneable, Externalizable
 		return Collections.unmodifiableMap(_indexedProperties);
 	}
 
-	@SuppressWarnings("unchecked")
-	public <T> T getProperty(String propertyName) {
+	public T getProperty<T>(String propertyName) {
 		T t= (T) _indexedProperties.get(propertyName);
 		if (t == null)
 			t= (T) _unindexedProperties.get(propertyName);
 		return t;
 	}
 
-	@SuppressWarnings("unchecked")
-	public <T> Set<T> getSet(String propertyName) {
+	public Set<T> getSet<T>(String propertyName) {
 		return (Set<T>)getProperty(propertyName);
 	}
 
@@ -191,38 +167,10 @@ implements Cloneable, Externalizable
 		return this;
 	}
 
-	@Override
-	public Item clone()  {
+	override public Item Clone()  {
 		return new Item(this);
 	}
-	
-	public void readExternal(ObjectInput in) throws IOException {
-		int count= in.readInt();
-		for (int i= count; 0 < i--;) {
-			String name= ExternalizationManager.StringSerializer.readExternal(in);
-			Object value= ExternalizationManager.readExternal(in);
-			_indexedProperties.put(name, value);
-		}
-		count= in.readInt();
-		for (int i= count; 0 < i--;) {
-			String name= ExternalizationManager.StringSerializer.readExternal(in);
-			Object value= ExternalizationManager.readExternal(in);
-			_unindexedProperties.put(name, value);
-		}
-	}
-	public void writeExternal(ObjectOutput out)
-	throws IOException {
-		out.writeInt(_indexedProperties.size());
-		for (Map.Entry<String, Object> entry: _indexedProperties.entrySet()) {
-			ExternalizationManager.StringSerializer.writeExternal(out, entry.getKey());
-			ExternalizationManager.writeExternal(out, entry.getValue());
-		}
-		out.writeInt(_unindexedProperties.size());
-		for (Map.Entry<String, Object> entry: _unindexedProperties.entrySet()) {
-			ExternalizationManager.StringSerializer.writeExternal(out, entry.getKey());
-			ExternalizationManager.writeExternal(out, entry.getValue());
-		}
-	}
+
 }
 
 }
