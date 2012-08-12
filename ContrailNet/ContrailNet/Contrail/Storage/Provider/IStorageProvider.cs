@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Contrail.Storage.Provider {
 
@@ -29,60 +30,61 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	Session connect();
-	
-	
-	public interface Session {
-		
-		/**
-		 * MUST be called when the session is no longer needed.
-		 * Any pending changed are flushed before closing.
-		 */
-		void close(); 
-		
-		/**
-		 * Returns the complete paths to all the children of the given path.
-		 */
-		IResult<Collection<Identifier>> listChildren(Identifier path);
-		
-		/**
-		 * @return the contents of of the given path, or null if the file does not exist.
-		 */
-		IResult<byte[]> fetch(Identifier path);
+	Task<IStorageSession> connect();
 
-		/**
-		 * Stores the given contents at the given location.
-		 * The file is created if it does not already exist.
-		 */
-		void store(Identifier path, IResult<byte[]> content);
-
-		/**
-		 * Stores the given contents at the given location if the file 
-		 * does not already exist.  Otherwise does nothing.
-		 * 
-		 * @param waitMillis
-		 * 		if the file already exists and parameter is greater than zero   
-		 * 		then wait the denoted number of milliseconds for the file to be 
-		 * 		deleted.
-		 * 
-		 * @return 
-		 * 		true if the file was created, false if the file already exists 
-		 * 		and was not deleted within the wait period.
-		 */
-		IResult<Boolean> create(Identifier i, IResult<byte[]> content, long waitMillis);
-
-		/**
-		 * Deletes the contents stored at the given locations.
-		 */
-		void delete(Identifier path);
-		
-		/**
-		 * Flush any pending changes made by this session to physical storage.
-		 */
-		void flush();
-
-
-	}
-	
 }
+
+
+public interface IStorageSession {
+	
+	/**
+	 * MUST be called when the session is no longer needed.
+	 * Any pending changed are flushed before closing.
+	 */
+	Task close(); 
+	
+	/**
+	 * Returns the complete paths to all the children of the given path.
+	 */
+	Task<ICollection<Identifier>> listChildren(Identifier path);
+	
+	/**
+	 * @return the contents of of the given path, or null if the file does not exist.
+	 */
+	Task<byte[]> fetch(Identifier path);
+
+	/**
+	 * Stores the given contents at the given location.
+	 * The file is created if it does not already exist.
+	 */
+	Task store(Identifier path, Task<byte[]> content);
+
+	/**
+	 * Stores the given contents at the given location if the file 
+	 * does not already exist.  Otherwise does nothing.
+	 * 
+	 * @param waitMillis
+	 * 		if the file already exists and parameter is greater than zero   
+	 * 		then wait the denoted number of milliseconds for the file to be 
+	 * 		deleted.
+	 * 
+	 * @return 
+	 * 		true if the file was created, false if the file already exists 
+	 * 		and was not deleted within the wait period.
+	 */
+	Task<Boolean> create(Identifier i, Task<byte[]> content, long waitMillis);
+
+	/**
+	 * Deletes the contents stored at the given locations.
+	 */
+	Task delete(Identifier path);
+	
+	/**
+	 * Flush any pending changes made by this session to physical storage.
+	 */
+	Task flush();
+
+
+}
+
 }

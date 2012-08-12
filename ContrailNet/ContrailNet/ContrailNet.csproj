@@ -7,7 +7,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{B6CB540B-D2BF-464D-A512-C23F0E9B2C12}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>ContrailNet</RootNamespace>
+    <RootNamespace>Contrail</RootNamespace>
     <AssemblyName>ContrailNet</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
@@ -68,6 +68,8 @@
     <Compile Include="Contrail\Storage\StorageSession.cs" />
     <Compile Include="Contrail\Storage\StorageSystem.cs" />
     <Compile Include="Contrail\Storage\StorageUtils.cs" />
+    <Compile Include="Contrail\Tasks\Operation.cs" />
+    <Compile Include="Contrail\Tasks\TaskMaster.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
@@ -76,5 +78,6 @@
     <Folder Include="Contrail\Storage\" />
     <Folder Include="Contrail\Storage\Provider\" />
     <Folder Include="Contrail\Storage\Remote\" />
+    <Folder Include="Contrail\Tasks\" />
   </ItemGroup>
 </Project>
