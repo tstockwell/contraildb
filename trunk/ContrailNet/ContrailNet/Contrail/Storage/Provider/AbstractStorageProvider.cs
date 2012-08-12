@@ -1,4 +1,9 @@
 using System;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Contrail.Tasks;
+
+
 namespace Contrail.Storage.Provider {
 
 
@@ -9,85 +14,63 @@ namespace Contrail.Storage.Provider {
  * implement the actual storage functions.   
  * 
  */
-abstract public class AbstractStorageProvider
-implements IStorageProvider
+abstract public class AbstractStorageProvider : IStorageProvider
 {
-	
-	// list of items for which we want notification of changes
-	private TaskDomain _tracker= new TaskDomain();
-	
-	abstract public class Session
-	implements IStorageProvider.Session
+	abstract public class Session: IStorageSession
 	{
-		private TaskDomain.Session _trackerSession= _tracker.beginSession();
+		private TaskMaster _trackerSession= new TaskMaster();
 		
-		abstract protected boolean exists(Identifier path) throws IOException;
-		abstract protected void doStore(Identifier path, byte[] byteArray) throws IOException;
-		abstract protected boolean doCreate(Identifier path, byte[] byteArray) throws IOException;
-		abstract protected byte[] doFetch(Identifier path) throws IOException;
-		abstract protected void doDelete(Identifier path) throws IOException;
-		abstract protected void doClose() throws IOException; 
-		abstract protected void doFlush() throws IOException;
-		abstract protected Collection<Identifier> doList(Identifier path) throws IOException;
+		abstract protected bool exists(Identifier path);
+		abstract protected void doStore(Identifier path, byte[] byteArray);
+		abstract protected bool doCreate(Identifier path, byte[] byteArray);
+		abstract protected byte[] doFetch(Identifier path);
+		abstract protected void doDelete(Identifier path);
+		abstract protected void doClose(); 
+		abstract protected void doFlush();
+		abstract protected ICollection<Identifier> doList(Identifier path);
 		
 		
 
-		@Override
-		public void flush() throws IOException {
+		public Task<Void> flush() {
 			try {
-				TaskUtils.get(_trackerSession.complete(), IOException.class);
+				_trackerSession.WaitAll();
 			}
 			finally {
 				doFlush();
 			}
 		}
 
-		@Override
-		public void close() throws IOException {
+		public async Task close() {
 			try {
 				flush();
 			}
 			finally {
-				try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
+				try { _trackerSession.close(); } catch (Exception t) { Logging.warning(t); }
 				doClose();
 			}
 		}
 		
-		@Override
-		public IResult<Collection<Identifier>> listChildren(final Identifier path) {
-			ContrailTask<Collection<Identifier>> action= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected Collection<Identifier> run() throws IOException {
+		public Task<Collection<Identifier>> listChildren( Identifier path) {
+			return _trackerSession.submit(path, Operation.LIST, delegate() {
 					return doList(path);
-				}
-			};
-			return _trackerSession.submit(action);
+			});
 		}
 		
-		@Override
-		public IResult<byte[]> fetch(final Identifier path) {
-			ContrailTask<byte[]> action= new ContrailTask<byte[]>(path, Operation.READ) {
-				protected byte[] run() throws IOException {
+		public Task<byte[]> fetch(Identifier path) {
+			return _trackerSession.submit(path, Operation.READ, delegate() {
 					return doFetch(path);
-				}
-			};
-			return _trackerSession.submit(action);
-		}
-
-		@Override
-		public void store(final Identifier identifier, final IResult<byte[]> content) {
-			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void action() throws IOException {
-					doStore(identifier, content.get());
-				}
 			});
 		}
 
-		@Override
-		public void delete(final Identifier path) {
-			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void action() throws IOException {
+		public void store(Identifier identifier, Task<byte[]> content) {
+			return _trackerSession.submit(path, Operation.WRITE, delegate() {
+					doStore(identifier, content.get());
+			});
+		}
+
+		public void delete(Identifier path) {
+			return _trackerSession.submit(path, Operation.DELETE, delegate() {
 					doDelete(path);
-				}
 			});
 		}
 		
@@ -104,13 +87,11 @@ implements IStorageProvider
 		 * 		true if the file was created, false if the file already exists 
 		 * 		and was not deleted within the wait period.
 		 */
-		@Override
-		public IResult<Boolean> create(final Identifier path_, final IResult<byte[]> source_, final long waitMillis_) 
+		public Task<Boolean> create(Identifier path_, Task<byte[]> source_, long waitMillis_) 
 		{
-			return _trackerSession.submit(new ContrailTask<Boolean>(path_, Operation.CREATE) {
-				protected Boolean run() throws IOException {
+			return _trackerSession.submit(path_, Operation.CREATE, delegate {
 					long startMillis= System.currentTimeMillis();
-					boolean success= false;
+					bool success= false;
 					while(true) {
 						if (doCreate(path_, source_.get())) { 
 							success= true;
@@ -123,7 +104,6 @@ implements IStorageProvider
 						yield(null);
 					}
 					return success;
-				}
 			});
 		}
 	}
