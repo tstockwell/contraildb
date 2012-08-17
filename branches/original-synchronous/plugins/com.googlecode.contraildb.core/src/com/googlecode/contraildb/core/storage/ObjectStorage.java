@@ -184,13 +184,7 @@ public class ObjectStorage {
 
 		public IResult<Collection<Identifier>> listChildren(final Identifier path)
 		{
-			ContrailTask<Collection<Identifier>> task= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected Collection<Identifier> run() {
-					Collection<Identifier> list= _storageSession.listChildren(path).get();
-					return list;
-				}
-			};
-			return _trackerSession.submit(task);
+			return _storageSession.listChildren(path);
 		}
 		
 		public void flush() throws IOException {

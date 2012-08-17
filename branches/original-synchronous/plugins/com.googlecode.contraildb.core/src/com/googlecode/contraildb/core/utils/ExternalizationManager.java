@@ -54,14 +54,14 @@ public class ExternalizationManager {
 	throws IOException
 	{
 		if (object == null) {
-			out.writeInt(0);
+			out.writeUTF("");
 		}
 		else {
-			Integer type= object.getClass().getName().hashCode();
+			String type= object.getClass().getName();
 			Serializer<T> serializer= (Serializer<T>) __serializers.get(type);
 			if (serializer == null)
 				throw new IOException("No serializer available for type: "+type);
-			out.writeInt(type);
+			out.writeUTF(serializer.typeCode());
 			serializer.writeExternal(out, object);
 		}
 	}
@@ -70,7 +70,7 @@ public class ExternalizationManager {
 	throws IOException
 	{
 		if (object == null) {
-			out.writeInt(0);
+			out.writeUTF("");
 		}
 		else {
 			out.writeUTF(serializer.typeCode());
