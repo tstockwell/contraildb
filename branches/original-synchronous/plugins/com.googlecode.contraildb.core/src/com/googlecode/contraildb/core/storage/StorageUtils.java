@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.IResult;
+import com.googlecode.contraildb.core.async.IResult;
 
 
 public class StorageUtils {

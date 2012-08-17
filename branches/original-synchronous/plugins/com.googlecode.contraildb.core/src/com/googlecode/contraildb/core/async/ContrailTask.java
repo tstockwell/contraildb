@@ -1,4 +1,4 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -9,13 +9,16 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.utils.ConcurrentHashedLinkedList;
+import com.googlecode.contraildb.core.utils.HashedLinkedList;
+import com.googlecode.contraildb.core.utils.Logging;
 
 
 /**
  * A base task class for Contrail related tasks.
  * 
  * All concurrency in the Contrail database is implemented via the ContrailTask facility.
- * In order for the ContrailTask scheduler to appropriately schedule the execute of tasks 
+ * In order for the ContrailTask scheduler to appropriately schedule the execution of tasks 
  * it is required that ContrailTasks expose the relationships between the tasks, essentially 
  * denoting the parallelism in the application.  This approach is similar to that of the 
  * <a href="http://en.wikipedia.org/wiki/Cilk">Cilk language</a> except that ContrailTasks 
@@ -132,15 +135,6 @@ abstract public class ContrailTask<T> {
 	
 	
 	
-	
-	
-	public static enum Operation {
-		READ,
-		WRITE,
-		DELETE,
-		LIST,
-		CREATE
-	}
 	
 	
 	/**
@@ -471,5 +465,25 @@ if (__logger.isLoggable(Level.FINER))
 				__yielded.remove(thread);
 			}
 		}
+	}
+	
+	
+	/**
+	 * Suspends the execution of this task.
+	 * This method will NOT RETURN until the resume method is invoked.
+	 */
+	public void suspend() {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	/**
+	 * Restart this task.
+	 * Calling this method causes the execution thread that called the suspend 
+	 * method to be reanimated. 
+	 */
+	public void resume() {
+		// TODO Auto-generated method stub
+		
 	}
 }

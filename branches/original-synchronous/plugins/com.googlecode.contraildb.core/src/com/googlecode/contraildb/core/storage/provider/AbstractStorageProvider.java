@@ -4,13 +4,13 @@ import java.io.IOException;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
-import com.googlecode.contraildb.core.utils.TaskDomain;
-import com.googlecode.contraildb.core.utils.IResult;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.Operation;
+import com.googlecode.contraildb.core.async.TaskDomain;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**

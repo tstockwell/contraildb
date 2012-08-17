@@ -1,4 +1,4 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.ContrailTask.Operation;
+import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
 
 
 /**

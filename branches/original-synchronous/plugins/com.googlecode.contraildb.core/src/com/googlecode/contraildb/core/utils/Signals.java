@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailAction;
 
 
 /**

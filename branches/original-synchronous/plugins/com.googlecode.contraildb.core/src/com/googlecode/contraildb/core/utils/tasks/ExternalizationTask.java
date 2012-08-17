@@ -4,11 +4,11 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.List;
 
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ClosableByteArrayOutputStream;
-import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**

@@ -34,11 +34,11 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.SessionAlreadyClosedException;
 import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.IResult;
 
 
 

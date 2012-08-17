@@ -7,8 +7,9 @@ import java.util.List;
 import java.util.UUID;
 
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.Operation;
 import com.googlecode.contraildb.core.impl.PathUtils;
-import com.googlecode.contraildb.core.utils.ContrailAction;
 import com.googlecode.contraildb.core.utils.Logging;
 
 

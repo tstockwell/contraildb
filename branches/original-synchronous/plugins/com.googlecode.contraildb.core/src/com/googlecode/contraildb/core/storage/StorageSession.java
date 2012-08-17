@@ -13,13 +13,13 @@ import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskDomain;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.PathUtils;
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.TaskDomain;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**

@@ -7,9 +7,9 @@ import java.util.Collection;
 import java.util.Map;
 
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.IResult;
 
 
 /**
