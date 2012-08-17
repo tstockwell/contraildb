@@ -24,6 +24,10 @@ import com.googlecode.contraildb.core.ContrailQuery.FilterPredicate;
 import com.googlecode.contraildb.core.ContrailQuery.QuantifiedValues;
 import com.googlecode.contraildb.core.ContrailQuery.Quantifier;
 import com.googlecode.contraildb.core.ContrailQuery.SortPredicate;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.BTree;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor;
@@ -33,10 +37,6 @@ import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.ContrailTask;
-import com.googlecode.contraildb.core.utils.IResult;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 

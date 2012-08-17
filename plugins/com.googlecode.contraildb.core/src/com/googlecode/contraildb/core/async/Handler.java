@@ -1,11 +1,14 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 
 import java.util.ArrayList;
 import java.util.Collection;
 
+import com.googlecode.contraildb.core.utils.Logging;
+
 /**
  * Handles one and only one result.
+ * Subclasses should override the onComplete() method.
  * @author ted.stockwell
  */
 @SuppressWarnings({"rawtypes","unchecked"})

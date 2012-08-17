@@ -11,9 +11,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.IResult;
-import com.googlecode.contraildb.core.utils.TaskUtils;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.Operation;
+import com.googlecode.contraildb.core.async.TaskUtils;
 
 
 /**

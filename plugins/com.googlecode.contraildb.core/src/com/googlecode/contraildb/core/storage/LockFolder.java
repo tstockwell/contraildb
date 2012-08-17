@@ -6,8 +6,8 @@ import java.io.IOException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Magic;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
-import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 
 

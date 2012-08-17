@@ -1,12 +1,13 @@
-package com.googlecode.contraildb.core.utils;
+package com.googlecode.contraildb.core.async;
 
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.ContrailTask;
+import org.apache.commons.javaflow.Continuation;
+
+import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.utils.Logging;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
@@ -59,24 +60,24 @@ public class Result<V> implements IResult<V>{
 	}
 
 	@Override public void join() {
-		/*
-		 * The current thread is one of Contrail's internal threads. 
-		 * The get method should never be used in an internal API.
-		 */
-		if (ContrailTask.isContrailTask()) {
-			ContrailTask task= ContrailTask.getContrailTask();
+		synchronized (this) {
 			while (!_done) {
-				task.yield(this);
-			}
-		}
-		else {
-			synchronized (this) {
-				while (!_done) {
-					try {
-						wait();
+				try {
+					final ContrailTask task= ContrailTask.getContrailTask();
+					if (task != null) {
+						// The current thread is one of Contrail's internal threads.
+						// Suspend this task until the result is ready
+						addHandler(new Handler() {
+							protected void onComplete() throws Exception {
+								task.resume();
+							}
+						});
+						task.suspend();
 					}
-					catch (InterruptedException x) {
-					}
+					else
+						wait(); // just wait
+				}
+				catch (InterruptedException x) {
 				}
 			}
 		}

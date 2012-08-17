@@ -20,9 +20,9 @@ package com.googlecode.contraildb.tests;
 import junit.framework.TestCase;
 
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**

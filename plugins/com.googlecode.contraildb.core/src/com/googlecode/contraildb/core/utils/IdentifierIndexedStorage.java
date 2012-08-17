@@ -40,13 +40,13 @@ public class IdentifierIndexedStorage<T> {
 	public IdentifierIndexedStorage() {
 	}
 	
-	synchronized void visitNode(Identifier path, Visitor<T> visitor) {
+	synchronized public void visitNode(Identifier path, Visitor<T> visitor) {
 		Node<T> n= _contents.get(path);
 		if (n != null) 
 			visitor.visit(n._identifier, n._content);
 	}
 	
-	synchronized void visitParents(Identifier path, Visitor<T> visitor) {
+	synchronized public void visitParents(Identifier path, Visitor<T> visitor) {
 		Node<T> data= _contents.get(path);
 		if (data != null) {
 			for (Node<T> n= data._parent; n != null; n= n._parent) {
@@ -55,7 +55,7 @@ public class IdentifierIndexedStorage<T> {
 		}
 	}
 	
-	synchronized void visitDescendents(Identifier path, Visitor<T> visitor) {
+	synchronized public void visitDescendents(Identifier path, Visitor<T> visitor) {
 		Node<T> n= _contents.get(path);		
 		if (n != null) {
 			LinkedList<Node<T>> todo= new LinkedList<Node<T>>();
@@ -70,7 +70,7 @@ public class IdentifierIndexedStorage<T> {
 		}
 	}
 	
-	synchronized void visitChildren(Identifier path, Visitor<T> visitor) {
+	synchronized public void visitChildren(Identifier path, Visitor<T> visitor) {
 		Node<T> n= _contents.get(path);
 		if (n != null) {
 			for (Node<T> node:n._children) {

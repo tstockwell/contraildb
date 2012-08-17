@@ -33,6 +33,9 @@ import com.google.appengine.tools.development.ApiProxyLocalFactory;
 import com.google.apphosting.api.ApiProxy;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
 import com.googlecode.contraildb.core.storage.IEntity;
@@ -43,9 +46,6 @@ import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageSystem;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
-import com.googlecode.contraildb.core.utils.ContrailAction;
-import com.googlecode.contraildb.core.utils.IResult;
-import com.googlecode.contraildb.core.utils.TaskUtils;
 
 
 /**
@@ -188,33 +188,7 @@ public class ContrailStorageTests extends TestCase {
 				String processId= Identifier.create().toString();
 				boolean lockd= lockFolder.lock(processId, true);
 				assertTrue(lockd);
-				IResult<Void> unlockd= lockFolder.unlock(processId);
-				unlockd.join(); // wait for folder to be unlocked
-			}
-		}
-	}
-	
-	/**
-	 * Like testSimplestLocks but doesn't call IResult.join on the result from LockFolder.unlock.
-	 * This causes more concurrency contention and can possibly results in bugs that wont appear when . 
-	 * Once upon a time there were bugs that would appear when the call to IResult.join was excluded. 
-	 */
-	public void testSimplerLocks() throws Throwable {
-		
-		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
-		for (int f= 0; f < 10; f++) {			
-			Entity rootFolder= new Entity(Identifier.create());
-			storage.store(rootFolder);
-			final LockFolder lockFolder= new LockFolder(rootFolder);
-			storage.store(lockFolder);
-			storage.flush();
-			
-			for (int t= 0; t < 20; t++) {
-				String processId= Identifier.create().toString();
-				boolean lockd= lockFolder.lock(processId, true);
-				assertTrue(lockd);
-				IResult<Void> unlockd= lockFolder.unlock(processId);
-				//unlockd.join(); // wait for folder to be unlocked
+				lockFolder.unlock(processId);
 			}
 		}
 	}

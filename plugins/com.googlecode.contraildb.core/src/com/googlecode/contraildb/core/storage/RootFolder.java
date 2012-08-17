@@ -11,7 +11,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.IResult;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
