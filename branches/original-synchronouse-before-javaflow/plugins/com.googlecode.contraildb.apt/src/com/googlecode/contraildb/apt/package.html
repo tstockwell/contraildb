@@ -1,0 +1,111 @@
+<h1>com.google.contrail.apt</h1>
+
+<h2>Automatic parallelization of Java Code</h2>
+This package implements a method of automatically parallelizing Java code.
+This implementation uses the Java APT (Annotation Processor Tool) and the Contrail 
+annotation processor to rewrite methods annotated with the @Parallel annotation to 
+return an instance of a Future.
+Code that makes calls to such methods are rewritten so that code 
+that uses the results of parallel methods is added to the Futures as callbacks to be 
+executed when the result becomes available.
+This method of paralleization is known as continuation passing, it is used in asynchronous 
+frameworks such as Node.js. 
+Unlike Node.js, which is single-threaded, Contrail executes callbacks using a small pool of threads, therefore 
+Contrail is not merely parallelized but concurrent.  
+
+
+<h2>History and Motivation</h2>
+The very first version of Contrail used threads for concurrency.
+It worked OK but it often deadlocked because it was difficult (nigh, impossible) to 
+come up with a strategy that avoided deadlock for executing tasks on a limited # of threads.
+A second version of Contrail was written that used continuation passing.
+Unfortunately, code that uses continuation passing is *very* difficult to read.
+It turned out that porting Contrail to use continuation passing was so difficult 
+that some of the code in Contrail could not successfully ported.
+
+A third version of Contrail was started using the Go language. 
+The lightweight processes in Go, called goroutines, made it possible to avoid the deadlocking 
+problems of the first version and the code hairball problems associated with continuation passing.
+Unfortunately, goroutines are just about the only good thing about the Go language.
+I consider the Go language so fatally flawed in other respects that I gave up on the Go port.
+So, this forth attempt at writing Contrail will employ a new tool that automatically 
+parallelizes the otherwise sequential code in Contrail.
+This approach should allow Contrail to be extremely concurrent while still allowing 
+code to be written in an understandable, sequential manner.
+
+<h2>Example</h2> 
+Consider the following...
+<code>
+	class Example {
+		public static void main(String[] args) {
+			String a= doA();
+			String b= doB();
+			System.out.println(a+b);
+		}
+		
+		@Parallel static String doA() { return "a"; }
+		@Parallel static String doB() { return "b"; }
+	}
+</code>
+
+When the above code is compiled using the Contrail annotation processor the code 
+will be transformed into the following... 
+
+<code>
+	class Example {
+		public static void main(String[] args) {
+			Future<String> a= doA();
+			Future<String> b= doB();
+			a.OnComplete(new ContrailTask() {
+				public void run() {
+					b.OnComplete(new ContrailTask() {
+						public void run() {
+							System.out.println(a.GetResult()+b.GetResult());
+						}
+					});
+				}
+			});
+		}
+		
+		static Future<String> doA() {
+			final Future<String> future= new Future<String>();
+			ContrailTaskManager.run(new ContrailTask() {
+				public void run() {
+					future.success("a");
+				}
+			});
+			return future; 
+		}
+		static Future<String> doB() { 
+			final Future<String> future= new Future<String>();
+			ContrailTaskManager.run(new ContrailTask() {
+				public void run() {
+					future.success("b");
+				}
+			});
+			return future; 
+		}
+	}
+</code>
+   
+   
+In the above code the methods doA() and doB() have been rewritten to do the following...
+	1) Create a future
+	2) Call ContrailTaskManager and pass a ContrailTask object that will do the 
+		processing in a separate thread and call the Future.success method when 
+		the pask has successfully completed. 
+	3) Return the future to the caller.  
+	
+The code that uses the doA() and doB() methods has been rewritten in the following ways...
+	1) The result from doA() and doB() are Futures.
+	2) A ContrailTask instance is created and passed to the Future.OnComplete method.
+		The given task will be executed after the associated task has successfully completed.
+
+The above changes make it possible to execute doA() and doB() concurrently and then 
+use the results after both methods have completed.
+
+
+<h2>Limitations</h2>
+Methods that use the @Parallel annotation should never block because a blocking method can potentially 
+block the entire application (when running on just a single thread).
+ 

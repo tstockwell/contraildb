@@ -1,0 +1,11 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: AWS S3 storage provider for Contrail database
+Bundle-SymbolicName: com.googlecode.contraildb.provider.s3
+Bundle-Version: 1.0.0
+Bundle-RequiredExecutionEnvironment: JavaSE-1.6
+Require-Bundle: com.googlecode.contraildb.core;bundle-version="1.0.0"
+Import-Package: org.jets3t.service,
+ org.jets3t.service.impl.rest.httpclient,
+ org.jets3t.service.model,
+ org.jets3t.service.security
