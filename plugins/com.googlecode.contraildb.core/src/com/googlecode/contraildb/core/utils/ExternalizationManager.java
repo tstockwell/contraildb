@@ -7,7 +7,8 @@ import java.util.HashMap;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
+import com.googlecode.contraildb.core.impl.btree.BPlusTree;
+import com.googlecode.contraildb.core.impl.btree.BTree;
 import com.googlecode.contraildb.core.impl.btree.InnerNode;
 import com.googlecode.contraildb.core.impl.btree.Node;
 import com.googlecode.contraildb.core.storage.CommitMarker;
@@ -38,14 +39,13 @@ public class ExternalizationManager {
 	    void writeExternal(DataOutput out, T object) throws IOException;
 	    T readExternal(DataInput out) throws IOException;
 	    void readExternal(DataInput out, T object) throws IOException;
-	    int typeCode(); 
+	    String typeCode(); 
 	}
 	
-	private static final HashMap<Integer, Serializer<?>> __serializers= 
-			new HashMap<Integer, Serializer<?>>();
+	private static final HashMap<String, Serializer<?>> __serializers= 
+			new HashMap<String, Serializer<?>>();
 	
 	public static void registerSerializer(Serializer<?> serializer) {
-		System.out.println("register type code:"+serializer.typeCode());
 		__serializers.put(serializer.typeCode(), serializer);
 	}
 	
@@ -73,7 +73,7 @@ public class ExternalizationManager {
 			out.writeInt(0);
 		}
 		else {
-			out.writeInt(serializer.typeCode());
+			out.writeUTF(serializer.typeCode());
 			serializer.writeExternal(out, object);
 		}
 	}
@@ -82,8 +82,8 @@ public class ExternalizationManager {
 	public static <T> T readExternal(DataInput in)
 	throws IOException
 	{
-		Integer type= in.readInt();
-		if (type == 0)
+		String type= in.readUTF();
+		if (type == null || type.length() <= 0)
 			return null;
 		Serializer<T> serializer= (Serializer<T>) __serializers.get(type);
 		if (serializer == null)
@@ -92,7 +92,7 @@ public class ExternalizationManager {
 	}
 	
 	static public final Serializer<String> StringSerializer= new Serializer<String>() {
-		private final int typeCode= String.class.getName().hashCode();
+		private final String typeCode= String.class.getName();
 		public String readExternal(DataInput in) 
 		throws IOException 
 		{
@@ -105,13 +105,13 @@ public class ExternalizationManager {
 		public void readExternal(DataInput arg0, String arg1) throws IOException {
 			throw new UnsupportedOperationException();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};
 	
 	static public final Serializer<Long> LongSerializer= new Serializer<Long>() {
-		private final int typeCode= Long.class.getName().hashCode();
+		private final String typeCode= Long.class.getName();
 		public Long readExternal(DataInput in) 
 		throws IOException 
 		{
@@ -124,13 +124,13 @@ public class ExternalizationManager {
 		public void readExternal(DataInput arg0, Long arg1) throws IOException {
 			throw new UnsupportedOperationException();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};
 	
 	static public final Serializer<Integer> IntegerSerializer= new Serializer<Integer>() {
-		private final int typeCode= Integer.class.getName().hashCode();
+		private final String typeCode= Integer.class.getName();
 		public Integer readExternal(DataInput in) 
 		throws IOException 
 		{
@@ -143,7 +143,7 @@ public class ExternalizationManager {
 		public void readExternal(DataInput arg0, Integer arg1) throws IOException {
 			throw new UnsupportedOperationException();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};
@@ -163,17 +163,18 @@ public class ExternalizationManager {
 		registerSerializer(Node.SERIALIZER);
 		registerSerializer(InnerNode.SERIALIZER);
 		registerSerializer(CommitMarker.SERIALIZER);
-		registerSerializer(KeyValueSet.SERIALIZER);
+		registerSerializer(BPlusTree.SERIALIZER);
+		registerSerializer(BTree.SERIALIZER);
 		registerSerializer(Item.SERIALIZER);
 	}
 
 	public static <T> T readExternal(DataInput in, Serializer<T> serializer) 
 	throws IOException 
 	{
-		int type= in.readInt();
-		if (type == 0)
+		String type= in.readUTF();
+		if (type == null || type.length() <= 0)
 			return null;
-		if (type != serializer.typeCode()) 
+		if (!type.equals(serializer.typeCode())) 
 			throw new IOException("Unexpected type code.  Expected "+serializer.typeCode()+", read "+type+".\nPossibly corrupted data.");
 		return serializer.readExternal(in);
 	}

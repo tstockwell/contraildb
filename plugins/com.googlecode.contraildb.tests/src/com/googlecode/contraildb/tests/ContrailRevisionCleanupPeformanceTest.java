@@ -41,10 +41,10 @@ public class ContrailRevisionCleanupPeformanceTest {
 
 		IStorageProvider rawStorage= new RamStorageProvider();
 		//ISimpleStorage rawStorage= new FileStorageSPI(new File("/temp/test/contrail"), true);
-		StorageSystem _storage= StorageSystem.create(rawStorage).get();
+		StorageSystem _storage= new StorageSystem(rawStorage);
 		
 		for (int i= 1; i <= 100; i++) {
-			StorageSession session= _storage.beginSession(Mode.READWRITE).get();
+			StorageSession session= _storage.beginSession(Mode.READWRITE);
 			Entity object_0_1= new Entity("person-"+i);
 			session.store(object_0_1);
 			session.commit();

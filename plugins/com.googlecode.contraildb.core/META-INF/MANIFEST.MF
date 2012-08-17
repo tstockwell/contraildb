@@ -4,13 +4,9 @@ Bundle-Name: Core
 Bundle-SymbolicName: com.googlecode.contraildb.core
 Bundle-Version: 1.0.0
 Export-Package: com.googlecode.contraildb.core,
- com.googlecode.contraildb.core.async,
  com.googlecode.contraildb.core.impl;x-friends:="com.googlecode.contraildb.tests",
  com.googlecode.contraildb.core.impl.btree,
- com.googlecode.contraildb.core.query,
  com.googlecode.contraildb.core.storage,
  com.googlecode.contraildb.core.storage.provider,
  com.googlecode.contraildb.core.storage.remote,
- com.googlecode.contraildb.core.utils,
- com.googlecode.contraildb.core.utils.tasks
-Require-Bundle: com.googlecode.lingwah;bundle-version="1.0.0"
+ com.googlecode.contraildb.core.utils

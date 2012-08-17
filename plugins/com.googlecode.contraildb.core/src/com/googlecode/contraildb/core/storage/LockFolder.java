@@ -4,12 +4,10 @@ import java.io.DataInput;
 import java.io.IOException;
 
 import com.googlecode.contraildb.core.ContrailException;
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Magic;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
+import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
 
 
@@ -19,7 +17,6 @@ import com.googlecode.contraildb.core.utils.Logging;
  * This class uses a home-grown consensus algorithm which enables remote processes 
  * to decide among themselves who gets the lock.
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
 public class LockFolder extends Entity {
 	private static final long serialVersionUID = 1L;
 	
@@ -45,7 +42,7 @@ public class LockFolder extends Entity {
 
 
 		public static final Serializer<Lock> SERIALIZER= new Serializer<Lock>() {
-			private final int typeCode= Lock.class.getName().hashCode();
+			private final String typeCode= Lock.class.getName();
 			public Lock readExternal(java.io.DataInput in) 
 			throws IOException {
 				Lock journal= new Lock();
@@ -62,7 +59,7 @@ public class LockFolder extends Entity {
 				Entity.SERIALIZER.readExternal(in, journal);
 				journal.processId= in.readUTF();
 			}
-			public int typeCode() {
+			public String typeCode() {
 				return typeCode;
 			}
 		};
@@ -79,56 +76,46 @@ public class LockFolder extends Entity {
 	 * @return true if the process was awarded the lock   
 	 * @throws IOException 
 	 */
-	public IResult<Boolean> lock(final String processId, final boolean waitForNext) 
+	public boolean lock(String processId, boolean waitForNext) 
+	throws IOException
 	{
-		final Lock lock= new Lock(id, processId);
-		final long waitMillis= waitForNext? Magic.SESSION_MAX_MILLIS+1000 : 0;
-		final IResult<Boolean> result= storage.create(lock, waitMillis);
-		return new Handler(result) {
-			protected IResult onSuccess() throws Exception {
-				if (result.getResult()) {
-					return TaskUtils.SUCCESS;
-				}
-				else if (waitForNext) {
-					// break existing lock
-					storage.delete(lock.getId());
-					if (storage.create(lock, waitMillis).get()) {
-						return TaskUtils.SUCCESS;
-					}
-					else
-						throw new ContrailException("Database is locked, waitMillis="+waitMillis);
-				}
-				return TaskUtils.FAIL;
-			};
-		}.toResult();
+		Lock lock= new Lock(id, processId);
+		long waitMillis= waitForNext? Magic.SESSION_MAX_MILLIS+1000 : 0;
+		IResult<Boolean> result= storage.create(lock, waitMillis);
+		if (result.get()) {
+			return true;
+		}
+		else if (waitForNext) {
+			// break existing lock
+			storage.delete(lock.getId());
+			if (storage.create(lock, waitMillis).get()) {
+				return true;
+			}
+			else
+				throw new ContrailException("Database is locked, waitMillis="+waitMillis);
+		}
+		return false;
 	}
 
 
-	public IResult<Void> unlock(final String processId)  
+	public void unlock(final String processId)  
 	{
-		final Identifier lockId= Identifier.create(id, "lock");
-		final IResult<Lock> lockResult= storage.fetch(lockId);
-		return new Handler(lockResult) {
-			protected IResult onSuccess() throws Exception {
-				try {
-					Lock lock= lockResult.getResult();
-					if (lock == null || !lock.processId.equals(processId))
-						throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
-					spawn(storage.delete(lock.getId()));
-					spawn(storage.flush());
-				} 
-				catch (Throwable e) {
-					Logging.warning("Error while unlocking folder "+lockId, e);
-				}
-				return TaskUtils.DONE;
-			};
-		}.toResult();
+			Identifier lockId= Identifier.create(id, "lock");
+			try {
+				Lock lock= (Lock) storage.fetch(lockId).get();
+				if (lock == null || !lock.processId.equals(processId))
+					throw new ContrailException("Internal Error: Session "+processId+" tried to unlock a folder that it did not own: "+id);
+				storage.delete(lock.getId()).get();
+			} 
+			catch (Throwable e) {
+				Logging.warning("Error while unlocking folder "+lockId, e);
+			}
 	}
 	
 
 
 	public static final Serializer<LockFolder> SERIALIZER= new Serializer<LockFolder>() {
-		private final int typeCode= LockFolder.class.getName().hashCode();
+		private final String typeCode= LockFolder.class.getName();
 		public LockFolder readExternal(java.io.DataInput in) 
 		throws IOException {
 			LockFolder journal= new LockFolder();
@@ -143,7 +130,7 @@ public class LockFolder extends Entity {
 		throws IOException {
 			Entity.SERIALIZER.readExternal(in, journal);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

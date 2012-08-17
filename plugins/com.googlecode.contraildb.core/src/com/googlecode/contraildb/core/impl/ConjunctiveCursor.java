@@ -1,15 +1,11 @@
 package com.googlecode.contraildb.core.impl;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-import com.googlecode.contraildb.core.IResult;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.ResultHandler;
-import com.googlecode.contraildb.core.async.TaskUtils;
-import com.googlecode.contraildb.core.async.WhileHandler;
+import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
-import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
 
 
 /**
@@ -19,7 +15,7 @@ import com.googlecode.contraildb.core.impl.btree.KeyValueSet;
  * @author Ted Stockwell
  * 
  */
-@SuppressWarnings({"unchecked","rawtypes"})
+@SuppressWarnings("unchecked")
 public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 	
 	final IForwardCursor<T>[] _cursors;
@@ -29,143 +25,63 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 		filterCursors.toArray(_cursors);
 	}
 
-	@Override public IResult<T> keyValue() {
-		if (0 < _cursors.length)
-			return _cursors[0].keyValue();
-		throw new NoSuchElementException();
+	@Override
+	public T keyValue() throws IOException {
+		if (_cursors.length <= 0)
+			throw new NoSuchElementException();
+		return _cursors[0].keyValue();
 	}
 
 	@Override
-	public IResult<Boolean> first() {
-		return new ResultHandler<Boolean>(_cursors[0].first()) {
-			protected IResult onSuccess(Boolean first) throws Exception {
-				if (!first)
-					return TaskUtils.FALSE;
-				return to(_cursors[0].keyValue());
+	public boolean first() throws IOException {
+		if (!_cursors[0].first())
+			return false;
+		return to(_cursors[0].keyValue());
+	}
+
+	@Override
+	public boolean to(T e) throws IOException {
+		if (!_cursors[0].to(e))
+			return false;
+
+		T value= _cursors[0].keyValue();
+		while (true) {
+
+			T ge= value;
+			for (int i= 1; i < _cursors.length; i++) {
+				IForwardCursor<T> cursor= _cursors[i];
+				if (!cursor.to(value))
+					return false;
+				T t= cursor.keyValue();
+				if (BPlusTree.compare(value, t) < 0)
+					ge= t;
 			}
-		};
+			if (BPlusTree.compare(value, ge) == 0) 
+				return true;
+
+			if (!_cursors[0].to(ge))
+				return false;
+			value= _cursors[0].keyValue();
+		}
 	}
 
 	@Override
-	public IResult<Boolean> to(T e) {
-		return new ResultHandler<Boolean>(_cursors[0].to(e)) { // move first cursor
-			protected IResult onSuccess(Boolean to) throws Exception {
-				if (!to)
-					return TaskUtils.FALSE; // if failed then done
-
-				final Object[] value= new Object[] { _cursors[0].keyValue() };
-				final Boolean[] done= new Boolean[] { null };
-				IResult wile= new WhileHandler() {
-					protected IResult<Boolean> While() throws Exception {
-						return asResult(done[0] == null);
-					}
-					protected IResult<Void> Do() throws Exception {
-						final Object[] ge= new Object[] { value[0] }; // this value is ge to the value from the first cursor
-
-						final int[] cursorIndex= new int[] { 1 };
-						IResult moveOtherCursors= new WhileHandler() {
-							protected IResult<Boolean> While() throws Exception {
-								return asResult(cursorIndex[0] < _cursors.length);
-							}
-							
-							protected IResult<Void> Do() throws Exception {
-								final IForwardCursor<T> cursor= _cursors[cursorIndex[0]];
-								return new ResultHandler<Boolean>(cursor.to((T)value[0])) {
-									protected IResult onSuccess(Boolean to) {
-										if (!to) { // if there no ge value then fail 
-											done[0]= false;
-											return TaskUtils.DONE;
-										}
-										
-										// if found value is ge than current value then save it
-										return new ResultHandler<T>(cursor.keyValue()) {
-											protected IResult onSuccess(T keyValue) {
-												if (KeyValueSet.compare((T)ge[0], keyValue) < 0)
-													ge[0]= keyValue;
-												return TaskUtils.DONE;
-											}
-										};
-									}
-								};
-							}
-						};
-						
-						return new Handler(moveOtherCursors) {
-							protected IResult onSuccess() throws Exception {
-								// if all cursors were moved to the first value then return success
-								if (KeyValueSet.compare((T)value[0], (T)ge[0]) == 0) {
-									done[0]= true;
-									return TaskUtils.DONE;
-								}
-								
-								// try moving the first cursor to the new value before starting over
-								return new ResultHandler<Boolean>(_cursors[0].to((T)ge[0])) {
-									protected IResult onSuccess(Boolean moveFirst) {
-										if (!moveFirst) {
-											done[0]= false;
-											return TaskUtils.DONE;
-										}
-										value[0]= _cursors[0].keyValue();
-										return TaskUtils.DONE;
-									}
-								};
-							}
-						};
-					}
-				};
-				return new Handler(wile) {
-					protected IResult onSuccess() throws Exception {
-						return asResult(done[0]);
-					}
-				};
-			}
-		};
-	}
-
-	@Override
-	public IResult<Boolean> hasNext()  {
+	public boolean hasNext() throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public IResult<Boolean> next() {
-		final Boolean[] result= new Boolean[] { null };
-		IResult wile= new WhileHandler() {
-			protected IResult<Boolean> While() throws Exception {
-				if (result[0] != null)
-					return TaskUtils.FALSE;
-				return _cursors[0].next();			
-			}
-			protected IResult<Void> Do() throws Exception {
-				return new ResultHandler<Boolean>(to(_cursors[0].keyValue())) {
-					protected IResult onSuccess(Boolean to) throws Exception {
-						if (to)
-							result[0]= Boolean.TRUE; 
-						return TaskUtils.DONE;
-					}
-				};
-			}
-		};
-		return new Handler(wile) {
-			protected IResult onSuccess() throws Exception {
-				if (result[0] != null)
-					return TaskUtils.asResult(result[0]);
-				return TaskUtils.FALSE;
-			}
-		};
+	public boolean next() throws IOException {
+		
+		while (_cursors[0].next()) {
+			if (to(_cursors[0].keyValue())) 
+				return true;
+		}
+		return false;
 	}
 	
 	@Override
 	public Direction getDirection() {
 		return Direction.FORWARD;
-	}
-
-	@Override
-	public IResult<Boolean> to(IResult<T> e) {
-		return new ResultHandler<T>(e) {
-			protected IResult onSuccess(T results) {
-				return to(results);
-			}
-		};
 	}
 }

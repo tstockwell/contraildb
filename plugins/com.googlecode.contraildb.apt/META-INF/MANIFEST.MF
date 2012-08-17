@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Apt
-Bundle-SymbolicName: com.googlecode.contraildb.apt
+Bundle-SymbolicName: com.googlecode.contraildb.apt;singleton:=true
 Bundle-Version: 1.0.0.qualifier
 Bundle-Vendor: Ted Stockwell
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6
@@ -13,3 +13,4 @@ Import-Package: com.sun.mirror.apt,
  org.eclipse.jdt.core,
  org.eclipse.osgi.service.resolver;version="1.4.0",
  org.eclipse.pde.core.plugin
+Require-Bundle: com.googlecode.contraildb.common;bundle-version="1.0.0"
