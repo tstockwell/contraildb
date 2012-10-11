@@ -7,5 +7,6 @@ Bundle-Vendor: Ted Stockwell
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6
 Require-Bundle: com.googlecode.contraildb.core;bundle-version="1.0.0",
  org.junit;bundle-version="3.8.2",
- com.googlecode.contraildb.library.appengine;bundle-version="1.2.1"
+ com.googlecode.contraildb.library.appengine;bundle-version="1.2.1",
+ com.googlecode.contraildb.library.commons.javaflow;bundle-version="1.0.0"
 Export-Package: com.googlecode.contraildb.tests

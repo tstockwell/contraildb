@@ -17,38 +17,17 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import static com.googlecode.contraildb.core.ContrailQuery.all;
-import static com.googlecode.contraildb.core.ContrailQuery.and;
-import static com.googlecode.contraildb.core.ContrailQuery.any;
-import static com.googlecode.contraildb.core.ContrailQuery.eq;
-import static com.googlecode.contraildb.core.ContrailQuery.gt;
-import static com.googlecode.contraildb.core.ContrailQuery.lt;
-import static com.googlecode.contraildb.core.ContrailQuery.ne;
-import static com.googlecode.contraildb.core.ContrailQuery.or;
-
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 
 import junit.framework.TestCase;
 
 import com.google.appengine.tools.development.ApiProxyLocalFactory;
 import com.google.apphosting.api.ApiProxy;
-import com.googlecode.contraildb.core.ContrailQuery;
 import com.googlecode.contraildb.core.ContrailServiceFactory;
 import com.googlecode.contraildb.core.IContrailService;
-import com.googlecode.contraildb.core.IContrailSession;
-import com.googlecode.contraildb.core.IPreparedQuery;
-import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.Item;
-import com.googlecode.contraildb.core.ContrailQuery.SortDirection;
 import com.googlecode.contraildb.core.IContrailService.Mode;
-import com.googlecode.contraildb.core.storage.provider.FileStorageProvider;
+import com.googlecode.contraildb.core.IContrailSession;
+import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 
@@ -58,8 +37,31 @@ import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
  * 
  * @author Ted Stockwell
  */
-@SuppressWarnings("unchecked")
 public class ContrailTasksTests extends TestCase {
+
+	private IStorageProvider _storageProvider;
+	private IContrailService _datastore;
+	
+	@Override
+	protected void tearDown() throws Exception {
+		_datastore.close();
+	}
+	
+	@Override
+	public void setUp() throws Exception {
+		super.setUp();
+		
+		// setup Google App Engine environment
+		ApiProxy.setEnvironmentForCurrentThread(new TestEnvironment());
+		ApiProxyLocalFactory factory= new ApiProxyLocalFactory();
+		factory.setApplicationDirectory(new File("."));
+		ApiProxy.setDelegate(factory.create());
+
+		
+		_storageProvider= new RamStorageProvider();
+		_datastore = ContrailServiceFactory.getContrailService(_storageProvider);
+		
+	}
 	
 	
 	public void testDeadlock() throws Exception {
@@ -77,7 +79,7 @@ public class ContrailTasksTests extends TestCase {
 		T1.delete(object_0_1.getId());
 		
 		assertTrue(T1.isActive());
-		T1.close(); // abondon any changes
+		T1.close(); // abandon any changes
 		assertFalse(T1.isActive());
 
 		// object-1.1 should not be visible 
