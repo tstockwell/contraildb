@@ -26,7 +26,6 @@ import static com.googlecode.contraildb.core.ContrailQuery.lt;
 import static com.googlecode.contraildb.core.ContrailQuery.ne;
 import static com.googlecode.contraildb.core.ContrailQuery.or;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -37,18 +36,15 @@ import java.util.Map;
 
 import junit.framework.TestCase;
 
-import com.google.appengine.tools.development.ApiProxyLocalFactory;
-import com.google.apphosting.api.ApiProxy;
 import com.googlecode.contraildb.core.ContrailQuery;
+import com.googlecode.contraildb.core.ContrailQuery.SortDirection;
 import com.googlecode.contraildb.core.ContrailServiceFactory;
 import com.googlecode.contraildb.core.IContrailService;
+import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.IContrailSession;
 import com.googlecode.contraildb.core.IPreparedQuery;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
-import com.googlecode.contraildb.core.ContrailQuery.SortDirection;
-import com.googlecode.contraildb.core.IContrailService.Mode;
-import com.googlecode.contraildb.core.storage.provider.FileStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 
@@ -86,13 +82,6 @@ public class BasicContrailTests extends TestCase {
 	@Override
 	public void setUp() throws Exception {
 		super.setUp();
-		
-		// setup Google App Engine environment
-		ApiProxy.setEnvironmentForCurrentThread(new TestEnvironment());
-		ApiProxyLocalFactory factory= new ApiProxyLocalFactory();
-		factory.setApplicationDirectory(new File("."));
-		ApiProxy.setDelegate(factory.create());
-
 		
 		_storageProvider= new RamStorageProvider();
 //		_storageProvider= new FileStorageProvider(new File("/temp/test/contrail"), true);
