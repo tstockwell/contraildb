@@ -6,7 +6,7 @@ package com.googlecode.contraildb.core.async;
  * A <tt>Claim</tt> represents the result of an asynchronous
  * computation.  
  * 
- * @param <V> The result type returned by this Future's <tt>get</tt> method
+ * @param <V> The result type returned by this result's <tt>get</tt> method
  */
 public interface IResult<V> {
 	

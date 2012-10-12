@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.commons.javaflow.Continuation;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ConcurrentHashedLinkedList;
 import com.googlecode.contraildb.core.utils.HashedLinkedList;
@@ -74,6 +76,7 @@ abstract public class ContrailTask<T> {
 	 * Tasks waiting to be executed
 	 */
 	private static HashedLinkedList<ContrailTask> __tasks= new ConcurrentHashedLinkedList<ContrailTask>();
+	
 	private static Object __done= new Object(); // used to wait/notify when tasks are completed
 	private static Object __arrive= new Object(); // used to wait/notify when new tasks arrive
 	private static ArrayList<Thread> __yielded= new ArrayList<Thread>();
@@ -170,19 +173,6 @@ abstract public class ContrailTask<T> {
 		}
 		return false;
 	}
-	/**
-	 * Returns true if the current thread is running a ContrailTask that has yielded.  
-	 */
-	public static final boolean isTaskYielded() {
-		Thread thread= Thread.currentThread();
-		synchronized (__yielded) {
-			if (__yielded.contains(thread))
-				return true;
-		}
-		return false;
-	}
-	
-	
 	
 	Identifier _id;
 	Operation _operation;
@@ -190,6 +180,7 @@ abstract public class ContrailTask<T> {
 	private volatile boolean _submitted= false;
 	private volatile List<ContrailTask<?>> _pendingTasks;
 	private final Result<T> _result= new Result<T>(); 
+	private Continuation _continuation;
 	
 	
 	public ContrailTask(Identifier id, Operation operation) {
@@ -278,9 +269,28 @@ if (__logger.isLoggable(Level.FINER))
 			return false;
 		}
 		try {
-			T result= run();
-			if (!_result.isCancelled())
-				success(result); 
+			final Object[] result= new Object[] { null };
+			final Exception[] err= new Exception[] { null };
+			Runnable runnable= new Runnable() {
+				public void run() {
+					try {
+						result[0]= ContrailTask.this.run();
+					}
+					catch (Exception x) {
+						err[0]= x;
+					}
+				}
+			};
+			
+			_continuation= Continuation.startWith(runnable);
+			while (_continuation != null)
+				_continuation= Continuation.continueWith(_continuation);
+			
+			if (err[0] != null) {
+				error(err[0]);
+			}
+			else if (!_result.isCancelled())
+				success((T)result[0]); 
 		}
 		catch (Throwable x) {
 			error(x);
@@ -473,8 +483,7 @@ if (__logger.isLoggable(Level.FINER))
 	 * This method will NOT RETURN until the resume method is invoked.
 	 */
 	public void suspend() {
-		// TODO Auto-generated method stub
-		
+		Continuation.suspend();
 	}
 	
 	/**
