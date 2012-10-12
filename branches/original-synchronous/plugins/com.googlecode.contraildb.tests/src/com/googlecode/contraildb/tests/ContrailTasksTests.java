@@ -17,12 +17,8 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import java.io.File;
-
 import junit.framework.TestCase;
 
-import com.google.appengine.tools.development.ApiProxyLocalFactory;
-import com.google.apphosting.api.ApiProxy;
 import com.googlecode.contraildb.core.ContrailServiceFactory;
 import com.googlecode.contraildb.core.IContrailService;
 import com.googlecode.contraildb.core.IContrailService.Mode;
@@ -50,13 +46,6 @@ public class ContrailTasksTests extends TestCase {
 	@Override
 	public void setUp() throws Exception {
 		super.setUp();
-		
-		// setup Google App Engine environment
-		ApiProxy.setEnvironmentForCurrentThread(new TestEnvironment());
-		ApiProxyLocalFactory factory= new ApiProxyLocalFactory();
-		factory.setApplicationDirectory(new File("."));
-		ApiProxy.setDelegate(factory.create());
-
 		
 		_storageProvider= new RamStorageProvider();
 		_datastore = ContrailServiceFactory.getContrailService(_storageProvider);

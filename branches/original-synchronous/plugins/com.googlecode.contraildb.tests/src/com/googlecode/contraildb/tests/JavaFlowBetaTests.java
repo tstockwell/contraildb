@@ -18,6 +18,8 @@
 package com.googlecode.contraildb.tests;
 
 import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.ArrayList;
 
 import junit.framework.TestCase;
 
@@ -32,22 +34,51 @@ import org.apache.commons.javaflow.ContinuationClassLoader;
  */
 public class JavaFlowBetaTests extends TestCase {
 	
-	MyRunnable _runnable;
+	public static class MyRunnable implements Runnable {
+		public void run() {
+			System.out.println("run started!");
+			for( int i=0; i < 10; i++ ) {
+				echo(i);
+			}
+		}
+
+		private void echo(int x) {
+			System.out.println("echo " + x);
+			Continuation.suspend();
+		}
+	}	
+	public static class SimpleTestRunner implements Runnable {
+		public void run() {
+			System.out.println("main started");
+			Continuation c = Continuation.startWith(new MyRunnable());
+			System.out.println("in main after continuation return");
+			while (c != null) {
+				c = Continuation.continueWith(c);
+				System.out.println("in main");
+			}
+		}
+	}	
+	
+	ContinuationClassLoader _javaflowClassLoader;
 	
 	@Override
 	protected void setUp() throws Exception {
-		ClassLoader parent= JavaFlowBetaTests.class.getClassLoader();
-		ClassLoader cl = new ContinuationClassLoader( new URL[]{}, parent );
-		_runnable= (MyRunnable) cl.loadClass(MyRunnable.class.getCanonicalName()).newInstance();
+		URLClassLoader parent= (URLClassLoader) JavaFlowBetaTests.class.getClassLoader();
+		ClassLoader gparent= parent.getParent();
+		
+		URL runnableLocation= MyRunnable.class.getProtectionDomain().getCodeSource().getLocation();
+		ArrayList<URL> urls= new ArrayList<URL>();
+		for (URL url:parent.getURLs()) {
+			if (!url.equals(runnableLocation))
+				urls.add(url);
+		}
+		URLClassLoader loader= new URLClassLoader(urls.toArray(new URL[urls.size()]), gparent);
+		_javaflowClassLoader = new ContinuationClassLoader( new URL[]{runnableLocation}, loader);
 	}
 
-	public void testSimpleContinuation() {
-		System.out.println("main started");
-		Continuation c = Continuation.startWith(new MyRunnable());
-		System.out.println("in main after continuation return");
-		while (c != null) {
-			c = Continuation.continueWith(c);
-			System.out.println("in main");
-		}
+	public void testSimpleContinuation() throws Throwable {
+		Thread.currentThread().setContextClassLoader(_javaflowClassLoader);
+		Runnable testRunner= (Runnable)_javaflowClassLoader.loadClass(SimpleTestRunner.class.getName()).newInstance();
+		testRunner.run();
 	}
 }

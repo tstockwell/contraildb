@@ -29,8 +29,6 @@ import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
 
-import com.google.appengine.tools.development.ApiProxyLocalFactory;
-import com.google.apphosting.api.ApiProxy;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
@@ -63,12 +61,6 @@ public class ContrailStorageTests extends TestCase {
 	public void setUp() throws Exception {
 		super.setUp();
 		
-		// setup Google App Engine environment
-		ApiProxy.setEnvironmentForCurrentThread(new TestEnvironment());
-		ApiProxyLocalFactory factory= new ApiProxyLocalFactory();
-		factory.setApplicationDirectory(new File("."));
-		ApiProxy.setDelegate(factory.create());
-
 		_rawStorage= new RamStorageProvider();
 		//_rawStorage= new FileStorageProvider(new File("/temp/test/contrail"), true);
 		_storage= new StorageSystem(_rawStorage);
