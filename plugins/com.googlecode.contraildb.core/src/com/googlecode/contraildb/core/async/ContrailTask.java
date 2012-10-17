@@ -1,10 +1,5 @@
 package com.googlecode.contraildb.core.async;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -79,7 +74,6 @@ abstract public class ContrailTask<T> {
 	
 	private static Object __done= new Object(); // used to wait/notify when tasks are completed
 	private static Object __arrive= new Object(); // used to wait/notify when new tasks arrive
-	private static ArrayList<Thread> __yielded= new ArrayList<Thread>();
 	private static int __THREAD_COUNT= 0;
 	
 	private static Logger __logger= Logging.getLogger();
@@ -176,23 +170,24 @@ abstract public class ContrailTask<T> {
 	
 	Identifier _id;
 	Operation _operation;
+	String _name;
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
-	private volatile List<ContrailTask<?>> _pendingTasks;
 	private final Result<T> _result= new Result<T>(); 
 	private Continuation _continuation;
 	
 	
-	public ContrailTask(Identifier id, Operation operation) {
+	public ContrailTask(Identifier id, Operation operation, String name) {
 		if ((_id= id) == null)
 			_id= Identifier.create();
 		
 		if ((_operation= operation) == null)
 			_operation= Operation.READ;
+		_name= name;
 	}
 	
 	public ContrailTask() {
-		this(Identifier.create(), Operation.READ);
+		this(Identifier.create(), Operation.READ, null);
 	}
 	
 	public void cancel() {
@@ -213,7 +208,11 @@ abstract public class ContrailTask<T> {
 	
 	@Override
 	public String toString() {
-		return "{_id="+_id+", _operation="+_operation+"}";
+		String txt= "{";
+		if (_name != null)
+			txt+= "_name="+_name+", ";
+		txt+= "_id="+_id+", _operation="+_operation+"}";
+		return txt;
 	}
 	
 	public Identifier getId() {
@@ -271,6 +270,8 @@ if (__logger.isLoggable(Level.FINER))
 		try {
 			final Object[] result= new Object[] { null };
 			final Exception[] err= new Exception[] { null };
+			final Object completeMonitor= new Object();
+			final boolean[] complete= new boolean[] { false };
 			Runnable runnable= new Runnable() {
 				public void run() {
 					try {
@@ -279,12 +280,31 @@ if (__logger.isLoggable(Level.FINER))
 					catch (Exception x) {
 						err[0]= x;
 					}
+					finally {
+						synchronized (completeMonitor) {
+							complete[0]= true;
+							completeMonitor.notifyAll();
+						}
+					}
 				}
 			};
 			
 			_continuation= Continuation.startWith(runnable);
-			while (_continuation != null)
-				_continuation= Continuation.continueWith(_continuation);
+			if (_continuation != null) {
+				// continuation was suspended, wait for completion
+				while (true) {
+					synchronized (completeMonitor) {
+						if (complete[0])
+							break;
+						try {
+							completeMonitor.wait();
+						}
+						catch (InterruptedException x) {
+						}
+					}
+				}
+			}
+			System.out.println("Task "+this.toString()+" is completed");
 			
 			if (err[0] != null) {
 				error(err[0]);
@@ -317,172 +337,14 @@ if (__logger.isLoggable(Level.FINER))
 		return _done;
 	}
 	
-	public T get() {
-		return _result.get();
-	}
-	
-	/**
-	 * Run other tasks in this thread while waiting for other things to happen
-	 * 
-	 * @param result A result that the caller is waiting on 
-	 * @return true if another task was run 
-	 */
-	protected boolean yield(IResult result) {
-		return yield(result, 0);
-	}
-	/**
-	 * Yields to some other task.
-	 * If there are no other tasks to run then wait the given number of milliseconds.
-	 * 
-	 * @param result A result that the caller is waiting on
-	 * @param waitMillis the # of milliseconds to wait  
-	 */
-	protected boolean yield(IResult result, long waitMillis) {
-		boolean taskWasRun= false;
-		
-		//if (!isTaskYielded()) { // no nested yields for now
-			if (!taskWasRun && !yieldToDependent()) {
-				/*
-				 * If this task has no dependencies then choose a random task to run.  
-				 * DONT mess with a task that has any dependencies, choose something nice and simple.
-				 */
-
-				ContrailTask nextTask= null;
-				for (Iterator<ContrailTask> i= __tasks.iterator(); i.hasNext();) {
-					ContrailTask t= i.next();
-					if (t._pendingTasks == null || t._pendingTasks.isEmpty()) {
-						// MUST guarantee that task is not done when choosing a task to yield to 
-						synchronized (__done) { 
-							if (_done) 
-								break;
-							
-							if (__tasks.remove(t)) {
-								nextTask= t;
-								break;
-							}
-						}
-					}
-				}
-
-				if (nextTask != null) 
-					taskWasRun= yieldToTask(nextTask);
-			}
-		//}
-		
-		if (!taskWasRun && 0 < waitMillis) {
-			synchronized (this) {
-				try {
-					wait(waitMillis);
-				}
-				catch (InterruptedException x) {
-				}
-			}
-		}
-		
-		return taskWasRun;
-	}
-	
-	/**
-	 * Run other dependency tasks in this thread while waiting for other things to happen
-	 * @return true if a task was run
-	 */
-	protected boolean yieldToDependent() {
-//		if (isTaskYielded())
-//			return false; // no nested yields for now
-		
-		ContrailTask nextTask= null;
-		synchronized (__done) {
-
-			if (_done)
-				return false;
-
-			/*
-			 * If this task is not done then perform some other task while we wait.
-			 * This task may be waiting on some other task to complete, if so 
-			 * we will run one of those dependent tasks first.  
-			 * 
-			 * If the task we're waiting for is not done them we'll see if 
-			 * we can get it off the list of waiting tasks and run it in 
-			 * this thread.
-			 * If the task we're waiting for is deferred then try to get 
-			 * one of the tasks it is waiting for off the list and run it. 
-			 * 
-			 * If this task has no dependencies then choose a random task
-			 * to run.  DONT choose a task that's dependent on this one.
-			 */
-			if (_submitted) 
-				if (__tasks.remove(this)) { 
-					nextTask= this; // this task has not been assigned to a thread, run it now.
-				}
-
-			// find a dependent task to run
-			if (!_submitted && nextTask == null && _pendingTasks != null) {
-				HashSet<Identifier> done= new HashSet<Identifier>();
-				LinkedList<ContrailTask> todo= new LinkedList<ContrailTask>();
-				todo.add(this);
-				while (!_done && !todo.isEmpty() && nextTask == null) {
-					ContrailTask t= todo.removeFirst();
-					Identifier taskID= t.getId();
-					if (done.contains(taskID))
-						continue;
-					done.add(taskID);
-					if (!t._done) {
-						if (t._submitted) {
-							if (__tasks.remove(t)) { 
-								nextTask= t;
-							}
-						}
-						else if (t._pendingTasks != null) {
-							List<ContrailTask> l= t._pendingTasks;
-							for (int i= l.size(); 0 < i--;) {
-								ContrailTask p= l.get(i);
-								if (p._done) {
-									t._pendingTasks.remove(i);
-								}
-								else
-									todo.add(p);
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if (nextTask != null) {
-			return yieldToTask(nextTask);
-		}
-		
-		return false;
-	}
-	
-	/**
-	 * Yield to the given task
-	 * @return true if the task was run
-	 */
-	protected boolean yieldToTask(ContrailTask task) {
-		Thread thread= Thread.currentThread();
-		synchronized (__yielded) {
-//			if (isTaskYielded())
-//				return false; // no nested yields for now
-			
-			__yielded.add(thread);
-		}
-		try {
-			return task.runTask();
-		}
-		finally {
-			synchronized (__yielded) {
-				__yielded.remove(thread);
-			}
-		}
-	}
-	
-	
 	/**
 	 * Suspends the execution of this task.
 	 * This method will NOT RETURN until the resume method is invoked.
 	 */
 	public void suspend() {
+		if (getContrailTask() != this)
+			throw new InternalError("Attempted to suspend a task that is not the current running task");
+		System.out.println("Task "+this.toString()+" is being suspended");
 		Continuation.suspend();
 	}
 	
@@ -491,8 +353,12 @@ if (__logger.isLoggable(Level.FINER))
 	 * Calling this method causes the execution thread that called the suspend 
 	 * method to be reanimated. 
 	 */
-	public void resume() {
-		// TODO Auto-generated method stub
-		
+	synchronized public void resume() {
+		if (_continuation == null)
+			throw new InternalError("Attempted to resume a task that has not been suspended");
+		Continuation c= _continuation;
+		_continuation= null;
+		System.out.println("Task "+this.toString()+" is being resumed");
+		_continuation= Continuation.continueWith(c);
 	}
 }

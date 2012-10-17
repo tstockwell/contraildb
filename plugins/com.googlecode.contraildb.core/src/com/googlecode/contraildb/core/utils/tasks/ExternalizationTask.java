@@ -43,10 +43,6 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 		}
 	}
 	
-	public byte[] get() {
-		return super.get();
-	}
-	
 	protected void stop() {
 		/*
 		 * If/when this task is canceled we close the byte stream which causes 

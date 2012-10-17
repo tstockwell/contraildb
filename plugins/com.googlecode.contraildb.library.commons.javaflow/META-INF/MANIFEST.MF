@@ -13,9 +13,7 @@ Export-Package: org.apache.commons.javaflow,
  org.apache.commons.javaflow.suite,
  org.apache.commons.javaflow.utils
 Require-Bundle: org.apache.commons.logging;bundle-version="1.0.4",
- org.apache.ant;bundle-version="1.8.2",
  com.googlecode.contraildb.library.asm;bundle-version="4.0.0",
  org.junit;bundle-version="4.8.2",
  com.googlecode.contraildb.library.commons.io;bundle-version="1.0.0"
-Bundle-ClassPath: junit-addons-1.4.jar,
- .
+Bundle-ClassPath: junit-addons-1.4.jar

@@ -5,9 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 
-import org.apache.commons.javaflow.Continuation;
-
-import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.utils.Logging;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
@@ -72,7 +69,9 @@ public class Result<V> implements IResult<V>{
 								task.resume();
 							}
 						});
-						task.suspend();
+						task.suspend(); // this method will return when the ContrailTask.resume method is called.
+						System.out.println("Task "+task.toString()+" returns from suspend");
+						break;
 					}
 					else
 						wait(); // just wait

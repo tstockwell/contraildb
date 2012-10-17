@@ -26,12 +26,18 @@ import junit.framework.TestCase;
 import org.apache.commons.javaflow.Continuation;
 import org.apache.commons.javaflow.ContinuationClassLoader;
 
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskUtils;
+
 
 /**
  * Test the Contrail storage system.
  * 
  * @author Ted Stockwell
  */
+@SuppressWarnings("rawtypes")
 public class JavaFlowBetaTests extends TestCase {
 	
 	public static class MyRunnable implements Runnable {
@@ -57,7 +63,7 @@ public class JavaFlowBetaTests extends TestCase {
 				System.out.println("in main");
 			}
 		}
-	}	
+	}
 	
 	ContinuationClassLoader _javaflowClassLoader;
 	
@@ -79,6 +85,81 @@ public class JavaFlowBetaTests extends TestCase {
 	public void testSimpleContinuation() throws Throwable {
 		Thread.currentThread().setContextClassLoader(_javaflowClassLoader);
 		Runnable testRunner= (Runnable)_javaflowClassLoader.loadClass(SimpleTestRunner.class.getName()).newInstance();
+		testRunner.run();
+	}
+	
+	
+	public static class SimpleTaskTestRunner implements Runnable {
+		public void run() {
+			final ContrailAction[] tasks= new ContrailAction[100]; 
+			final IResult[] results= new IResult[100]; 
+			for (int i= 0; i < tasks.length; i++) {
+				final int tasknum= i;
+				tasks[i]= new ContrailAction("Test Task "+tasknum) {
+					protected void action() throws Exception {
+						System.out.println("task "+tasknum);
+					}
+				};
+			}
+			
+			// run all tasks
+			for (int i= 0; i < tasks.length; i++) {
+				results[i]= tasks[i].submit();
+			}
+			
+			// wait tasks to complete
+			TaskUtils.combineResults(tasks);
+			
+		}
+	}
+	/**
+	 * Simple test that runs several tasks at once
+	 */
+	public void testSimpleContrailTask() throws Throwable {
+		Thread.currentThread().setContextClassLoader(_javaflowClassLoader);
+		Runnable testRunner= (Runnable)_javaflowClassLoader.loadClass(SimpleTaskTestRunner.class.getName()).newInstance();
+		testRunner.run();
+	}
+	
+	
+	public static class JoinTaskTestRunner implements Runnable {
+		public void run() {
+			final ContrailAction[] tasks= new ContrailAction[5/*100*/];
+			final boolean[] completed= new boolean[tasks.length];
+			for (int i= 0; i < tasks.length; i++) {
+				final int tasknum= i;
+				completed[tasknum]= false;
+				tasks[i]= new ContrailAction("Test Task "+tasknum) {
+					protected void action() throws Exception {
+						// wait for preceding task to complete
+						if (0 < tasknum)
+							tasks[tasknum-1].getResult().join();
+						System.out.println("task "+tasknum);
+						completed[tasknum]= true;
+					}
+				};
+			}
+			
+			// run all tasks
+			for (int i= 0; i < tasks.length; i++) {
+				tasks[i].submit();
+			}
+			
+			// wait for last task to complete
+			tasks[tasks.length-1].getResult().join();
+			
+			// make sure that every task was actually executed
+			for (int i= 0; i < tasks.length; i++) {
+				assertTrue("Task "+i+" was not completed", completed[i]);
+			}
+		}
+	}	
+	/**
+	 *  Tests ability of a task to wait for another task to complete 
+	 */
+	public void testContrailTaskJoins() throws Throwable {
+		Thread.currentThread().setContextClassLoader(_javaflowClassLoader);
+		Runnable testRunner= (Runnable)_javaflowClassLoader.loadClass(JoinTaskTestRunner.class.getName()).newInstance();
 		testRunner.run();
 	}
 }
