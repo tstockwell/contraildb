@@ -3,7 +3,9 @@ package com.googlecode.contraildb.core.async;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.commons.javaflow.Continuation;
+import kilim.Mailbox;
+import kilim.Pausable;
+import kilim.Task;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.ConcurrentHashedLinkedList;
@@ -174,8 +176,6 @@ abstract public class ContrailTask<T> {
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
 	private final Result<T> _result= new Result<T>(); 
-	private Continuation _continuation;
-	
 	
 	public ContrailTask(Identifier id, Operation operation, String name) {
 		if ((_id= id) == null)
@@ -223,7 +223,7 @@ abstract public class ContrailTask<T> {
 		return _operation;
 	}
 	
-	protected abstract T run() throws Exception;
+	protected abstract T run() throws Pausable, Exception;
 	
 	protected void error(Throwable throwable) {
 		_result.error(throwable);
@@ -261,7 +261,7 @@ abstract public class ContrailTask<T> {
 		return _result;
 	}
 	
-	private synchronized boolean runTask() {
+	private synchronized boolean runTask() throws Pausable {
 if (__logger.isLoggable(Level.FINER))
 	__logger.finer("run task "+hashCode()+", id "+_id+", op "+_operation+", thread "+Thread.currentThread().getName() );		
 		if (_done) { 
@@ -270,10 +270,10 @@ if (__logger.isLoggable(Level.FINER))
 		try {
 			final Object[] result= new Object[] { null };
 			final Exception[] err= new Exception[] { null };
-			final Object completeMonitor= new Object();
-			final boolean[] complete= new boolean[] { false };
-			Runnable runnable= new Runnable() {
-				public void run() {
+			final Mailbox<Boolean> outBox= new Mailbox<Boolean>();
+			new Task() {
+				@Override
+				public void execute() throws Pausable, Exception {
 					try {
 						result[0]= ContrailTask.this.run();
 					}
@@ -281,30 +281,14 @@ if (__logger.isLoggable(Level.FINER))
 						err[0]= x;
 					}
 					finally {
-						synchronized (completeMonitor) {
-							complete[0]= true;
-							completeMonitor.notifyAll();
-						}
+						outBox.put(Boolean.TRUE);
 					}
 				}
-			};
+			}.start();
 			
-			_continuation= Continuation.startWith(runnable);
-			if (_continuation != null) {
-				// continuation was suspended, wait for completion
-				while (true) {
-					synchronized (completeMonitor) {
-						if (complete[0])
-							break;
-						try {
-							completeMonitor.wait();
-						}
-						catch (InterruptedException x) {
-						}
-					}
-				}
-			}
-			System.out.println("Task "+this.toString()+" is completed");
+			// does not return until task above has completed
+			outBox.get(); 
+			//System.out.println("Task "+this.toString()+" is completed");
 			
 			if (err[0] != null) {
 				error(err[0]);
@@ -335,30 +319,5 @@ if (__logger.isLoggable(Level.FINER))
 	
 	public boolean isDone() {
 		return _done;
-	}
-	
-	/**
-	 * Suspends the execution of this task.
-	 * This method will NOT RETURN until the resume method is invoked.
-	 */
-	public void suspend() {
-		if (getContrailTask() != this)
-			throw new InternalError("Attempted to suspend a task that is not the current running task");
-		System.out.println("Task "+this.toString()+" is being suspended");
-		Continuation.suspend();
-	}
-	
-	/**
-	 * Restart this task.
-	 * Calling this method causes the execution thread that called the suspend 
-	 * method to be reanimated. 
-	 */
-	synchronized public void resume() {
-		if (_continuation == null)
-			throw new InternalError("Attempted to resume a task that has not been suspended");
-		Continuation c= _continuation;
-		_continuation= null;
-		System.out.println("Task "+this.toString()+" is being resumed");
-		_continuation= Continuation.continueWith(c);
 	}
 }
