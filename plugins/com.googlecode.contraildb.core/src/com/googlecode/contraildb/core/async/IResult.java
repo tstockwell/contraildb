@@ -1,5 +1,7 @@
 package com.googlecode.contraildb.core.async;
 
+import kilim.Pausable;
+
 
 
 /**
@@ -38,6 +40,7 @@ public interface IResult<V> {
 	
     /**
      * If this task completed successfully then get the result.
+     * @throws IllegalStateException if the associated task is not complete.
      */
     public V getResult();
     
@@ -53,7 +56,7 @@ public interface IResult<V> {
      * @return the computed result
      * @throws An unchecked exception if an error occurred while producing the result
      */
-    public V get();
+    public V get() throws Pausable;
 
     /**
      * Waits if necessary for the computation to complete.
@@ -63,6 +66,6 @@ public interface IResult<V> {
      * Does NOT throw an exception if an error occurred in the associated task.
      * 
      */
-    public void join();
+    public void join() throws Pausable;
     
 }

@@ -5,6 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 
+import kilim.Mailbox;
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.utils.Logging;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
@@ -16,6 +19,7 @@ public class Result<V> implements IResult<V>{
 	private boolean _cancelled= false;
 	private Throwable _error= null;
 	private List<IResultHandler> _completedHandlers= null;
+	private Mailbox<Boolean> _completeBox= new Mailbox<Boolean>();
 	
 	public Result() { 
 	}
@@ -41,7 +45,7 @@ public class Result<V> implements IResult<V>{
 		}
 	}
 
-	@Override public V get() {
+	@Override public V get() throws Pausable {
 		
 		join();
 		
@@ -56,28 +60,12 @@ public class Result<V> implements IResult<V>{
 		return _result;
 	}
 
-	@Override public void join() {
+	@Override public void join() throws Pausable {
 		synchronized (this) {
-			while (!_done) {
-				try {
-					final ContrailTask task= ContrailTask.getContrailTask();
-					if (task != null) {
-						// The current thread is one of Contrail's internal threads.
-						// Suspend this task until the result is ready
-						addHandler(new Handler() {
-							protected void onComplete() throws Exception {
-								task.resume();
-							}
-						});
-						task.suspend(); // this method will return when the ContrailTask.resume method is called.
-						System.out.println("Task "+task.toString()+" returns from suspend");
-						break;
-					}
-					else
-						wait(); // just wait
-				}
-				catch (InterruptedException x) {
-				}
+			if (!_done) {
+				_completeBox.get(); // will not return until this result is completed
+				if (!_done)
+					throw new InternalError("Received complete notification but result is not available");
 			}
 		}
 	}
@@ -114,8 +102,7 @@ public class Result<V> implements IResult<V>{
 			_completedHandlers= null;
 		}
 		
-		
-		notify(); // notify the get() method that results are available
+		_completeBox.putnb(Boolean.TRUE); // send notification that this result is completed
 	}
 
 	@Override

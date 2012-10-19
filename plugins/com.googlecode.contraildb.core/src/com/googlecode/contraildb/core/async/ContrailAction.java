@@ -1,5 +1,7 @@
 package com.googlecode.contraildb.core.async;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 
 abstract public class ContrailAction extends ContrailTask<Void> {
@@ -14,9 +16,9 @@ abstract public class ContrailAction extends ContrailTask<Void> {
 		super(Identifier.create(), null, name);
 	}
 	
-	protected abstract void action() throws Exception;
+	protected abstract void action() throws Pausable, Exception;
 	
-	final protected Void run() throws Exception {
+	final protected Void run() throws Pausable, Exception {
 		action();
 		return null;
 	}

@@ -4,6 +4,8 @@ package com.googlecode.contraildb.core.async;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.utils.Logging;
 
 /**
@@ -20,11 +22,11 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 			checkForHandler();
 			return super.getResult();
 		};
-		public synchronized Object get() {
+		public synchronized Object get() throws Pausable {
 			checkForHandler();
 			return super.get();
 		};
-		public synchronized void join() {
+		public synchronized void join() throws Pausable {
 			checkForHandler();
 			super.join();
 		};
@@ -210,10 +212,10 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
     public O getResult() {
     	return _outgoing.getResult();
     }
-    public O get() {
+    public O get() throws Pausable {
     	return _outgoing.get();
     }
-    public void join() {
+    public void join() throws Pausable {
     	_outgoing.join();
     }
 	public void addHandler(IResultHandler<O> handler) {
