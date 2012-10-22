@@ -102,7 +102,7 @@ abstract public class ContrailTask<T> {
 				}
 				if (task != null) { 
 					_currentTask= task;
-					task.runTask();
+					try { task.runTask(); } catch (Pausable p) { p.printStackTrace(); }
 					_currentTask= null;
 				}
 			}
@@ -175,6 +175,7 @@ abstract public class ContrailTask<T> {
 	String _name;
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
+	private volatile boolean _running= false;
 	private final Result<T> _result= new Result<T>(); 
 	
 	public ContrailTask(Identifier id, Operation operation, String name) {
@@ -261,12 +262,16 @@ abstract public class ContrailTask<T> {
 		return _result;
 	}
 	
-	private synchronized boolean runTask() throws Pausable {
+	private boolean runTask() throws Pausable {
+		synchronized (this) {
+			if (_done) 
+				return false;
+			if (_running)
+				return false;
+			_running= true;
+		}
 if (__logger.isLoggable(Level.FINER))
 	__logger.finer("run task "+hashCode()+", id "+_id+", op "+_operation+", thread "+Thread.currentThread().getName() );		
-		if (_done) { 
-			return false;
-		}
 		try {
 			final Object[] result= new Object[] { null };
 			final Exception[] err= new Exception[] { null };

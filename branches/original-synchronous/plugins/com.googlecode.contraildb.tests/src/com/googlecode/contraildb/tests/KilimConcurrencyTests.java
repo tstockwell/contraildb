@@ -117,12 +117,10 @@ public class KilimConcurrencyTests extends TestCase {
 		ArrayList<URL> urls = new ArrayList<URL>();
 		for (URL url : parent.getURLs()) {
 			String urltxt= url.toString();
-			/*
 			if (urltxt.contains("kilim")) {
 				urls2instrument.add(url);
 			}
 			else
-			*/ 
 			if (urltxt.contains("contraildb")) {
 				urls2instrument.add(url);
 			}
