@@ -3,6 +3,8 @@ package com.googlecode.contraildb.core.storage.provider;
 import java.io.IOException;
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
 
@@ -19,12 +21,16 @@ import com.googlecode.contraildb.core.async.IResult;
  * None of the methods are considered atomic, that is, if they fail 
  * they may have partially completed their operation.
  * 
- * Some implementation of this interface may cache operations for performance 
- * reasons or, more likely, perform operations asynchronously in the background.  
+ * Some implementation of this interface may choose to cache operations for 
+ * performance reasons or, more likely, perform operations asynchronously in 
+ * the background.  
  * The flush method must be called to make sure that all changes are flushed 
  * to physical storage at a particular point in time.
- * Note that IStorageProvider implementations are not required to implement caching 
+ * IStorageProvider implementations are not required to implement caching 
  * since Contrail will cache objects it reads from the raw storage system.
+ * 
+ * The methods in this interface throw Pausable, which identifies them as 
+ * asynchronous methods. 
  * 
  */
 public interface IStorageProvider {
@@ -32,7 +38,7 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException;
+	IStorageProvider.Session connect() throws Pausable, IOException;
 	
 	
 	static public interface Session {
@@ -41,23 +47,23 @@ public interface IStorageProvider {
 		 * MUST be called when the session is no longer needed.
 		 * Any pending changed are flushed before closing.
 		 */
-		public void close() throws IOException; 
+		public void close() throws Pausable, IOException; 
 		
 		/**
 		 * Returns the complete paths to all the children of the given path.
 		 */
-		public IResult<Collection<Identifier>> listChildren(Identifier path);
+		public Collection<Identifier> listChildren(Identifier path) throws Pausable;
 		
 		/**
 		 * @return the contents of of the given path, or null if the file does not exist.
 		 */
-		public IResult<byte[]> fetch(Identifier path);
+		public byte[] fetch(Identifier path) throws Pausable;
 
 		/**
 		 * Stores the given contents at the given location.
 		 * The file is created if it does not already exist.
 		 */
-		public void store(Identifier path, IResult<byte[]> content);
+		public void store(Identifier path, byte[] content) throws Pausable;
 
 		/**
 		 * Stores the given contents at the given location if the file 
@@ -72,17 +78,17 @@ public interface IStorageProvider {
 		 * 		true if the file was created, false if the file already exists 
 		 * 		and was not deleted within the wait period.
 		 */
-		public IResult<Boolean> create(Identifier i, IResult<byte[]> content, long waitMillis);
+		public boolean create(Identifier i, IResult<byte[]> content, long waitMillis) throws Pausable;
 
 		/**
 		 * Deletes the contents stored at the given locations.
 		 */
-		public void delete(Identifier path);
+		public void delete(Identifier path) throws Pausable;
 		
 		/**
 		 * Flush any pending changes made by this session to physical storage.
 		 */
-		public void flush() throws IOException;
+		public void flush() throws Pausable, IOException;
 
 
 	}
