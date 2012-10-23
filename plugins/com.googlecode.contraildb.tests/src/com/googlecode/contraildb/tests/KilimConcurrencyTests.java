@@ -17,25 +17,16 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import java.lang.reflect.Method;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.ArrayList;
-
-import junit.framework.TestCase;
 import kilim.Mailbox;
 import kilim.Pausable;
 import kilim.Task;
-import kilim.tools.WeaverClassLoader;
-
-import com.googlecode.contraildb.core.async.ContrailAction;
 
 /**
- * Basic Kilim tests.
+ * Basic Kilim tests for verifying Kilim features and runtime characteristics.
  * 
  * @author Ted Stockwell
  */
-public class KilimConcurrencyTests extends TestCase {
+public class KilimConcurrencyTests extends ContrailTestCase2 {
 
 	public static class Chain extends Task {
 		Mailbox<String> inBox, outBox;
@@ -50,105 +41,24 @@ public class KilimConcurrencyTests extends TestCase {
 			outBox.put(sb + "x");
 		}
 	}
-
-	public static class ChainTestRunner extends Task {
-		public void execute() throws Pausable {
-			System.out.println("main started");
-			int n = 10;
-			Mailbox<String> first = new Mailbox<String>();
-			Mailbox<String> in = first;
-			Mailbox<String> out = new Mailbox<String>();
-			for (int i = 0; i < n; i++) {
-				new Chain(in, out).start();
-				in = out;
-				out = new Mailbox<String>();
-			}
-			first.put("");
-			String result = out.get();
-			assertTrue(result.length() == n);
-		}
-	}
 	
-	public static class JoinTaskTestRunner extends Task {
-		public void execute() throws Pausable {
-			final ContrailAction[] tasks= new ContrailAction[5/*100*/];
-			final boolean[] completed= new boolean[tasks.length];
-			for (int i= 0; i < tasks.length; i++) {
-				final int tasknum= i;
-				completed[tasknum]= false;
-				tasks[i]= new ContrailAction("Test Task "+tasknum) {
-					protected void action() throws Pausable, Exception {
-						// wait for preceding task to complete
-						if (0 < tasknum)
-							tasks[tasknum-1].getResult().join();
-						System.out.println("task "+tasknum);
-						completed[tasknum]= true;
-					}
-				};
+	public void testSimpleContinuation() throws Throwable {
+		runTest(new Task() {
+			public void execute() throws Pausable {
+				System.out.println("main started");
+				int n = 10;
+				Mailbox<String> first = new Mailbox<String>();
+				Mailbox<String> in = first;
+				Mailbox<String> out= null;
+				for (int i = 0; i < n; i++) {
+					out = new Mailbox<String>();
+					new Chain(in, out).start();
+					in = out;
+				}
+				first.put("");
+				String result = out.get();
+				assertTrue(result.length() == n);
 			}
-			
-			// run all tasks
-			for (int i= 0; i < tasks.length; i++) {
-				tasks[i].submit();
-			}
-			
-			// wait for last task to complete
-			tasks[tasks.length-1].getResult().join();
-			
-			// make sure that every task was actually executed
-			for (int i= 0; i < tasks.length; i++) {
-				assertTrue("Task "+i+" was not completed", completed[i]);
-			}
-		}
-	}	
-
-	WeaverClassLoader _weaverClassLoader;
-
-	@Override
-	protected void setUp() throws Exception {
-		//
-		// create classloader that applies kilim instrumentation
-		//
-		URLClassLoader parent = (URLClassLoader) KilimConcurrencyTests.class
-				.getClassLoader();
-		ClassLoader gparent = parent.getParent();
-
-		ArrayList<URL> urls2instrument = new ArrayList<URL>();
-		ArrayList<URL> urls = new ArrayList<URL>();
-		for (URL url : parent.getURLs()) {
-			String urltxt= url.toString();
-			if (urltxt.contains("kilim")) {
-				urls2instrument.add(url);
-			}
-			else
-			if (urltxt.contains("contraildb")) {
-				urls2instrument.add(url);
-			}
-			else
-				urls.add(url);
-		}
-		URLClassLoader loader = new URLClassLoader(
-				urls.toArray(new URL[urls.size()]), gparent);
-		_weaverClassLoader = new WeaverClassLoader( 
-				urls2instrument.toArray(new URL[urls2instrument.size()]), loader);
+		});
 	}
-	
-	protected void startTask(Class<? extends Task> klass) throws Pausable, Throwable {
-		Thread.currentThread().setContextClassLoader(_weaverClassLoader);
-		Object testRunner = _weaverClassLoader.loadClass(klass.getName()).newInstance();
-		Method startMethod= testRunner.getClass().getMethod("start", (Class<?>[])null);
-		startMethod.invoke(testRunner, (Object[])null);
-	}
-
-	public void testSimpleContinuation() throws Pausable, Throwable {
-		startTask(ChainTestRunner.class);
-	}
-	
-	/**
-	 *  Tests ability of a task to wait for another task to complete 
-	 */
-	public void testContrailTaskJoins() throws Pausable, Throwable {
-		startTask(JoinTaskTestRunner.class);
-	}
-	
 }
