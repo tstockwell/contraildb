@@ -55,7 +55,7 @@ public final class WeaverClassLoader extends URLClassLoader {
      * Indicates whether the parent class loader should be
      * consulted before trying to load with this class loader.
      */
-    private boolean parentFirst = true;
+    private boolean parentFirst = false;
 
     /**
      * These are the package roots that are to be loaded by the parent class
