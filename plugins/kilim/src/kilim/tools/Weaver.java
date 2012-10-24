@@ -104,7 +104,7 @@ public class Weaver {
         return excludePattern == null ? false : excludePattern.matcher(name).find();
     }
 
-    static void weaveFile(String name, InputStream is, Detector detector) throws IOException {
+    static public void weaveFile(String name, InputStream is, Detector detector) throws IOException {
         try {
             ClassWeaver cw = new ClassWeaver(is, detector);
             cw.weave();
