@@ -30,7 +30,9 @@ public class ContrailTestSuite {
     public static Test suite() throws Exception {
     	__classloader= createKilimClassloader();
     	Thread.currentThread().setContextClassLoader(__classloader);
-    	
+//        __testSuite= (TestSuite) __classloader.loadClass(TestSuite.class.getName()).newInstance();
+System.out.println("Kilim classloader:"+__classloader);
+System.out.println("TestSuite classloader:"+__testSuite.getClass().getClassLoader());
         addTestSuite(KilimConcurrencyTests.class);
         return __testSuite;
     }
@@ -38,6 +40,7 @@ public class ContrailTestSuite {
     
 	private static void addTestSuite(Class<? extends TestCase> originalClass)  throws Exception {
         Class<? extends TestCase> testClass= (Class<? extends TestCase>) __classloader.loadClass(originalClass.getName());
+System.out.println("testClass classloader:"+testClass.getClassLoader());
         __testSuite.addTestSuite(testClass);
 	}
     
@@ -45,8 +48,7 @@ public class ContrailTestSuite {
 		//
 		// create classloader that applies kilim instrumentation
 		//
-		URLClassLoader loader = (URLClassLoader) KilimConcurrencyTests.class
-				.getClassLoader();
+		URLClassLoader loader = (URLClassLoader) KilimConcurrencyTests.class.getClassLoader();
 		ClassLoader gparent = loader.getParent();
 
 		ArrayList<URL> urls2instrument = new ArrayList<URL>();
@@ -63,8 +65,9 @@ public class ContrailTestSuite {
 			else
 				urls.add(url);
 		}
+		URLClassLoader parent= new URLClassLoader(urls.toArray(new URL[urls.size()]), gparent);
 		return new WeaverClassLoader( 
-				urls2instrument.toArray(new URL[urls2instrument.size()]), loader);
+				urls2instrument.toArray(new URL[urls2instrument.size()]), parent);
 	}
 
 }

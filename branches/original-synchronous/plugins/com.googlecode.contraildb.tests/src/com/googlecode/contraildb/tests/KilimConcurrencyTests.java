@@ -43,6 +43,7 @@ public class KilimConcurrencyTests extends ContrailTestCase2 {
 	}
 	
 	public void testSimpleContinuation() throws Throwable {
+		
 		runTest(new Task() {
 			public void execute() throws Pausable {
 				System.out.println("main started");
