@@ -36,7 +36,7 @@
                class="kilim.tools.eclipse.builder.ToggleNatureAction"
                enablesFor="+"
                id="kilim.builder.addRemoveNatureAction"
-               label="Add/Remove Kilim Nature"
+               label="Add/Remove Kilim Support"
                menubarPath="additions">
          </action>
       </objectContribution>
