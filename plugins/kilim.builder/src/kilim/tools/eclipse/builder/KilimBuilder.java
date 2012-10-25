@@ -1,25 +1,14 @@
 package kilim.tools.eclipse.builder;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.util.List;
 import java.util.Map;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-import kilim.KilimException;
-import kilim.analysis.ClassInfo;
-import kilim.mirrors.Detector;
 import kilim.tools.Weaver;
 
-import org.eclipse.core.internal.jobs.JobStatus;
+import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IProject;
@@ -33,64 +22,17 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
-import org.eclipse.jdt.core.IClassFile;
+import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.JavaCore;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
 
 public class KilimBuilder extends IncrementalProjectBuilder {
 	
-	private Weaver _weaver= new Weaver();
-
-	/**
-	 * Reads the entire file and returns a byte array of the contents.
-	 */
-	public static byte[] readFully(File file) 
-	throws IOException
-	{
-		if (file.length() < Integer.MAX_VALUE) {
-			// space optimized method for reading files...
-			InputStream in= new BufferedInputStream(new FileInputStream(file));
-			try
-			{
-				int length= (int)file.length();
-				byte[] buffer= new byte[length];
-				int offset= 0;
-				int c;
-				while (0 < length && (c= in.read(buffer, offset, length)) != -1) {
-					offset+= c;
-					length-= c;
-				}
-				return buffer;
-			} 
-			finally  {
-				try { in.close(); } catch (Throwable t) { }
-			}
-		}
-
-		return readFully(file.toURI().toURL());
-	}
-	
-	public static byte[] readFully(URL url) throws IOException {
-		InputStream in = new BufferedInputStream(url.openStream());
-		try {
-			return readFully(in);
-		} finally {
-			try {
-				in.close();
-			} catch (Throwable t) {
-			}
-		}
-	}
-
-	public static byte[] readFully(InputStream in) throws IOException {
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		byte[] buffer = new byte[1024 * 64];
-		int c;
-		while ((c = in.read(buffer)) != -1)
-			out.write(buffer, 0, c);
-		return out.toByteArray();
-	}
 	
 	class KilimWeavingJob extends WorkspaceJob {
 		IFile _classfile;
@@ -100,21 +42,35 @@ public class KilimBuilder extends IncrementalProjectBuilder {
 		}
 		public IStatus runInWorkspace(IProgressMonitor monitor) {
 			try {
-				IClassFile classFile= (IClassFile) _classfile.getAdapter(IClassFile.class);
-				byte[] data= readFully(_classfile.getFullPath().toFile());
-				String classname= _classfile.getLocation().addTrailingSeparator().toPortableString()+_classfile.getName();
-				classname= classname.replace('/', '.');
-				ClassInfo classInfo= new ClassInfo(classname, data);
-				Weaver weaver= new Weaver();
-				List<ClassInfo> infos= weaver.weave(classInfo);
-				for (ClassInfo info:infos) {
-					
+				// get class name
+				ICompilationUnit compilationUnit= JavaCore.createCompilationUnitFrom(_classfile);
+				IType primaryType= compilationUnit.findPrimaryType();
+				String className= primaryType.getFullyQualifiedName();
+				
+				
+				// get path to class to weave
+				IContainer classContainer= _classfile.getParent();
+				String outputDirectory= classContainer.getFullPath().toString(); 
+				
+				IJavaProject project= (IJavaProject)_classfile.getProject();
+				ClassLoader projectClassLoader= new ProjectClassLoader(project);
+				
+				ClassLoader oldClassLoader= Thread.currentThread().getContextClassLoader();
+				Thread.currentThread().setContextClassLoader(projectClassLoader);
+				try {
+					Weaver.main(new String[]{ "-d", outputDirectory, className });
 				}
+				finally {
+					Thread.currentThread().setContextClassLoader(oldClassLoader);
+				}
+				
+				// refresh so that Eclipse sees any new files
+				_classfile.getParent().refreshLocal(IResource.DEPTH_ZERO, null);
+				
+				deleteMarkers(_classfile);
 			} 
 			catch (Exception e) {
-				String msg= "Error during Kilim weaving: "+e.getMessage();
-				addMarker(_classfile, msg, -1, IMarker.SEVERITY_ERROR);
-				e.printStackTrace();
+				KilimLog.logError("Error during Kilim weaving", e);
 			}
 			return Status.OK_STATUS;
 		}
@@ -221,18 +177,12 @@ public class KilimBuilder extends IncrementalProjectBuilder {
 
 	void weave(IResource resource) {
 		if (!(resource instanceof IFile) ||  !resource.getName().endsWith(".class")) 
-			return; // do nothing, kilim weaving only appliesto .class files
+			return; // do nothing, kilim weaving only applies to .class files
 
 		IFile file = (IFile) resource;
-		deleteMarkers(file);
-		
-		resource.
-		ClassInfo classInfo= new ClassInfo(aClassName, aBytes)
-		_weaver.weave(cl)XMLErrorHandler reporter = new XMLErrorHandler(file);
-		try {
-			getParser().parse(file.getContents(), reporter);
-		} catch (Exception e1) {
-		}
+		KilimWeavingJob job= new KilimWeavingJob(file);
+		job.setPriority(Job.BUILD);
+		job.schedule();
 	}
 
 	private void deleteMarkers(IFile file) {
