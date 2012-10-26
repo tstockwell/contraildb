@@ -9,5 +9,4 @@ Require-Bundle: com.googlecode.contraildb.core;bundle-version="1.0.0",
  org.junit;bundle-version="3.8.2",
  kilim;bundle-version="1.0.0"
 Export-Package: com.googlecode.contraildb.tests
-Bundle-ClassPath: bin/,
- .
+Bundle-ClassPath: bin/
