@@ -38,7 +38,7 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	IStorageProvider.Session connect() throws Pausable, IOException;
+	IResult<IStorageProvider.Session> connect();
 	
 	
 	static public interface Session {
@@ -47,23 +47,23 @@ public interface IStorageProvider {
 		 * MUST be called when the session is no longer needed.
 		 * Any pending changed are flushed before closing.
 		 */
-		public void close() throws Pausable, IOException; 
+		public IResult<Void> close(); 
 		
 		/**
 		 * Returns the complete paths to all the children of the given path.
 		 */
-		public Collection<Identifier> listChildren(Identifier path) throws Pausable;
+		public IResult<Collection<Identifier>> listChildren(Identifier path);
 		
 		/**
 		 * @return the contents of of the given path, or null if the file does not exist.
 		 */
-		public byte[] fetch(Identifier path) throws Pausable;
+		public IResult<byte[]> fetch(Identifier path);
 
 		/**
 		 * Stores the given contents at the given location.
 		 * The file is created if it does not already exist.
 		 */
-		public void store(Identifier path, byte[] content) throws Pausable;
+		public IResult<Void> store(Identifier path, IResult<byte[]> content);
 
 		/**
 		 * Stores the given contents at the given location if the file 
@@ -78,17 +78,17 @@ public interface IStorageProvider {
 		 * 		true if the file was created, false if the file already exists 
 		 * 		and was not deleted within the wait period.
 		 */
-		public boolean create(Identifier i, IResult<byte[]> content, long waitMillis) throws Pausable;
+		public IResult<Boolean> create(Identifier i, IResult<byte[]> content, long waitMillis);
 
 		/**
 		 * Deletes the contents stored at the given locations.
 		 */
-		public void delete(Identifier path) throws Pausable;
+		public IResult<Void> delete(Identifier path);
 		
 		/**
 		 * Flush any pending changes made by this session to physical storage.
 		 */
-		public void flush() throws Pausable, IOException;
+		public IResult<Void> flush();
 
 
 	}
