@@ -2,7 +2,7 @@
 <feature
       id="feature.com.googlecode.contraildb.apt"
       label="Apt"
-      version="1.0.0.qualifier">
+      version="0.9.0">
 
    <description url="http://www.example.com/description">
       [Enter Feature Description here.]
@@ -38,6 +38,5 @@
          install-size="0"
          version="0.0.0"
          unpack="false"/>
-
 
 </feature>
