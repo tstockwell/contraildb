@@ -12,6 +12,5 @@ Export-Package: com.googlecode.contraildb.core,
  com.googlecode.contraildb.core.storage.remote,
  com.googlecode.contraildb.core.utils,
  com.googlecode.contraildb.core.utils.tasks
-Require-Bundle: kilim;bundle-version="1.0.0"
 Bundle-ClassPath: bin/,
  .
