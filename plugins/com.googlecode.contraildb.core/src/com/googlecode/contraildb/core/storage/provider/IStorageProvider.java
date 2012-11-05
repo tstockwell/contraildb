@@ -1,9 +1,6 @@
 package com.googlecode.contraildb.core.storage.provider;
 
-import java.io.IOException;
 import java.util.Collection;
-
-import kilim.Pausable;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
@@ -38,7 +35,7 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	IResult<IStorageProvider.Session> connect();
+	public IResult<IStorageProvider.Session> connect();
 	
 	
 	static public interface Session {
