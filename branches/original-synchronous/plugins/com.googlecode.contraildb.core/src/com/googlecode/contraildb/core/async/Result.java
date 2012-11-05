@@ -62,11 +62,14 @@ public class Result<V> implements IResult<V>{
 
 	@Override public void join() throws Pausable {
 		synchronized (this) {
-			if (!_done) {
-				_completeBox.get(); // will not return until this result is completed
-				if (!_done)
-					throw new InternalError("Received complete notification but result is not available");
-			}
+			if (_done) 
+				return;
+		}
+		_completeBox.get(); // will not return until this result is completed
+		_completeBox.putnb(true); // some other thread might also be waiting, so we hafta prime the pump for them 
+		synchronized (this) {
+			if (!_done)
+				throw new InternalError("Received complete notification but result is not available");
 		}
 	}
 

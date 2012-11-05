@@ -3,6 +3,8 @@ package com.googlecode.contraildb.core.storage.provider;
 import java.io.IOException;
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
@@ -44,24 +46,35 @@ implements IStorageProvider
 		
 
 		@Override
-		public void flush() throws IOException {
-			try {
-				TaskUtils.get(_trackerSession.complete(), IOException.class);
-			}
-			finally {
-				doFlush();
-			}
+		public IResult<Void> flush() {
+			return 	_trackerSession.submit(new ContrailAction() {
+				@Override
+				protected void action() throws Pausable, Exception {
+					try {
+						// wait for previous operations to complete
+						_trackerSession.complete().get(); 
+					}
+					finally {
+						doFlush();
+					}
+				}
+			});
 		}
 
 		@Override
-		public void close() throws IOException {
-			try {
-				flush();
-			}
-			finally {
-				try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
-				doClose();
-			}
+		public IResult<Void> close() {
+			return new ContrailAction() {
+				@Override
+				protected void action() throws Pausable, Exception {
+					try {
+						flush();
+					}
+					finally {
+						try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
+						doClose();
+					}
+				}
+			}.submit();
 		}
 		
 		@Override

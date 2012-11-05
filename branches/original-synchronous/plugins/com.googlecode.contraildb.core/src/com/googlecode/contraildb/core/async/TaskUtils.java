@@ -184,16 +184,4 @@ public class TaskUtils {
 			}
 		};
 	}
-
-	public static <X extends Throwable, T extends IResult<?>> void getAll(Collection<T> results, Class<X> errorType) throws X {
-		get(combineResults(results), errorType);
-	}
-	public static <T extends Throwable> void get(IResult results, Class<T> errorType) throws T {
-		try {
-			results.join();
-		}
-		catch (Throwable t) {
-			throwSomething(t, errorType);
-		}
-	}
 }
