@@ -23,9 +23,9 @@ import com.googlecode.contraildb.core.utils.Logging;
  * <a href="http://en.wikipedia.org/wiki/Cilk">Cilk language</a> except that ContrailTasks 
  * denote more information about parallel relationships (an identifier and an operation) 
  * and can therefore achieve greater parallelism. 
- * Contrails approach to controlling concurrency is based on the concept of 
+ * Contrail's approach to controlling concurrency is based on the concept of 
  * <a href="http://en.wikipedia.org/wiki/Serializability">Serializability</a>.
- * An set of operation s executed concurrently is serializable if the result of executing 
+ * An set of operations executed concurrently is serializable if the result of executing 
  * those operations is the same as executing the operation sequentially.
  * Contrail allows as much concurrency as possible while preserving the serializability 
  * of operations. 
@@ -38,8 +38,7 @@ import com.googlecode.contraildb.core.utils.Logging;
  * 		Operation.DELETE,
  * 		Operation.LIST, or
  * 		Operation.CREATE
- * 
- * Subclasses need to implement the run method.
+ * 		Operation.FLUSH
  *
  * All tasks are associated with a 'domain' that controls the execution of tasks in that domain.
  * To execute a task a ContrailTask must be submitted to a TaskDomain for execution.
@@ -48,14 +47,9 @@ import com.googlecode.contraildb.core.utils.Logging;
  * If the current thread is not executing a ContrailTask (thus there is no associated domain) then 
  * an error will occur.
  * 
- * Contrail's concurrency facility employs a tactic known as 'work-stealing'.
- * That is, when a task needs to wait for some other task to complete the thread 
- * running the waiting task will execute some other tasks while waiting.  
- * Work-stealing ensures that the system will not become deadlocked because all 
- * available threads need to wait, thus making it impossible to execute any other 
- * tasks and make progress towards a computational goal.  
- * 
  * This class uses a fixed pool of threads to run tasks.
+ * 
+ * Subclasses need to implement the run method.
  *
  * @param <T> The result type returned by the <tt>getResult</tt> method
  * 
@@ -65,75 +59,7 @@ import com.googlecode.contraildb.core.utils.Logging;
 @SuppressWarnings({"unchecked", "rawtypes"})
 abstract public class ContrailTask<T> {
 	
-	public static final String CONTRAIL_THREAD_COUNT= "contrail.thread.count";
-
-
-
-	/**
-	 * Tasks waiting to be executed
-	 */
-	private static HashedLinkedList<ContrailTask> __tasks= new ConcurrentHashedLinkedList<ContrailTask>();
-	
-	private static Object __done= new Object(); // used to wait/notify when tasks are completed
-	private static Object __arrive= new Object(); // used to wait/notify when new tasks arrive
-	private static int __THREAD_COUNT= 0;
-	
 	private static Logger __logger= Logging.getLogger();
-	
-	
-	static class ContrailThread extends Thread {
-		ContrailTask _currentTask= null;
-		
-		public ContrailThread() {
-			super("Contrail Thread "+(++__THREAD_COUNT));
-			setDaemon(true);
-		}
-		
-		public void run() {
-			ContrailTask task= null;
-			while (true) {
-				synchronized (__arrive) {
-					try {
-						if ((task= __tasks.removeFirst()) == null)
-							__arrive.wait();
-					}
-					catch (InterruptedException x) {
-					}
-				}
-				if (task != null) { 
-					_currentTask= task;
-					try { task.runTask(); } catch (Pausable p) { p.printStackTrace(); }
-					_currentTask= null;
-				}
-			}
-		}
-	}
-	
-	static {
-		// fire up threads for running tasks
-		int count= Runtime.getRuntime().availableProcessors() * 2;  
-		String value= System.getProperty(CONTRAIL_THREAD_COUNT);
-		if (value != null) {
-			try {
-				int i= Integer.parseInt(value);
-				if (0 < i) {
-					count= i;
-				}
-				else {
-					Logging.warning("Invalid value for "+CONTRAIL_THREAD_COUNT+":"+value);
-				}
-			}
-			catch (Throwable t) {
-				Logging.warning("Invalid value for "+CONTRAIL_THREAD_COUNT+":"+value, t);
-			}
-		}
-		for (; 0 < count--;) { 
-			new ContrailThread().start();
-		}
-	}
-	
-	
-	
 	
 	
 	/**
@@ -185,6 +111,9 @@ abstract public class ContrailTask<T> {
 		if ((_operation= operation) == null)
 			_operation= Operation.READ;
 		_name= name;
+	}
+	public ContrailTask(Identifier id, Operation operation) {
+		this(id, operation, null);
 	}
 	
 	public ContrailTask() {
@@ -245,15 +174,11 @@ abstract public class ContrailTask<T> {
 	
 	private void done(boolean cancelled) {
 		if (!_done) {
-			
-			synchronized (__done) {
-				if (!_done) {
-					if (cancelled) {
-						try { stop(); } catch (Throwable t) { Logging.warning("Error while trying to stop a task", t); } 
-					}
-					_done= true;
-					__done.notifyAll();
+			if (!_done) {
+				if (cancelled) {
+					try { stop(); } catch (Throwable t) { Logging.warning("Error while trying to stop a task", t); } 
 				}
+				_done= true;
 			}
 		}
 	}
@@ -309,20 +234,24 @@ if (__logger.isLoggable(Level.FINER))
 	
 	synchronized public IResult<T> submit() {
 		if (!_submitted) {
-			__tasks.append(this);
 			_submitted= true;
-			synchronized (__arrive) {
-				__arrive.notify();
-			}
+			new Task() {
+				public void execute() throws Pausable, Exception {
+					runTask();
+				}
+			}.start();
 		}
-		return _result;
+		return getResult();
 	}
 	synchronized public boolean isSubmitted() {
 		return _submitted;
 	}
 	
 	
-	public boolean isDone() {
+	synchronized public boolean isDone() {
 		return _done;
+	}
+	public static void sleep(long waitMillis_) throws Pausable {
+		Task.sleep(waitMillis_);
 	}
 }

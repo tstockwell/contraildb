@@ -86,7 +86,32 @@ public class TaskUtils {
 		}
 		return result;
 	} 
-	public static final <T extends ContrailTask<?>> IResult<Void> combineResults(T[] tasks) {
+	public static final <T extends ContrailTask> IResult<Void> combineTasks(Collection<T> tasks) {
+		if (tasks == null || tasks.size() <= 0)
+			return DONE;
+		final Result<Void> result= new Result<Void>();
+		final int[] count= new int[] { tasks.size() };
+		final IResult[] error= new IResult[] { null };
+		IResultHandler handler= new IResultHandler() {
+			public void onComplete(IResult r) throws Exception {
+				if (!r.isSuccess()) {
+					error[0]= r;
+				}
+				if (--count[0] <= 0) {
+					if (error[0] != null) {
+						result.error(error[0].getError());
+					}
+					else
+						result.success(null);
+				}
+			}
+		};
+		for (ContrailTask<?> task: tasks) {
+			task.getResult().addHandler(handler);
+		}
+		return result;
+	}
+	public static final <T extends ContrailTask> IResult<Void> combineResults(T[] tasks) {
 		if (tasks == null || tasks.length <= 0)
 			return DONE;
 		final Result<Void> result= new Result<Void>();

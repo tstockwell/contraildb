@@ -10,6 +10,7 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.Operation;
+import com.googlecode.contraildb.core.async.Result;
 import com.googlecode.contraildb.core.async.TaskDomain;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.Logging;
@@ -17,7 +18,7 @@ import com.googlecode.contraildb.core.utils.Logging;
 
 /**
  * A convenient base class for implementing providers.
- * This class implements the nasty, complicated concurrency aspect.
+ * This class implements the concurrency aspect.
  * All that needs to be implemented are the doXXXX methods that just 
  * implement the actual storage functions.   
  * 
@@ -36,6 +37,9 @@ implements IStorageProvider
 		
 		abstract protected boolean exists(Identifier path) throws IOException;
 		abstract protected void doStore(Identifier path, byte[] byteArray) throws IOException;
+		/**
+		 * @return true if the file was created, false if the file already exists.
+		 */
 		abstract protected boolean doCreate(Identifier path, byte[] byteArray) throws IOException;
 		abstract protected byte[] doFetch(Identifier path) throws IOException;
 		abstract protected void doDelete(Identifier path) throws IOException;
@@ -47,7 +51,7 @@ implements IStorageProvider
 
 		@Override
 		public IResult<Void> flush() {
-			return 	_trackerSession.submit(new ContrailAction() {
+			return 	_trackerSession.submit(new ContrailAction(null, Operation.FLUSH) {
 				@Override
 				protected void action() throws Pausable, Exception {
 					try {
@@ -67,30 +71,28 @@ implements IStorageProvider
 				@Override
 				protected void action() throws Pausable, Exception {
 					try {
-						flush();
+						try { _trackerSession.close().join(); } catch (Throwable t) { Logging.warning(t); }
 					}
 					finally {
-						try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
 						doClose();
 					}
 				}
-			}.submit();
+			}.submit(); 
 		}
 		
 		@Override
 		public IResult<Collection<Identifier>> listChildren(final Identifier path) {
-			ContrailTask<Collection<Identifier>> action= new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
-				protected Collection<Identifier> run() throws IOException {
+			return _trackerSession.submit(new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
+				protected Collection<Identifier> run() throws Pausable, IOException {
 					return doList(path);
 				}
-			};
-			return _trackerSession.submit(action);
+			});
 		}
 		
 		@Override
 		public IResult<byte[]> fetch(final Identifier path) {
 			ContrailTask<byte[]> action= new ContrailTask<byte[]>(path, Operation.READ) {
-				protected byte[] run() throws IOException {
+				protected byte[] run() throws Pausable, IOException {
 					return doFetch(path);
 				}
 			};
@@ -98,18 +100,18 @@ implements IStorageProvider
 		}
 
 		@Override
-		public void store(final Identifier identifier, final IResult<byte[]> content) {
-			_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void action() throws IOException {
+		public IResult<Void> store(final Identifier identifier, final IResult<byte[]> content) {
+			return _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
+				protected void action() throws Pausable, IOException  {
 					doStore(identifier, content.get());
 				}
 			});
 		}
 
 		@Override
-		public void delete(final Identifier path) {
-			_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void action() throws IOException {
+		public IResult<Void> delete(final Identifier path) {
+			return _trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
+				protected void action() throws Pausable, IOException {
 					doDelete(path);
 				}
 			});
@@ -132,21 +134,11 @@ implements IStorageProvider
 		public IResult<Boolean> create(final Identifier path_, final IResult<byte[]> source_, final long waitMillis_) 
 		{
 			return _trackerSession.submit(new ContrailTask<Boolean>(path_, Operation.CREATE) {
-				protected Boolean run() throws IOException {
-					long startMillis= System.currentTimeMillis();
-					boolean success= false;
-					while(true) {
-						if (doCreate(path_, source_.get())) { 
-							success= true;
-							break;
-						}
-						if (waitMillis_ <= 0) 
-							break;
-						if (waitMillis_ < System.currentTimeMillis() - startMillis)
-							break;
-						yield(null);
-					}
-					return success;
+				protected Boolean run() throws Pausable, IOException {
+					if (doCreate(path_, source_.get()))  
+						return true;
+					ContrailTask.sleep(waitMillis_);
+					return doCreate(path_, source_.get());  
 				}
 			});
 		}

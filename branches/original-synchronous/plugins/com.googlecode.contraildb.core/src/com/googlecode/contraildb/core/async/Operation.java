@@ -5,5 +5,6 @@ public enum Operation {
 	WRITE,
 	DELETE,
 	LIST,
-	CREATE
+	CREATE,
+	FLUSH
 }
