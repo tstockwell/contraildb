@@ -9,6 +9,7 @@ import java.util.Set;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
+import com.sun.org.apache.xalan.internal.xsltc.compiler.sym;
 
 
 /**
@@ -28,6 +29,10 @@ import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
  * the hierarchy as well as the type of operation being performed.
  * 
  * Here are the rules...
+ * 
+ * A FLUSH operation may not proceed until all pending operations known to the 
+ * scheduler have completed.
+ * A FLUSH operation blocks all subsequent operations until the flush has completed.
  * 
  * A DELETE operation on an object may not proceed until all pending operations 
  * on the associated object or any of its descendants have completed.
@@ -57,8 +62,12 @@ public class TaskDomain {
 	
 	IdentifierIndexedStorage<Set<ContrailTask>> _tasks= 
 		new IdentifierIndexedStorage<Set<ContrailTask>>();
+	ArrayList<ContrailTask> _flushTasks= new ArrayList<ContrailTask>();
 	LinkedList<ContrailTask> _tasksToBeRemoved= new LinkedList<ContrailTask>();
 	ContrailAction _taskRemoval= null;
+	
+	public TaskDomain() {
+	}
 	
 	public Session beginSession() {
 		return new Session();
@@ -71,11 +80,21 @@ public class TaskDomain {
 		return tasks.contains(action);
 	}
 	
-	private List<ContrailTask<?>> findPendingTasks(ContrailTask task) {
+	private List<ContrailTask> findPendingTasks(ContrailTask task) {
 
 		Identifier taskId= task.getId();
 		final Operation op= task.getOperation();
-		final ArrayList<ContrailTask<?>> pendingTasks= new ArrayList<ContrailTask<?>>();
+		final ArrayList<ContrailTask> pendingTasks= new ArrayList<ContrailTask>();
+		pendingTasks.addAll(_flushTasks);
+		
+		if (op == Operation.FLUSH) {
+			ArrayList<ContrailTask> alltasks= new ArrayList<ContrailTask>();
+			for (Set<ContrailTask> tasks2:_tasks.values()) {
+				alltasks.addAll(tasks2);
+			}
+			alltasks.addAll(_flushTasks);
+			return alltasks;
+		}
 
 		IdentifierIndexedStorage.Visitor visitor= new IdentifierIndexedStorage.Visitor<Set<ContrailTask>>() {
 			public void visit(Identifier identifier, Set<ContrailTask> list) {
@@ -140,6 +159,9 @@ public class TaskDomain {
 			case CREATE:  { 
 				return true; 
 			}
+			case FLUSH:  { 
+				return true; 
+			}
 		}
 		return false;
 	}
@@ -170,13 +192,15 @@ public class TaskDomain {
 			if (_closed)
 				return TaskUtils.asResult(null);
 			_closed= true;
-			if (_sessionTasks == null)
-				return TaskUtils.asResult(null);
-			List<ContrailTask> tasks= new ArrayList<ContrailTask>(_sessionTasks);
-			List<IResult> results= new ArrayList<IResult>(_sessionTasks.size());
-			for (ContrailTask task:tasks)
-				results.add(task.getResult());
-			return TaskUtils.combineResults(results);
+
+			ArrayList<ContrailTask> alltasks= new ArrayList<ContrailTask>();
+			synchronized (_tasks) {
+				for (Set<ContrailTask> tasks2:_tasks.values()) {
+					alltasks.addAll(tasks2);
+				}
+				alltasks.addAll(_flushTasks);
+			}
+			return TaskUtils.combineTasks(alltasks);
 		}
 		
 		@Override
@@ -188,7 +212,7 @@ public class TaskDomain {
 		synchronized public <T> IResult<T> submit(final ContrailTask<T> task) {
 			if (_closed)
 				throw new IllegalStateException("The session has already been closed");
-			List<ContrailTask<?>> pendingTasks= findPendingTasks(task);
+			List<ContrailTask> pendingTasks= findPendingTasks(task);
 			addTask(task);
 			if (pendingTasks.isEmpty())
 				return task.submit();
@@ -210,13 +234,19 @@ public class TaskDomain {
 		
 		private void addTask(ContrailTask<?> task) {
 			Identifier taskId= task.getId();
+			Operation operation= task.getOperation();
 			synchronized (_tasks) {
-				Set<ContrailTask> tasks= _tasks.fetch(taskId);
-				if (tasks == null) {
-					tasks= new HashSet<ContrailTask>();
-					_tasks.store(taskId, tasks);
+				if (operation == Operation.FLUSH) {
+					_flushTasks.add(task);
 				}
-				tasks.add(task);
+				else {
+					Set<ContrailTask> tasks= _tasks.fetch(taskId);
+					if (tasks == null) {
+						tasks= new HashSet<ContrailTask>();
+						_tasks.store(taskId, tasks);
+					}
+					tasks.add(task);
+				}
 			}
 			_sessionTasks.add(task);
 			task.getResult().addHandler(_completionListener);
@@ -225,12 +255,18 @@ public class TaskDomain {
 		private void removeTask(ContrailTask<?> task) {
 			// remove the task from internal lists
 			Identifier ti= task.getId();
+			Operation operation= task.getOperation();
 			synchronized (_tasks) {
-				Set<ContrailTask> list= _tasks.fetch(ti);
-				if (list != null) {
-					list.remove(task);
-					if (list.isEmpty())
-						_tasks.delete(ti);
+				if (operation == Operation.FLUSH) {
+					_flushTasks.remove(task);
+				}
+				else {
+					Set<ContrailTask> list= _tasks.fetch(ti);
+					if (list != null) {
+						list.remove(task);
+						if (list.isEmpty())
+							_tasks.delete(ti);
+					}
 				}
 			}
 			_sessionTasks.remove(task);
@@ -243,6 +279,9 @@ public class TaskDomain {
 			List<ContrailTask> tasks;
 			synchronized (this) {
 				tasks= new ArrayList<ContrailTask>(_sessionTasks);
+			}
+			synchronized (_tasks) {
+				tasks.addAll(_flushTasks);
 			}
 			ArrayList<IResult> results= new ArrayList<IResult>(tasks.size());
 			for (ContrailTask task:tasks)
