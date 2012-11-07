@@ -2,6 +2,7 @@ package com.googlecode.contraildb.core.utils.tasks;
 
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.util.List;
 
 import kilim.Pausable;
 
@@ -28,7 +29,7 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 		return super.submit();
 	}
 	
-	protected byte[] run() throws Pausable, IOException {
+	protected byte[] run() throws Pausable {
 		try {
 			ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
 			outputStream.writeObject(_item);
@@ -38,7 +39,7 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 		catch (Throwable x) {
 			if (!getResult().isCancelled()) { // if task was canceled then we can ignore the error.
 				x.printStackTrace();
-				TaskUtils.throwSomething(x, IOException.class);
+				TaskUtils.throwSomething(x);
 			}
 			return null;
 		}

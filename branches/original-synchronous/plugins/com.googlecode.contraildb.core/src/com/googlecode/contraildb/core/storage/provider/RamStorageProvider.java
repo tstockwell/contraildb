@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.Collection;
 
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
 
 
@@ -17,8 +19,8 @@ public class RamStorageProvider extends AbstractStorageProvider {
 	IdentifierIndexedStorage<byte[]> _storage= new IdentifierIndexedStorage<byte[]>(); 
 	
 	@Override
-	public com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException {
-		return new RamStorageSession();
+	public IResult<IStorageProvider.Session> connect() {
+		return TaskUtils.asResult(new RamStorageSession());
 	}
 	
 	private class RamStorageSession 

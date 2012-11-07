@@ -152,7 +152,7 @@ public class TaskUtils {
 				throw (T)t;
 		return t;
 	}
-	static final void throwSomething(Throwable t) {
+	public static final void throwSomething(Throwable t) {
 		if (t == null)
 			return;
 		if (t instanceof RuntimeException)
