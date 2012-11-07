@@ -5,7 +5,7 @@ import kilim.Pausable;
 
 
 /**
- * A <tt>Claim</tt> represents the result of an asynchronous
+ * An <tt>IResult</tt> represents the result of an asynchronous
  * computation.  
  * 
  * @param <V> The result type returned by this result's <tt>get</tt> method

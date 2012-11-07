@@ -17,7 +17,6 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
+import kilim.Pausable;
 
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.Identifier;
@@ -72,7 +72,7 @@ public class ContrailStorageTests extends TestCase {
 		super.tearDown();
 	}
 	
-	public void testObjectStorage() throws Exception {
+	public void testObjectStorage() throws Pausable, Exception {
 			IEntityStorage.Session storage= 
 				new EntityStorage(_storage.getStorageProvider()).connect();
 		
@@ -85,8 +85,8 @@ public class ContrailStorageTests extends TestCase {
 			
 	}
 	
-	public void testSimpleCreate() throws Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect();
+	public void testSimpleCreate() throws Pausable, Exception {
+		final IStorageProvider.Session storage= _rawStorage.connect().get();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			IResult<Boolean> result= storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0);
@@ -99,8 +99,8 @@ public class ContrailStorageTests extends TestCase {
 	 * Verify that the create method works correctly when invoked by many 
 	 * threads at once.
 	 */
-	public void testConcurrentFileCreation() throws Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect();
+	public void testConcurrentFileCreation() throws Pausable, Exception {
+		final IStorageProvider.Session storage= _rawStorage.connect().get();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			ArrayList<IResult<Boolean>> results= new ArrayList<IResult<Boolean>>();
@@ -120,13 +120,13 @@ public class ContrailStorageTests extends TestCase {
 	 * @throws IOException
 	 */
 	@SuppressWarnings("unchecked")
-	public void testConcurrentCreateAndDelete() throws Throwable {
+	public void testConcurrentCreateAndDelete() throws Pausable, Throwable {
 		final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
 		
 		// test that only thread can create the same file at a time
 		for (int f= 0; f < 10; f++) {			
 			final Identifier identifier= Identifier.create("file-"+f);
-			final IStorageProvider.Session session= _rawStorage.connect();
+			final IStorageProvider.Session session= _rawStorage.connect().get();
 			final List count= Collections.synchronizedList(new ArrayList());
 			ExecutorService executorService= Executors.newFixedThreadPool(20);
 			final Throwable[] error= new Throwable[] { null }; 
@@ -232,7 +232,7 @@ public class ContrailStorageTests extends TestCase {
 		}
 	}
 	
-	public void testBasicTransaction() throws Exception {
+	public void testBasicTransaction() throws Pausable, Exception {
 			StorageSession session= _storage.beginSession(Mode.READWRITE);
 			assertEquals(1, session.getRevisionNumber());
 			Entity object_0_1= new Entity("person-0.1");
@@ -306,7 +306,7 @@ public class ContrailStorageTests extends TestCase {
 			assertNotNull(T2.fetch(object_0_1.getId()).get());
 	}
 	
-	public void testRollback() throws Exception {
+	public void testRollback() throws Pausable, Exception {
 		StorageSession session= _storage.beginSession(Mode.READWRITE);
 		assertEquals(1, session.getRevisionNumber());
 		Entity object_0_1= new Entity("person-0.1");
@@ -383,8 +383,9 @@ public class ContrailStorageTests extends TestCase {
 	
 	/**
 	 * Reproduces a bug where a stored object was not returned from the listChildren method.
+	 * @throws Pausable 
 	 */
-	public void testConcurrentObjectStoreListChildren() throws IOException {
+	public void testConcurrentObjectStoreListChildren() throws IOException, Pausable {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
 		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect();
 		ArrayList<IResult> tasks= new ArrayList<IResult>();
@@ -416,9 +417,9 @@ public class ContrailStorageTests extends TestCase {
 	/**
 	 * Reproduces a bug where a stored object was not returned from the listChildren method.
 	 */
-	public void testConcurrentStoreAPIListChildren() throws IOException {
+	public void testConcurrentStoreAPIListChildren() throws Pausable, IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
-		final IStorageProvider.Session storage= _rawStorage.connect();
+		final IStorageProvider.Session storage= _rawStorage.connect().get();
 		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
