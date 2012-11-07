@@ -9,11 +9,11 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 
 
 /**
- * An even more convenient API for storing Java objects than IObjectStore.
+ * An even more convenient API for storing Java objects than ObjectStorage.
  * 
  * This API stores instances of IEntity instead of POJOs, thus simplifying the 
  * API somewhat.
- * Other than that, IEntityStorage is like IObjectStore, this API handles the 
+ * Other than that, IEntityStorage is like ObjectStorage, this API handles the 
  * serialization of Java objects to byte streams, object caching, and ILifecycle 
  * lifecycle management.
  * 
