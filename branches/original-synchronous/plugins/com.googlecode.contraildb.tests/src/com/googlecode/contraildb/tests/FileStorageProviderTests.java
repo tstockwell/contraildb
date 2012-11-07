@@ -17,11 +17,9 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import junit.framework.TestCase;
-import kilim.Pausable;
+import java.io.File;
 
-import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.storage.provider.FileStorageProvider;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 
 
@@ -30,34 +28,10 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
  * 
  * @author Ted Stockwell
  */
-abstract public class ContrailStorageProviderTests extends TestCase {
+public class FileStorageProviderTests extends ContrailStorageProviderTests {
 	
-	IStorageProvider _rawStorage;
-	
-	@Override
-	public void setUp() throws Exception {
-		super.setUp();
-		
-		_rawStorage= createStorageProvider();
+	protected IStorageProvider createStorageProvider() {
+		return new FileStorageProvider(new File("/temp/test/contrail"), true);
 	}
-	
-	abstract protected IStorageProvider createStorageProvider();
-	
-	@Override
-	protected void tearDown() throws Exception {
-		super.tearDown();
-	}
-	
-	public void testProviderStorage() throws Pausable, Exception {
-		IStorageProvider.Session storage= _rawStorage.connect().get();
-
-		Identifier id= Identifier.create("person-0.1");
-		String object_0_1= "person-0.1";
-		storage.store(id, TaskUtils.asResult(object_0_1.getBytes()));
-		storage.flush();
-		String fetched= new String(storage.fetch(id).get());
-		assertEquals(object_0_1, fetched);
-	}
-	
 	
 }
