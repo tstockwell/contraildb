@@ -10,6 +10,8 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.IResult;
@@ -51,7 +53,7 @@ public class FileStorageProvider extends AbstractStorageProvider {
 			_file= file;
 		}
 		@Override
-		protected void action() {
+		protected void action() throws Pausable {
 			File[] files= _file.listFiles();
 			if (files != null) {
 				ArrayList<IResult<Void>> tasks= new ArrayList<IResult<Void>>();
@@ -73,21 +75,15 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	}
 	
 	public FileStorageProvider(File root) {
-		root.mkdirs();
-		_root= root;		
+		this(root, false);
 	}
-	public FileStorageProvider(File root, boolean clean) throws IOException {
-		try {
-			if (clean) {
-				if (root.exists())
-					new DeleteAction(Identifier.create(""), root).submit().get();
-			}
-			root.mkdirs();
-			_root= root;
+	public FileStorageProvider(File root, boolean clean) {
+		if (clean) {
+			if (root.exists())
+				new DeleteAction(Identifier.create(""), root).submit().getb();
 		}
-		catch (Throwable t) {
-			TaskUtils.throwSomething(t, IOException.class);
-		}
+		root.mkdirs();
+		_root= root;
 	}
 	
 	public File getRoot() {
@@ -95,8 +91,8 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	}
 	
 	@Override
-	public Session connect() throws IOException {
-		return new FileStorageSession();
+	public IResult<IStorageProvider.Session> connect() {
+		return TaskUtils.asResult(new FileStorageSession());
 	}
 	
 	
@@ -176,6 +172,7 @@ public class FileStorageProvider extends AbstractStorageProvider {
 	}
 	
 	
+	@SuppressWarnings("resource")
 	static byte[] fetchFile(File file) throws IOException {
 		InputStream in= null;
 		try {

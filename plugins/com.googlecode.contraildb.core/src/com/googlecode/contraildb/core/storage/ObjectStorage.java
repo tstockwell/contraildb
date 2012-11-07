@@ -10,6 +10,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
@@ -74,11 +76,11 @@ public class ObjectStorage {
 		_storageProvider= storageProvider;
 	}
 
-	public Session connect() throws IOException {
-		return new Session(_tracker.beginSession(), _storageProvider.connect());
+	public IResult<Session> connect() throws Pausable {
+		return TaskUtils.asResult(new Session(_tracker.beginSession(), _storageProvider.connect().get()));
 	}
-	public Session connect(EntityStorage.Session entitySession) throws IOException {
-		return new Session(_tracker.beginSession(), _storageProvider.connect(), entitySession);
+	public IResult<Session> connect(EntityStorage.Session entitySession) throws Pausable {
+		return TaskUtils.asResult(new Session(_tracker.beginSession(), _storageProvider.connect().get(), entitySession));
 	}
 	public IStorageProvider getStorageProvider() {
 		return _storageProvider;
@@ -119,9 +121,9 @@ public class ObjectStorage {
 		}
 
 		public IResult<Void> delete(final Identifier path) {
-			final Object item= fetch(path).get();
 			return _trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-				protected void action() throws IOException {
+				protected void action() throws IOException, Pausable {
+					Object item= fetch(path).get();
 					_cache.delete(path);
 					_storageSession.delete(path);
 					if (item instanceof ILifecycle) 
@@ -132,8 +134,8 @@ public class ObjectStorage {
 
 		public <T extends Serializable> IResult<T> fetch(final Identifier path) 
 		{
-			ContrailTask<T> task= new ContrailTask<T>(path, Operation.READ) {
-				protected T run() throws IOException {
+			return _trackerSession.submit(new ContrailTask<T>(path, Operation.READ) {
+				protected T run() throws IOException, Pausable {
 					T storable= (T)_cache.fetch(path);
 					if (storable == null) {
 						IResult<byte[]> content= _storageSession.fetch(path);
@@ -142,8 +144,7 @@ public class ObjectStorage {
 					}
 					return storable;
 				}
-			};
-			return _trackerSession.submit(task);
+			});
 		}
 		
 		private <T extends Serializable> T readStorable(Identifier id, byte[] contents)
@@ -164,8 +165,8 @@ public class ObjectStorage {
 
 		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path)
 		{
-			ContrailTask<Map<Identifier, T>> task= new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
-				protected Map<Identifier, T> run() throws IOException {
+			return _trackerSession.submit(new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
+				protected Map<Identifier, T> run() throws IOException, Pausable {
 					Collection<Identifier> children= _storageSession.listChildren(path).get();
 					HashMap<Identifier, IResult<byte[]>> fetched= new HashMap<Identifier, IResult<byte[]>>();
 					for (Identifier childId:children) 
@@ -178,8 +179,7 @@ public class ObjectStorage {
 					}
 					return results;
 				}
-			};
-			return _trackerSession.submit(task);
+			});
 		}
 
 		public IResult<Collection<Identifier>> listChildren(final Identifier path)
@@ -208,8 +208,8 @@ public class ObjectStorage {
 		
 		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
 		{
-			ContrailTask<Boolean> action= new ContrailTask<Boolean>(identifier, Operation.CREATE) {
-				protected Boolean run() throws IOException {
+			return _trackerSession.submit(new ContrailTask<Boolean>(identifier, Operation.CREATE) {
+				protected Boolean run() throws IOException, Pausable {
 
 					IResult<byte[]> bytes= new ExternalizationTask(item).submit();
 
@@ -225,8 +225,7 @@ public class ObjectStorage {
 					}
 					return created;
 				}
-			};
-			return _trackerSession.submit(action);
+			});
 		}
 		
 		
@@ -237,18 +236,18 @@ public class ObjectStorage {
 			return TaskUtils.combineResults(all);
 		}
 
-		public IResult<Void> deleteAllChildren(Identifier... paths) throws IOException {
+		public IResult<Void> deleteAllChildren(Identifier... paths) throws Pausable {
 			return deleteAllChildren(Arrays.asList(paths));
 		}
 
-		public IResult<Void> deleteAllChildren(Iterable<Identifier> paths) throws IOException {
+		public IResult<Void> deleteAllChildren(Iterable<Identifier> paths) throws Pausable {
 			ArrayList<IResult> all= new ArrayList<IResult>();
 			for (Identifier identifier:paths)
 				all.add(deleteAllChildren(identifier));
 			return TaskUtils.combineResults(all);
 		}
 
-		public IResult<Void> deleteAllChildren(Identifier path) {
+		public IResult<Void> deleteAllChildren(Identifier path) throws Pausable {
 			ArrayList<IResult> all= new ArrayList<IResult>();
 			IResult<Collection<Identifier>> children= listChildren(path);
 			for (Identifier identifier: children.get()) {
