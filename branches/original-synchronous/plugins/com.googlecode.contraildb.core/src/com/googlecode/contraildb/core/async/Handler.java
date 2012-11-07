@@ -26,9 +26,17 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 			checkForHandler();
 			return super.get();
 		};
+		public synchronized Object getb() {
+			checkForHandler();
+			return super.getb();
+		};
 		public synchronized void join() throws Pausable {
 			checkForHandler();
 			super.join();
+		};
+		public synchronized void joinb() {
+			checkForHandler();
+			super.joinb();
 		};
 		public synchronized Throwable getError() {
 			checkForHandler();
@@ -215,8 +223,14 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
     public O get() throws Pausable {
     	return _outgoing.get();
     }
+    public O getb()  {
+    	return _outgoing.getb();
+    }
     public void join() throws Pausable {
     	_outgoing.join();
+    }
+    public void joinb() {
+    	_outgoing.joinb();
     }
 	public void addHandler(IResultHandler<O> handler) {
 		_outgoing.addHandler(handler);

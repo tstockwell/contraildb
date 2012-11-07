@@ -2,7 +2,8 @@ package com.googlecode.contraildb.core.utils.tasks;
 
 import java.io.IOException;
 import java.io.ObjectOutputStream;
-import java.util.List;
+
+import kilim.Pausable;
 
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
@@ -27,7 +28,7 @@ public class ExternalizationTask extends ContrailTask<byte[]>  {
 		return super.submit();
 	}
 	
-	protected byte[] run() throws IOException {
+	protected byte[] run() throws Pausable, IOException {
 		try {
 			ObjectOutputStream outputStream= new ObjectOutputStream(_byteStream);
 			outputStream.writeObject(_item);
