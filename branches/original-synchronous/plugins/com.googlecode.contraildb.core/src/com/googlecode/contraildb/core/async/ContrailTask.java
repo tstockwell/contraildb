@@ -6,10 +6,9 @@ import java.util.logging.Logger;
 import kilim.Mailbox;
 import kilim.Pausable;
 import kilim.Task;
+import kilim.WorkerThread;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.ConcurrentHashedLinkedList;
-import com.googlecode.contraildb.core.utils.HashedLinkedList;
 import com.googlecode.contraildb.core.utils.Logging;
 
 
@@ -61,21 +60,43 @@ abstract public class ContrailTask<T> {
 	
 	private static Logger __logger= Logging.getLogger();
 	
+	/**
+	 * Kilim task type used to execute ContrailTasks.
+	 * Kilim Tasks that has this type can be recognized as being associated 
+	 * with a ContrailTask.  
+	 */
+	private static class InternalTask extends Task {
+		ContrailTask _contrailTask;
+		public InternalTask(ContrailTask contrailTask) {
+			_contrailTask= contrailTask;
+		}
+	}
+	
 	
 	/**
 	 * Returns true if the current thread is running a ContrailTask.  
 	 */
 	public static final boolean isContrailTask() {
-		return Thread.currentThread() instanceof ContrailThread;
+		Thread currentThread= Thread.currentThread();
+		if (!(currentThread instanceof WorkerThread))
+			return false;
+		WorkerThread workerThread= (WorkerThread)currentThread;
+		Task currentTask= workerThread.getCurrentTask();
+		if (currentTask instanceof InternalTask)
+			return true;
+		return false;
 	}
 	/**
 	 * Returns the current ContrailTask, if any.  
 	 */
 	public static final <T> ContrailTask<T> getContrailTask() {
-		Thread thread= Thread.currentThread();
-		if (thread instanceof ContrailThread) {
-			return ((ContrailThread)thread)._currentTask;
-		}
+		Thread currentThread= Thread.currentThread();
+		if (!(currentThread instanceof WorkerThread))
+			return null;
+		WorkerThread workerThread= (WorkerThread)currentThread;
+		Task currentTask= workerThread.getCurrentTask();
+		if (currentTask instanceof InternalTask)
+			return ((InternalTask)currentTask)._contrailTask;
 		return null;
 	}
 	
@@ -84,15 +105,14 @@ abstract public class ContrailTask<T> {
 	 * task has been canceled.  
 	 */
 	public static final boolean isTaskCanceled() {
-		Thread thread= Thread.currentThread();
-		if (thread instanceof ContrailThread) {
-			ContrailTask t= ((ContrailThread)thread)._currentTask;
-			if (t != null) {
-				IResult result= t.getResult();
-				if (result.isDone())
-					return result.isCancelled();
-			}
-		}
+		ContrailTask contrailTask= getContrailTask();
+		if (contrailTask == null) 
+			return false;
+
+		IResult result= contrailTask.getResult();
+		if (result.isDone())
+			return result.isCancelled();
+		
 		return false;
 	}
 	
@@ -201,7 +221,7 @@ if (__logger.isLoggable(Level.FINER))
 			final Object[] result= new Object[] { null };
 			final Exception[] err= new Exception[] { null };
 			final Mailbox<Boolean> outBox= new Mailbox<Boolean>();
-			new Task() {
+			new InternalTask(this) {
 				@Override
 				public void execute() throws Pausable, Exception {
 					try {

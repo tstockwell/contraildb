@@ -18,6 +18,7 @@
 package com.googlecode.contraildb.tests;
 
 import junit.framework.TestCase;
+import kilim.Pausable;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.TaskUtils;
@@ -47,8 +48,8 @@ public class ContrailStorageProviderTests extends TestCase {
 		super.tearDown();
 	}
 	
-	public void testProviderStorage() throws Exception {
-		IStorageProvider.Session storage= _rawStorage.connect();
+	public void testProviderStorage() throws Pausable, Exception {
+		IStorageProvider.Session storage= _rawStorage.connect().get();
 
 		Identifier id= Identifier.create("person-0.1");
 		String object_0_1= "person-0.1";
