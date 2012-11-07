@@ -76,11 +76,21 @@ public class ObjectStorage {
 		_storageProvider= storageProvider;
 	}
 
-	public IResult<Session> connect() throws Pausable {
-		return TaskUtils.asResult(new Session(_tracker.beginSession(), _storageProvider.connect().get()));
+	public IResult<Session> connect() {
+		return new ContrailTask<Session>() {
+			@Override
+			protected Session run() throws Pausable, Exception {
+				return new Session(_tracker.beginSession(), _storageProvider.connect().get());
+			}
+		}.getResult();
 	}
-	public IResult<Session> connect(EntityStorage.Session entitySession) throws Pausable {
-		return TaskUtils.asResult(new Session(_tracker.beginSession(), _storageProvider.connect().get(), entitySession));
+	public IResult<Session> connect(final EntityStorage.Session entitySession) {
+		return new ContrailTask<Session>() {
+			@Override
+			protected Session run() throws Pausable, Exception {
+				return new Session(_tracker.beginSession(), _storageProvider.connect().get(), entitySession);
+			}
+		}.getResult();
 	}
 	public IStorageProvider getStorageProvider() {
 		return _storageProvider;

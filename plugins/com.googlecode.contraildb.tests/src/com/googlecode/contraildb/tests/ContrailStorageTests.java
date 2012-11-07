@@ -27,7 +27,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
-import kilim.Pausable;
 
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.Identifier;
@@ -72,25 +71,25 @@ public class ContrailStorageTests extends TestCase {
 		super.tearDown();
 	}
 	
-	public void testObjectStorage() throws Pausable, Exception {
+	public void testObjectStorage() throws Exception {
 			IEntityStorage.Session storage= 
 				new EntityStorage(_storage.getStorageProvider()).connect();
 		
 			Identifier id= Identifier.create("person-0.1");
 			Entity object_0_1= new Entity(id);
 			storage.store(object_0_1);
-			IEntity fetched= storage.fetch(id).get();
+			IEntity fetched= storage.fetch(id).getb();
 			assertNotNull(fetched);
 			storage.flush();
 			
 	}
 	
-	public void testSimpleCreate() throws Pausable, Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect().get();
+	public void testSimpleCreate() throws Exception {
+		final IStorageProvider.Session storage= _rawStorage.connect().getb();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			IResult<Boolean> result= storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0);
-			assertTrue(result.get());
+			assertTrue(result.getb());
 		}
 		
 	}
@@ -99,8 +98,8 @@ public class ContrailStorageTests extends TestCase {
 	 * Verify that the create method works correctly when invoked by many 
 	 * threads at once.
 	 */
-	public void testConcurrentFileCreation() throws Pausable, Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect().get();
+	public void testConcurrentFileCreation() throws Exception {
+		final IStorageProvider.Session storage= _rawStorage.connect().getb();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
 			ArrayList<IResult<Boolean>> results= new ArrayList<IResult<Boolean>>();
@@ -108,7 +107,7 @@ public class ContrailStorageTests extends TestCase {
 				results.add(storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0));
 			int count= 0;
 			for (IResult<Boolean> result: results)
-				if (result.get())
+				if (result.getb())
 					count++;
 			assertEquals(1, count);
 		}
@@ -120,13 +119,13 @@ public class ContrailStorageTests extends TestCase {
 	 * @throws IOException
 	 */
 	@SuppressWarnings("unchecked")
-	public void testConcurrentCreateAndDelete() throws Pausable, Throwable {
+	public void testConcurrentCreateAndDelete() throws Throwable {
 		final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
 		
 		// test that only thread can create the same file at a time
 		for (int f= 0; f < 10; f++) {			
 			final Identifier identifier= Identifier.create("file-"+f);
-			final IStorageProvider.Session session= _rawStorage.connect().get();
+			final IStorageProvider.Session session= _rawStorage.connect().getb();
 			final List count= Collections.synchronizedList(new ArrayList());
 			ExecutorService executorService= Executors.newFixedThreadPool(20);
 			final Throwable[] error= new Throwable[] { null }; 
@@ -135,7 +134,7 @@ public class ContrailStorageTests extends TestCase {
 					public void run() {
 						try {
 							IResult<Boolean> result= session.create(identifier, content, Integer.MAX_VALUE);
-							assertTrue(result.get());
+							assertTrue(result.getb());
 							count.add(true);
 							assertEquals("More than one lock was granted", 1, count.size());
 							try { Thread.sleep(10); } catch (InterruptedException x) { }
@@ -232,18 +231,18 @@ public class ContrailStorageTests extends TestCase {
 		}
 	}
 	
-	public void testBasicTransaction() throws Pausable, Exception {
+	public void testBasicTransaction() throws Exception {
 			StorageSession session= _storage.beginSession(Mode.READWRITE);
 			assertEquals(1, session.getRevisionNumber());
 			Entity object_0_1= new Entity("person-0.1");
 			session.store(object_0_1);
-			assertNotNull(session.fetch(object_0_1.getId()).get());
+			assertNotNull(session.fetch(object_0_1.getId()).getb());
 			session.commit();
 			
 			StorageSession T1= _storage.beginSession(Mode.READWRITE);
 			assertEquals(1, T1.getStartingCommitNumber());
 			assertEquals(2, T1.getRevisionNumber());
-			assertNotNull(T1.fetch(object_0_1.getId()).get());
+			assertNotNull(T1.fetch(object_0_1.getId()).getb());
 			StorageSession T2= _storage.beginSession(Mode.READONLY);
 			assertEquals(1, T2.getRevisionNumber());
 			
@@ -251,30 +250,30 @@ public class ContrailStorageTests extends TestCase {
 			// put object-1.1 in transaction 1
 			Entity object_1_1= new Entity("person-1.1");
 			T1.store(object_1_1);
-			assertNotNull(T1.fetch(object_1_1.getId()).get());
+			assertNotNull(T1.fetch(object_1_1.getId()).getb());
 			// object-1.1 should not be visible outside of T1 since it is not yet committed 
-			assertNull("transaction isolation violated", T2.fetch(object_1_1.getId()).get());
+			assertNull("transaction isolation violated", T2.fetch(object_1_1.getId()).getb());
 			StorageSession T3= _storage.beginSession(Mode.READONLY);
 			assertEquals(1, T3.getRevisionNumber());
-			assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()).get());
+			assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()).getb());
 			T3.close();
 			StorageSession T4= _storage.beginSession(Mode.READWRITE);
 			assertEquals(3, T4.getRevisionNumber());
-			assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()).get());
+			assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()).getb());
 			T4.close();
 			
 			// TEST DELETE ISOLATION
 			T1.delete(object_0_1.getId());
 			// object_0_1 should not be visible in T1 
-			assertNull("transaction isolation violated", T1.fetch(object_0_1.getId()).get());
+			assertNull("transaction isolation violated", T1.fetch(object_0_1.getId()).getb());
 			// object-0.1 should still be visible outside of T1 since it is not yet committed 
-			assertNotNull("transaction isolation violated", T2.fetch(object_0_1.getId()).get());
+			assertNotNull("transaction isolation violated", T2.fetch(object_0_1.getId()).getb());
 			T3= _storage.beginSession(Mode.READONLY);
-			assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()).get());
+			assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()).getb());
 			T3.close();
 			T4= _storage.beginSession(Mode.READWRITE);
 			assertEquals(4, T4.getRevisionNumber());
-			assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()).get());
+			assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()).getb());
 			T4.close();
 			
 			// TEST COMMIT AND ACTIVE STATE
@@ -286,27 +285,27 @@ public class ContrailStorageTests extends TestCase {
 			// object-1.1 should now be visible to new transactions
 			T3= _storage.beginSession(Mode.READONLY);
 			assertEquals(2, T3.getRevisionNumber());
-			assertNotNull(T3.fetch(object_1_1.getId()).get());
+			assertNotNull(T3.fetch(object_1_1.getId()).getb());
 			T3.close();
 			T4= _storage.beginSession(Mode.READWRITE);
-			assertNotNull(T4.fetch(object_1_1.getId()).get());
+			assertNotNull(T4.fetch(object_1_1.getId()).getb());
 			T4.close();
 			// object-1.1 should still not be visible to T2 since T2 was started before object-1.1 was committed
-			assertNull("transaction isolation violated", T2.fetch(object_1_1.getId()).get());
+			assertNull("transaction isolation violated", T2.fetch(object_1_1.getId()).getb());
 			
 			// TEST DELETE ISOLATION
 			// object-0.1 should not be visible to new transactions 
 			T3= _storage.beginSession(Mode.READONLY);
-			assertNull(T3.fetch(object_0_1.getId()).get());
+			assertNull(T3.fetch(object_0_1.getId()).getb());
 			T3.close();
 			T4= _storage.beginSession(Mode.READWRITE);
-			assertNull(T4.fetch(object_0_1.getId()).get());
+			assertNull(T4.fetch(object_0_1.getId()).getb());
 			T4.close();
 			// object-0.1 should still be visible to T2 
-			assertNotNull(T2.fetch(object_0_1.getId()).get());
+			assertNotNull(T2.fetch(object_0_1.getId()).getb());
 	}
 	
-	public void testRollback() throws Pausable, Exception {
+	public void testRollback() throws Exception {
 		StorageSession session= _storage.beginSession(Mode.READWRITE);
 		assertEquals(1, session.getRevisionNumber());
 		Entity object_0_1= new Entity("person-0.1");
@@ -319,10 +318,10 @@ public class ContrailStorageTests extends TestCase {
 		// put object-1.1 in transaction 1
 		Entity object_1_1= new Entity("person-1.1");
 		T1.store(object_1_1);
-		assertNotNull(T1.fetch(object_1_1.getId()).get());
-		assertNotNull(T1.fetch(object_0_1.getId()).get());
+		assertNotNull(T1.fetch(object_1_1.getId()).getb());
+		assertNotNull(T1.fetch(object_0_1.getId()).getb());
 		T1.delete(object_0_1.getId());
-		assertNull(T1.fetch(object_0_1.getId()).get());
+		assertNull(T1.fetch(object_0_1.getId()).getb());
 		
 		assertTrue(T1.isActive());
 		T1.close(); // abandon any changes
@@ -331,19 +330,19 @@ public class ContrailStorageTests extends TestCase {
 		// object-1.1 should not be visible 
 		// object-0.1 should still be visible 
 		StorageSession T3= _storage.beginSession(Mode.READONLY);
-		assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()).get());
-		assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()).get());
+		assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()).getb());
+		assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()).getb());
 		T3.close();
 		StorageSession T4= _storage.beginSession(Mode.READWRITE);
-		assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()).get());
-		assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()).get());
+		assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()).getb());
+		assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()).getb());
 		T4.close();
 	}
 	
 	public void testFetchObjectStore() throws Exception {
 		
 		for (int i= 1; i <= 100; i++) {
-			ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect();
+			ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect().getb();
 			Identifier entity= Identifier.create("person-"+i);
 			objectStorage.store(entity, entity);
 			if (objectStorage.fetch(entity) == null) 
@@ -383,11 +382,10 @@ public class ContrailStorageTests extends TestCase {
 	
 	/**
 	 * Reproduces a bug where a stored object was not returned from the listChildren method.
-	 * @throws Pausable 
 	 */
-	public void testConcurrentObjectStoreListChildren() throws IOException, Pausable {
+	public void testConcurrentObjectStoreListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
-		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect();
+		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect().getb();
 		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
@@ -411,15 +409,15 @@ public class ContrailStorageTests extends TestCase {
 				}.submit());
 			}
 		}
-		TaskUtils.combineResults(tasks).get();
+		TaskUtils.combineResults(tasks).getb();
 		
 	}
 	/**
 	 * Reproduces a bug where a stored object was not returned from the listChildren method.
 	 */
-	public void testConcurrentStoreAPIListChildren() throws Pausable, IOException {
+	public void testConcurrentStoreAPIListChildren() throws IOException {
 		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
-		final IStorageProvider.Session storage= _rawStorage.connect().get();
+		final IStorageProvider.Session storage= _rawStorage.connect().getb();
 		ArrayList<IResult> tasks= new ArrayList<IResult>();
 		for (int f= 0; f < 10; f++) {			
 			final Identifier folderId= Identifier.create(Integer.toString(f));
@@ -446,7 +444,7 @@ public class ContrailStorageTests extends TestCase {
 				}.submit());
 			}
 		}
-		TaskUtils.combineResults(tasks).get();
+		TaskUtils.combineResults(tasks).getb();
 		
 	}
 	
