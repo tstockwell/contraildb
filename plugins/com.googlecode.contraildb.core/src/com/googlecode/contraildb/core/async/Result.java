@@ -72,6 +72,21 @@ public class Result<V> implements IResult<V>{
 		
 		return _result;
 	}
+	
+	@Override public V getb() {
+		
+		joinb();
+		
+		if (!_success) {
+			if (_cancelled) {
+				throw new CancellationException();
+			}
+			else
+				TaskUtils.throwSomething(_error);
+		}
+		
+		return _result;
+	}
 
 	@Override public void join() throws Pausable {
 		synchronized (this) {
@@ -85,7 +100,27 @@ public class Result<V> implements IResult<V>{
 		// since we cannot synchronise access to _completeBox, it is possible 
 		// that some other thread might also be waiting on _completeBox, so we 
 		// hafta prime the pump for them 
-		_completeBox.putnb(true);
+		_completeBox.putb(true);
+		
+		synchronized (this) {
+			if (!_done)
+				throw new InternalError("Received complete notification but result is not available");
+		}
+	}
+	
+	@Override public void joinb() {
+		synchronized (this) {
+			if (_done) 
+				return;
+		}
+		
+		// will not return until this result is completed
+		_completeBox.getb(); 
+		
+		// since we cannot synchronise access to _completeBox, it is possible 
+		// that some other thread might also be waiting on _completeBox, so we 
+		// hafta prime the pump for them 
+		_completeBox.putb(true);
 		
 		synchronized (this) {
 			if (!_done)
@@ -129,7 +164,7 @@ public class Result<V> implements IResult<V>{
 			_completedHandlers= null;
 		}
 		
-		_completeBox.putnb(Boolean.TRUE); // send notification that this result is completed
+		_completeBox.putb(Boolean.TRUE); // send notification that this result is completed
 	}
 
 	@Override

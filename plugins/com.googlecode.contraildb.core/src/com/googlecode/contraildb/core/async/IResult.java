@@ -57,7 +57,29 @@ public interface IResult<V> {
      * @throws An unchecked exception if an error occurred while producing the result
      */
     public V get() throws Pausable;
+    
+    /**
+     * Waits if necessary for the computation to complete, and then
+     * retrieves its result.
+     * Note, this call potentially blocks the current thread, unlike #get() that 
+     * pauses the current fiber but doesn't block the thread.
+     * Use this method in situations where Pausable cannot be thrown, like 
+     * a JUnit test method.
+     * 
+     * @return the computed result
+     * @throws An unchecked exception if an error occurred while producing the result
+     */
+    public V getb();
+    
 
+    /**
+     * Waits if necessary for the computation to complete.
+     * 
+     * Does NOT throw an exception if an error occurred in the associated task.
+     * 
+     */
+    public void join() throws Pausable;
+    
     /**
      * Waits if necessary for the computation to complete.
      * Calling this method can block the current thread therefore it's
@@ -66,6 +88,6 @@ public interface IResult<V> {
      * Does NOT throw an exception if an error occurred in the associated task.
      * 
      */
-    public void join() throws Pausable;
+    public void joinb();
     
 }

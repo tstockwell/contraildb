@@ -179,7 +179,13 @@ public class TaskUtils {
 			public X get() {
 				return bs;
 			}
+			public X getb() {
+				return bs;
+			}
 			public void join() {
+				// do nothing
+			}
+			public void joinb() {
 				// do nothing
 			}
 			public boolean isDone() {
