@@ -17,6 +17,8 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
+import com.googlecode.contraildb.core.utils.TestTask;
+
 import kilim.Mailbox;
 import kilim.Pausable;
 import kilim.Task;
@@ -61,5 +63,15 @@ public class KilimConcurrencyTests extends ContrailTestCase2 {
 				assertTrue(result.length() == n);
 			}
 		});
+	}
+
+	/**
+	 * Once upon a time, in a workspace far far away, this test failed 
+	 * because the TestTask class was not exported from the correct folder 
+	 * in the com.googlecode.contraildb.core plugin.
+	 */
+	public void testExportedTask() throws Throwable {
+		
+		runTest(new TestTask());
 	}
 }

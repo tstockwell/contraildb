@@ -38,6 +38,9 @@ abstract public class ContrailStorageProviderTests extends TestCase {
 	public void setUp() throws Exception {
 		super.setUp();
 		
+		Class class1= this.getClass();
+		ClassLoader classLoader= class1.getClassLoader();
+		
 		_rawStorage= createStorageProvider();
 	}
 	
