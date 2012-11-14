@@ -8,7 +8,6 @@
 			<attribute name="com.googlecode.kilimbuilder.path" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry exported="true" kind="lib" path="bin" sourcepath="bin"/>
 	<classpathentry kind="con" path="com.googlecode.kilimbuilder.KILIM_CONTAINER"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
