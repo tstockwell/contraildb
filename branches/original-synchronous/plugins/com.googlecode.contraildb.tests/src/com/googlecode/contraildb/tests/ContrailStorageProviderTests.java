@@ -48,14 +48,14 @@ abstract public class ContrailStorageProviderTests extends TestCase {
 		super.tearDown();
 	}
 	
-	public void testProviderStorage() throws Pausable, Exception {
-		IStorageProvider.Session storage= _rawStorage.connect().get();
+	public void testProviderStorage() throws Exception {
+		IStorageProvider.Session storage= _rawStorage.connect().getb();
 
 		Identifier id= Identifier.create("person-0.1");
 		String object_0_1= "person-0.1";
 		storage.store(id, TaskUtils.asResult(object_0_1.getBytes()));
 		storage.flush();
-		String fetched= new String(storage.fetch(id).get());
+		String fetched= new String(storage.fetch(id).getb());
 		assertEquals(object_0_1, fetched);
 	}
 	

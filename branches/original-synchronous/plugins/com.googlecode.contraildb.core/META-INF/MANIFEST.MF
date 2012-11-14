@@ -15,3 +15,4 @@ Export-Package: com.googlecode.contraildb.core,
 Bundle-ClassPath: instrumented/kilim/,
  bin/,
  .
+Import-Package: kilim
