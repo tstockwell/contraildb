@@ -151,7 +151,7 @@ public class Result<V> implements IResult<V>{
 		if (_completedHandlers != null) {
 			for (final IResultHandler handler:_completedHandlers) {
 				new ContrailAction() {
-					@Override protected void action() throws Exception {
+					@Override protected void action() throws Pausable, Exception {
 						try {
 							handler.onComplete(Result.this);
 						}

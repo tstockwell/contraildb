@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.utils.Logging;
 
 @SuppressWarnings({"unchecked","rawtypes"})
@@ -176,13 +178,13 @@ public class TaskUtils {
 	 */
 	public static <X, Y extends X> IResult<X> asResult( final Y bs) {
 		return new IResult<X>() {
-			public X get() {
+			public X get() throws Pausable {
 				return bs;
 			}
 			public X getb() {
 				return bs;
 			}
-			public void join() {
+			public void join() throws Pausable {
 				// do nothing
 			}
 			public void joinb() {
