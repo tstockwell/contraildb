@@ -44,6 +44,10 @@ public class KilimConcurrencyTests extends ContrailTestCase2 {
 		}
 	}
 	
+	public static interface SomeTask {
+		public void doSomething() throws Pausable;
+	}
+	
 	public void testSimpleContinuation() throws Throwable {
 		
 		runTest(new Task() {
@@ -73,5 +77,19 @@ public class KilimConcurrencyTests extends ContrailTestCase2 {
 	public void testExportedTask() throws Throwable {
 		
 		runTest(new TestTask());
+	}
+	
+	public void testInterfaceImplementation() throws Throwable {
+		final SomeTask someTask= new SomeTask() {
+			@Override
+			public void doSomething() { // notice that Pausable is not thrown
+				System.out.println("do something");
+			}
+		};
+		runTest(new Task() {
+			public void execute() throws Pausable ,Exception {
+				someTask.doSomething(); // this call will throw a java.lang.AbstractMethodError error 
+			}
+		});
 	}
 }
