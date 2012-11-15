@@ -17,8 +17,8 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import junit.framework.TestCase;
 import kilim.Pausable;
+import kilim.Task;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.TaskUtils;
@@ -30,16 +30,13 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
  * 
  * @author Ted Stockwell
  */
-abstract public class ContrailStorageProviderTests extends TestCase {
+abstract public class ContrailStorageProviderTests extends ContrailTestCase {
 	
 	IStorageProvider _rawStorage;
 	
 	@Override
 	public void setUp() throws Exception {
 		super.setUp();
-		
-		Class class1= this.getClass();
-		ClassLoader classLoader= class1.getClassLoader();
 		
 		_rawStorage= createStorageProvider();
 	}
@@ -51,15 +48,25 @@ abstract public class ContrailStorageProviderTests extends TestCase {
 		super.tearDown();
 	}
 	
-	public void testProviderStorage() throws Exception {
-		IStorageProvider.Session storage= _rawStorage.connect().getb();
+	static class TestTask extends Task {
+		ContrailStorageProviderTests _providerTests;
+		TestTask(ContrailStorageProviderTests providerTests) {
+			_providerTests= providerTests;
+		}
+		public void execute() throws Pausable ,Exception {
+			IStorageProvider.Session storage= _providerTests._rawStorage.connect().get();
 
-		Identifier id= Identifier.create("person-0.1");
-		String object_0_1= "person-0.1";
-		storage.store(id, TaskUtils.asResult(object_0_1.getBytes()));
-		storage.flush();
-		String fetched= new String(storage.fetch(id).getb());
-		assertEquals(object_0_1, fetched);
+			Identifier id= Identifier.create("person-0.1");
+			String object_0_1= "person-0.1";
+			storage.store(id, TaskUtils.asResult(object_0_1.getBytes()));
+			storage.flush().join();
+			byte[] bs= storage.fetch(id).get();
+			assertEquals(object_0_1, new String(bs));
+		}
+	}
+	
+	public void testProviderStorage() throws Throwable {
+		runTest(new TestTask(this));
 	}
 	
 	
