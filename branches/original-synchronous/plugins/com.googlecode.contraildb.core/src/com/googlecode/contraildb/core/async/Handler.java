@@ -18,31 +18,31 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 
 	IResult<I> _incoming;
 	Result<O> _outgoing= new Result() {
-		public synchronized Object getResult() {
+		public Object getResult() {
 			checkForHandler();
 			return super.getResult();
 		};
-		public synchronized Object get() throws Pausable {
+		public Object get() throws Pausable {
 			checkForHandler();
 			return super.get();
 		};
-		public synchronized Object getb() {
+		public Object getb() {
 			checkForHandler();
 			return super.getb();
 		};
-		public synchronized void join() throws Pausable {
+		public void join() throws Pausable {
 			checkForHandler();
 			super.join();
 		};
-		public synchronized void joinb() {
+		public void joinb() {
 			checkForHandler();
 			super.joinb();
 		};
-		public synchronized Throwable getError() {
+		public Throwable getError() {
 			checkForHandler();
 			return super.getError();
 		}
-		public synchronized boolean isSuccess() {
+		public boolean isSuccess() {
 			checkForHandler();
 			return super.isSuccess();
 		}
@@ -80,7 +80,7 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	/**
 	 * Set result to handle.
 	 */
-	public void handleResult(IResult result) {
+	synchronized public void handleResult(IResult result) {
 		if (_incoming != null)
 			throw new IllegalStateException("This handler is already associated with a result");
 		_incoming= result;
@@ -196,7 +196,7 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	 * somewhat cryptic.
 	 * 
 	 */
-	protected void checkForHandler() {
+	synchronized protected void checkForHandler() {
 		if (_incoming == null && !_outgoing.isDone() && !_outgoing.hasHandlers())
 			handleResult(TaskUtils.DONE);
 	}
