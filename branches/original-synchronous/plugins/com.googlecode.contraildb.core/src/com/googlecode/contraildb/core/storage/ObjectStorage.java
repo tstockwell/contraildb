@@ -120,7 +120,7 @@ public class ObjectStorage {
 				lifecycle.setStorage(_outerStorage);
 
 			return _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-				protected void action() throws IOException {
+				protected void action() throws Pausable, IOException {
 					_cache.store(identifier, item);
 					if (lifecycle != null)
 						lifecycle.onInsert(identifier);
@@ -197,23 +197,27 @@ public class ObjectStorage {
 			return _storageSession.listChildren(path);
 		}
 		
-		public void flush() throws IOException {
-			try {
-				_trackerSession.complete().get();
-				_storageSession.flush();
-			}
-			catch (Throwable t) {
-				
-			}
+		public IResult<Void> flush() {
+			return _trackerSession.submit(new ContrailAction(null, Operation.FLUSH) {
+				@Override
+				protected void action() throws Pausable, Exception {
+					_storageSession.flush();
+				}
+			});
 		}
 		
-		public void close() throws IOException {
-			flush();
-			try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
-			try { _storageSession.close(); } catch (Throwable t) {  Logging.warning(t); }
-			_trackerSession= null;
-			_storageSession= null;
-			_outerStorage= null;
+		public IResult<Void> close() {
+			return _trackerSession.submit(new ContrailAction(null, Operation.FLUSH) {
+				@Override
+				protected void action() throws Pausable, Exception {
+					try { _storageSession.flush(); } catch (Throwable t) { Logging.warning(t); }
+					try { _trackerSession.close(); } catch (Throwable t) { Logging.warning(t); }
+					try { _storageSession.close(); } catch (Throwable t) {  Logging.warning(t); }
+					_trackerSession= null;
+					_storageSession= null;
+					_outerStorage= null;
+				}
+			});
 		}
 		
 		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis)
@@ -246,24 +250,30 @@ public class ObjectStorage {
 			return TaskUtils.combineResults(all);
 		}
 
-		public IResult<Void> deleteAllChildren(Identifier... paths) throws Pausable {
+		public IResult<Void> deleteAllChildren(Identifier... paths) {
 			return deleteAllChildren(Arrays.asList(paths));
 		}
 
-		public IResult<Void> deleteAllChildren(Iterable<Identifier> paths) throws Pausable {
+		public IResult<Void> deleteAllChildren(Iterable<Identifier> paths) {
 			ArrayList<IResult> all= new ArrayList<IResult>();
 			for (Identifier identifier:paths)
 				all.add(deleteAllChildren(identifier));
 			return TaskUtils.combineResults(all);
 		}
 
-		public IResult<Void> deleteAllChildren(Identifier path) throws Pausable {
-			ArrayList<IResult> all= new ArrayList<IResult>();
-			IResult<Collection<Identifier>> children= listChildren(path);
-			for (Identifier identifier: children.get()) {
-				all.add(delete(identifier));
-			}
-			return TaskUtils.combineResults(all);
+		public IResult<Void> deleteAllChildren(final Identifier path) {
+			return new ContrailAction() {
+				@Override
+				protected void action() throws Pausable, Exception {
+					ArrayList<IResult> all= new ArrayList<IResult>();
+					IResult<Collection<Identifier>> children= listChildren(path);
+					Collection<Identifier> identifiers= children.get();
+					for (Identifier identifier: identifiers) {
+						all.add(delete(identifier));
+					}
+					TaskUtils.combineResults(all).join();
+				}
+			}.submit();
 		}
 
 

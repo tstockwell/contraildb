@@ -25,6 +25,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.ContrailQuery;
@@ -34,6 +36,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.Item;
 import com.googlecode.contraildb.core.SessionAlreadyClosedException;
 import com.googlecode.contraildb.core.IContrailService.Mode;
+import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
@@ -170,21 +173,27 @@ implements IContrailSession
 	}
 
 	@Override
-	public <T extends Item> Map<Identifier, Collection<T>> fetchChildren(Collection<Identifier> paths) throws IOException {
+	public <T extends Item> Map<Identifier, Collection<T>> fetchChildren(final Collection<Identifier> paths) throws IOException {
+		
 		if (_storageSession == null)
 			throw new SessionAlreadyClosedException();
-
-		HashMap<Identifier, IResult<Collection<T>>> fetched= new HashMap<Identifier, IResult<Collection<T>>>();
-		for (Identifier path:paths) {
-			IResult<Collection<T>> result= _storageSession.fetchChildren(path);
-			fetched.put(path, result);
-		}
-		HashMap<Identifier, Collection<T>> items= new HashMap<Identifier, Collection<T>>();
-		for (Identifier path:paths) {
-			IResult<Collection<T>> result= fetched.get(path);
-			items.put(path, result.get());
-		}
 		
+		final HashMap<Identifier, Collection<T>> items= new HashMap<Identifier, Collection<T>>();
+		new ContrailAction() {
+			@Override
+			protected void action() throws Pausable, Exception {
+				HashMap<Identifier, IResult<Collection<T>>> fetched= new HashMap<Identifier, IResult<Collection<T>>>();
+				for (Identifier path:paths) {
+					IResult<Collection<T>> result= _storageSession.fetchChildren(path);
+					fetched.put(path, result);
+				}
+				for (Identifier path:paths) {
+					Collection<T> results= fetched.get(path).get();
+					items.put(path, results);
+				}
+			}
+		}.submit().getb();
+
 		return items;
 	}
 
@@ -204,20 +213,26 @@ implements IContrailSession
 	}
 
 	@Override
-	public Map<Identifier, Collection<Identifier>> listChildren(Collection<Identifier> paths) throws IOException {
+	public Map<Identifier, Collection<Identifier>> listChildren(final Collection<Identifier> paths) throws IOException {
+		
 		if (_storageSession == null)
 			throw new SessionAlreadyClosedException();
-
-		HashMap<Identifier, IResult<Collection<Identifier>>> fetched= new HashMap<Identifier, IResult<Collection<Identifier>>>();
-		for (Identifier path:paths) {
-			IResult<Collection<Identifier>> result= _storageSession.listChildren(path);
-			fetched.put(path, result);
-		}
-		HashMap<Identifier, Collection<Identifier>> items= new HashMap<Identifier, Collection<Identifier>>();
-		for (Identifier path:paths) {
-			IResult<Collection<Identifier>> result= fetched.get(path);
-			items.put(path, result.get());
-		}
+		
+		final HashMap<Identifier, Collection<Identifier>> items= new HashMap<Identifier, Collection<Identifier>>();
+		new ContrailAction() {
+			@Override
+			protected void action() throws Pausable, Exception {
+				HashMap<Identifier, IResult<Collection<Identifier>>> fetched= new HashMap<Identifier, IResult<Collection<Identifier>>>();
+				for (Identifier path:paths) {
+					IResult<Collection<Identifier>> result= _storageSession.listChildren(path);
+					fetched.put(path, result);
+				}
+				for (Identifier path:paths) {
+					Collection<Identifier> results= fetched.get(path).get();
+					items.put(path, results);
+				}
+			}
+		}.submit().getb();
 		
 		return items;
 	}

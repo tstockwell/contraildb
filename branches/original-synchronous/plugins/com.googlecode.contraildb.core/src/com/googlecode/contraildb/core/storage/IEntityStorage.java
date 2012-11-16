@@ -35,7 +35,7 @@ public interface IEntityStorage {
 	/**
 	 * Start a storage session. 
 	 */
-	public Session connect() throws IOException;
+	public IResult<Session> connect() throws IOException;
 	
 	
 	static public interface Session {
@@ -44,12 +44,12 @@ public interface IEntityStorage {
 		 * MUST be called when the session is no longer needed.
 		 * Any pending changed are flushed before closing.
 		 */
-		public void close() throws IOException; 
+		public IResult<Void> close() throws IOException; 
 	
 		/**
 		 * Flush any pending changes to physical storage.
 		 */
-		public void flush() throws IOException;
+		public IResult<Void> flush() throws IOException;
 		
 		public IResult<Void> delete(Identifier path);
 		

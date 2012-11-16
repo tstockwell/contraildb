@@ -81,8 +81,8 @@ public class LockFolder extends Entity {
 	{
 		Lock lock= new Lock(id, processId);
 		long waitMillis= waitForNext? Magic.SESSION_MAX_MILLIS+1000 : 0;
-		IResult<Boolean> result= storage.create(lock, waitMillis);
-		if (result.get()) {
+		boolean result= storage.create(lock, waitMillis).get();
+		if (result) {
 			return true;
 		}
 		else if (waitForNext) {
