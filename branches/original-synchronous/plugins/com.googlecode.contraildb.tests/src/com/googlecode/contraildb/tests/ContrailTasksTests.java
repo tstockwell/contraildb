@@ -17,71 +17,63 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import junit.framework.TestCase;
+import kilim.Pausable;
+import kilim.Task;
 
-import com.googlecode.contraildb.core.ContrailServiceFactory;
-import com.googlecode.contraildb.core.IContrailService;
-import com.googlecode.contraildb.core.IContrailService.Mode;
-import com.googlecode.contraildb.core.IContrailSession;
-import com.googlecode.contraildb.core.Item;
+import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.Operation;
+import com.googlecode.contraildb.core.async.TaskDomain;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
-import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
 
 
 /**
- * task concurrency tests.
+ * Basic tests for Contrail Async API.
  * 
  * @author Ted Stockwell
  */
-public class ContrailTasksTests extends TestCase {
+public class ContrailTasksTests extends ContrailTestCase {
 
-	private IStorageProvider _storageProvider;
-	private IContrailService _datastore;
-	
-	@Override
-	protected void tearDown() throws Exception {
-		_datastore.close();
+	public void testBasicTask() throws Throwable {
+		runTest(new Task() {
+			final String expected= "boogity";
+			public void execute() throws Pausable, Exception {
+				String actual= new ContrailTask<String>() {
+					protected String run() throws Pausable, Exception {
+						return expected;
+					}
+				}.submit().get();
+				assertEquals(expected, actual);
+			}
+		});
 	}
 	
-	@Override
-	public void setUp() throws Exception {
-		super.setUp();
-		
-		_storageProvider= new RamStorageProvider();
-		_datastore = ContrailServiceFactory.getContrailService(_storageProvider);
-		
-	}
-	
-	
-	public void testDeadlock() throws Exception {
-		IContrailSession session= _datastore.beginSession(Mode.READWRITE);
-		Item object_0_1= new Item("person-0.1");
-		session.store(object_0_1);
-		session.commit();
-		session.close();
-		
-		IContrailSession T1= _datastore.beginSession(Mode.READWRITE);
-		
-		// put object-1.1 in transaction 1
-		Item object_1_1= new Item("person-1.1");
-		T1.store(object_1_1);
-		T1.delete(object_0_1.getId());
-		
-		assertTrue(T1.isActive());
-		T1.close(); // abandon any changes
-		assertFalse(T1.isActive());
 
-		// object-1.1 should not be visible 
-		// object-0.1 should still be visible 
-		IContrailSession T3= _datastore.beginSession(Mode.READONLY);
-		assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()));
-		assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()));
-		T3.close();
-		IContrailSession T4= _datastore.beginSession(Mode.READWRITE);
-		assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()));
-		assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()));
-		T4.close();
+	public void testBasicTaskDomain() throws Throwable {
+		runTest(new Task() {
+			final private TaskDomain _tracker= new TaskDomain();
+			final private TaskDomain.Session _trackerSession= _tracker.beginSession();
+			public void execute() throws Pausable, Exception {
+				Identifier id= Identifier.create();
+				_trackerSession.submit(new ContrailAction(id, Operation.WRITE) {
+					protected void action() throws Pausable, Exception {
+						System.out.println("write");
+					}
+				});
+				_trackerSession.submit(new ContrailAction(id, Operation.FLUSH) {
+					protected void action() throws Pausable, Exception {
+						System.out.println("flush");
+					}
+				});
+				_trackerSession.submit(new ContrailAction(id, Operation.READ) {
+					protected void action() throws Pausable, Exception {
+						System.out.println("read");
+					}
+				});
+				_trackerSession.complete().get();
+			}
+		});
 	}
-	
 	
 }

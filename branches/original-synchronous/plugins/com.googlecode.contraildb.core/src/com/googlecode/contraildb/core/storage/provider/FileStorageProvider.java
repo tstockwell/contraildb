@@ -31,7 +31,7 @@ import com.googlecode.contraildb.core.async.TaskUtils;
  * off-the-shelf backup routines.  
  * 
  * This implementation is only meant for embedded use by a single process.
- * Another class, ServerStorageProvider, implements an HTTP API on top of 
+ * Another class, ServerStorageProvider, implements a socket-based API on top of 
  * this class that provides multi-user, client-server access to a file store. 
  *  
  * @see ServerStorageProvider for client/server access to a file store 
@@ -147,7 +147,7 @@ public class FileStorageProvider extends AbstractStorageProvider {
 		@Override
 		protected void doDelete(Identifier path) throws IOException {
 			try {
-				new DeleteAction(path, new File(_root, path.toString())).submit().get();
+				new DeleteAction(path, new File(_root, path.toString())).submit().getb();
 			}
 			catch (Throwable t) {
 				TaskUtils.throwSomething(t, IOException.class);

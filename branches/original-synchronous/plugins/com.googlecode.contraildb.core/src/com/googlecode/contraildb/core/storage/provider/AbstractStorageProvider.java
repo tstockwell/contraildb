@@ -10,10 +10,7 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.Operation;
-import com.googlecode.contraildb.core.async.Result;
 import com.googlecode.contraildb.core.async.TaskDomain;
-import com.googlecode.contraildb.core.async.TaskUtils;
-import com.googlecode.contraildb.core.utils.Logging;
 
 
 /**
@@ -52,26 +49,18 @@ implements IStorageProvider
 		@Override
 		public IResult<Void> flush() {
 			return 	_trackerSession.submit(new ContrailAction(null, Operation.FLUSH) {
-				@Override
-				protected void action() throws Pausable, Exception {
-					try {
-						// wait for previous operations to complete
-						_trackerSession.complete().get(); 
-					}
-					finally {
-						doFlush();
-					}
+				@Override protected void action() throws Pausable, Exception {
+					doFlush();
 				}
 			});
 		}
 
 		@Override
 		public IResult<Void> close() {
-			return new ContrailAction() {
-				@Override
-				protected void action() throws Pausable, Exception {
+			return new ContrailAction(null, Operation.FLUSH) {
+				@Override protected void action() throws Pausable, Exception {
 					try {
-						try { _trackerSession.close().join(); } catch (Throwable t) { Logging.warning(t); }
+						doFlush();
 					}
 					finally {
 						doClose();
@@ -131,16 +120,24 @@ implements IStorageProvider
 		 * 		and was not deleted within the wait period.
 		 */
 		@Override
-		public IResult<Boolean> create(final Identifier path_, final IResult<byte[]> source_, final long waitMillis_) 
+		public IResult<Boolean> create(final Identifier id, final IResult<byte[]> content, final long waitMillis) 
 		{
-			return _trackerSession.submit(new ContrailTask<Boolean>(path_, Operation.CREATE) {
-				protected Boolean run() throws Pausable, IOException {
-					if (doCreate(path_, source_.get()))  
-						return true;
-					ContrailTask.sleep(waitMillis_);
-					return doCreate(path_, source_.get());  
+			return new ContrailTask<Boolean>() {
+				@Override protected Boolean run() throws Pausable, Exception {
+					final long end= System.currentTimeMillis()+waitMillis;
+					while (true) {
+						boolean created= _trackerSession.submit(new ContrailTask<Boolean>(id, Operation.CREATE) {
+							protected Boolean run() throws Pausable, IOException {
+								return doCreate(id, content.get());  
+							}
+						}).get();
+						if (created)
+							return true;
+						if (end < System.currentTimeMillis())
+							return false;
+					}
 				}
-			});
+			}.submit();
 		}
 	}
 }

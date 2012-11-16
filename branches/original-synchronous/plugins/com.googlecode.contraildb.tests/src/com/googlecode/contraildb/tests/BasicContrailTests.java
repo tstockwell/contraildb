@@ -537,4 +537,40 @@ public class BasicContrailTests extends TestCase {
 	}
 	
 	
+
+	/**
+	 * At one time early in Contrails's development, this test would cause 
+	 * Contrail to deadlock 
+	 */
+	public void testDeadlock() throws Exception {
+		IContrailSession session= _datastore.beginSession(Mode.READWRITE);
+		Item object_0_1= new Item("person-0.1");
+		session.store(object_0_1);
+		session.commit();
+		session.close();
+		
+		IContrailSession T1= _datastore.beginSession(Mode.READWRITE);
+		
+		// put object-1.1 in transaction 1
+		Item object_1_1= new Item("person-1.1");
+		T1.store(object_1_1);
+		T1.delete(object_0_1.getId());
+		
+		assertTrue(T1.isActive());
+		T1.close(); // abandon any changes
+		assertFalse(T1.isActive());
+
+		// object-1.1 should not be visible 
+		// object-0.1 should still be visible 
+		IContrailSession T3= _datastore.beginSession(Mode.READONLY);
+		assertNull("transaction isolation violated", T3.fetch(object_1_1.getId()));
+		assertNotNull("transaction isolation violated", T3.fetch(object_0_1.getId()));
+		T3.close();
+		IContrailSession T4= _datastore.beginSession(Mode.READWRITE);
+		assertNull("transaction isolation violated", T4.fetch(object_1_1.getId()));
+		assertNotNull("transaction isolation violated", T4.fetch(object_0_1.getId()));
+		T4.close();
+	}
+	
+	
 }
