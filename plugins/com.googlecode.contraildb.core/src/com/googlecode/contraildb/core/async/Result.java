@@ -97,7 +97,7 @@ public class Result<V> implements IResult<V>{
 		// will not return until this result is completed
 		_completeBox.get(); 
 		
-		// since we cannot synchronise access to _completeBox, it is possible 
+		// since we cannot synchronize access to _completeBox, it is possible 
 		// that some other thread might also be waiting on _completeBox, so we 
 		// hafta prime the pump for them 
 		_completeBox.putb(true);

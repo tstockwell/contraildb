@@ -27,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
+import kilim.Pausable;
 
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.Identifier;
@@ -392,7 +393,7 @@ public class ContrailStorageTests extends TestCase {
 			for (int t= 0; t < 10; t++) {
 				final int task= t; 
 				tasks.add(new ContrailAction() {
-					protected void action() throws Exception {
+					protected void action() throws Pausable, Exception {
 						for (int i= 0; i < 10; i++) {
 							
 							// store an object in a folder
@@ -424,7 +425,7 @@ public class ContrailStorageTests extends TestCase {
 			for (int t= 0; t < 10; t++) {
 				final int task= t; 
 				tasks.add(new ContrailAction() {
-					protected void action() throws Exception {
+					protected void action() throws Pausable, Exception {
 						for (int i= 0; i < 10; i++) {
 							
 							// store an object in a folder
