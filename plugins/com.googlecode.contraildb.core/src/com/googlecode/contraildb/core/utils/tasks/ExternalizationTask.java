@@ -1,8 +1,6 @@
 package com.googlecode.contraildb.core.utils.tasks;
 
-import java.io.IOException;
 import java.io.ObjectOutputStream;
-import java.util.List;
 
 import kilim.Pausable;
 

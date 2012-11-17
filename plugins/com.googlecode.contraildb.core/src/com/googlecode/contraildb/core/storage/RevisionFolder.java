@@ -2,13 +2,18 @@ package com.googlecode.contraildb.core.storage;
 
 import java.io.DataInput;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskTracker;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -63,26 +68,28 @@ public class RevisionFolder extends Entity {
 	@Override
 	public void onInsert(Identifier identifier) throws IOException {
 		super.onInsert(identifier);
-		storage.store(_sessionsFolder);
-		storage.store(_lockFolder);
+		new TaskTracker(
+				storage.store(_sessionsFolder),
+				storage.store(_lockFolder)).;
+		
+		tasks.getb();
 	}
 	@Override
 	public void onLoad(Identifier identifier) throws IOException {
 		super.onLoad(identifier);
 		IResult<Entity> sf= storage.fetch(Identifier.create(id, "sessions"));
-		IResult<LockFolder> lf= storage.fetch(LockFolder.createId(this));
+		IResult<LockFolder> lf= storage.fetch(LockFolder.createId(RevisionFolder.this));
 		
-		_sessionsFolder= sf.get();
-		_lockFolder= lf.get();
+		_sessionsFolder= sf.getb();
+		_lockFolder= lf.getb();
 	}
 
-	public boolean lock(String processId, boolean waitForLock) 
-	throws IOException 
+	public IResult<Boolean> lock(String processId, boolean waitForLock) 
 	{
 		return _lockFolder.lock(processId, waitForLock);
 	}
-	public void unlock(String processId) throws IOException {
-		_lockFolder.unlock(processId);
+	public IResult<Void> unlock(String processId) {
+		return _lockFolder.unlock(processId);
 	}
 
 	

@@ -7,6 +7,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
 
 
+@SuppressWarnings("unchecked")
 public class StorageUtils {
 	
 	public static final <T extends IEntity> List<T> syncFetch(IEntityStorage.Session storage, Iterable<Identifier> ids)
@@ -18,12 +19,12 @@ public class StorageUtils {
 		}
 		ArrayList<T> results= new ArrayList<T>();
 		for (IResult<T> result: fetched)
-			results.add(result.get());
+			results.add(result.getb());
 		return results;
 	}
 
 	public static <T extends IEntity> T syncFetch(IEntityStorage.Session storageSession, Identifier indexId) {
-		IResult<T> result= storageSession.fetch(indexId);
-		return result.get();
+		T result= (T) storageSession.fetch(indexId).getb();
+		return result;
 	}
 }
