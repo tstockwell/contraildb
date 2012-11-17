@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
@@ -75,16 +77,16 @@ public class StorageSystem {
 	TaskDomain.Session _trackerSession= _tracker.beginSession();
 
 
-	public StorageSystem(IStorageProvider rawStorage) 
+	public StorageSystem(final IStorageProvider rawStorage) 
 	throws IOException 
 	{
 		_entityStorage= new EntityStorage(rawStorage);
-		_entitySession= _entityStorage.connect();
+		_entitySession= _entityStorage.connect().getb();
 		Identifier rootId= Identifier.create("net/sf/contrail/core/storage/rootFolder");
 		_root= StorageUtils.syncFetch(_entitySession, rootId);
 		if (_root == null) {
 			_entitySession.store(_root= new RootFolder(rootId));
-			_entitySession.flush();
+			_entitySession.flush().getb();
 		}
 	}
 	

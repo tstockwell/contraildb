@@ -13,8 +13,8 @@ public class AllTests extends TestSuite {
         ret.addTestSuite(RamStorageProviderTests.class);
         ret.addTestSuite(FileStorageProviderTests.class);
         ret.addTestSuite(ContrailBTreeTests.class);
-        ret.addTestSuite(BasicContrailTests.class);
         ret.addTestSuite(ContrailStorageTests.class);
+        ret.addTestSuite(BasicContrailTests.class);
         return ret;
     }
 }

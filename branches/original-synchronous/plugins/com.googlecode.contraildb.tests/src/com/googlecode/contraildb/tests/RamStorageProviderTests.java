@@ -26,7 +26,7 @@ import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
  * 
  * @author Ted Stockwell
  */
-public class RamStorageProviderTests extends ContrailStorageProviderTests {
+public class RamStorageProviderTests extends BaseStorageProviderTests {
 	
 	protected IStorageProvider createStorageProvider() {
 		return new RamStorageProvider();

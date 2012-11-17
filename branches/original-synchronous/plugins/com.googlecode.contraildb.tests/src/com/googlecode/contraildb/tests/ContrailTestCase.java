@@ -21,11 +21,14 @@ import junit.framework.TestCase;
 import kilim.ExitMsg;
 import kilim.Task;
 
+import com.googlecode.contraildb.core.async.ContrailTask;
+
 /**
  * Base class for Contrail tests.
  * 
  * @author Ted Stockwell
  */
+@SuppressWarnings("rawtypes")
 public class ContrailTestCase extends TestCase {
 
 	protected void runTest(Task task) throws Throwable {
@@ -41,6 +44,10 @@ public class ContrailTestCase extends TestCase {
                 fail(exitMsg.toString());
             }
         }
+	}
+	
+	protected void runTest(ContrailTask task) throws Throwable {
+		task.submit().getb();
 	}
 
 }

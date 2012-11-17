@@ -28,7 +28,7 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
  * 
  * @author Ted Stockwell
  */
-public class FileStorageProviderTests extends ContrailStorageProviderTests {
+public class FileStorageProviderTests extends BaseStorageProviderTests {
 	
 	protected IStorageProvider createStorageProvider() {
 		return new FileStorageProvider(new File("/temp/test/contrail"), true);

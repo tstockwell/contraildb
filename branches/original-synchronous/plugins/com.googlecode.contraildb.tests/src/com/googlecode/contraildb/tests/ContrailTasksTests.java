@@ -17,6 +17,8 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import kilim.Pausable;
 import kilim.Task;
 
@@ -25,7 +27,6 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.Operation;
 import com.googlecode.contraildb.core.async.TaskDomain;
-import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 
 
 /**
@@ -54,24 +55,42 @@ public class ContrailTasksTests extends ContrailTestCase {
 		runTest(new Task() {
 			final private TaskDomain _tracker= new TaskDomain();
 			final private TaskDomain.Session _trackerSession= _tracker.beginSession();
+			final AtomicInteger count= new AtomicInteger();
 			public void execute() throws Pausable, Exception {
 				Identifier id= Identifier.create();
 				_trackerSession.submit(new ContrailAction(id, Operation.WRITE) {
 					protected void action() throws Pausable, Exception {
-						System.out.println("write");
+						ContrailTask.sleep(50);
+						count.incrementAndGet();
 					}
 				});
 				_trackerSession.submit(new ContrailAction(id, Operation.FLUSH) {
 					protected void action() throws Pausable, Exception {
-						System.out.println("flush");
+						assertEquals(1, count);
+						ContrailTask.sleep(50);
+						count.incrementAndGet();
 					}
 				});
 				_trackerSession.submit(new ContrailAction(id, Operation.READ) {
 					protected void action() throws Pausable, Exception {
-						System.out.println("read");
+						assertEquals(2, count);
+						ContrailTask.sleep(50);
+						count.incrementAndGet();
 					}
 				});
 				_trackerSession.complete().get();
+				assertEquals(3, count);
+			}
+		});
+	}
+
+	public void testSleep() throws Throwable {
+		runTest(new ContrailAction() {
+			@Override
+			protected void action() throws Pausable, Exception {
+				long start= System.currentTimeMillis();
+				ContrailTask.sleep(100);
+				assertTrue("ContrailTask.sleep didnt sleep long enough", start+100 < System.currentTimeMillis());
 			}
 		});
 	}

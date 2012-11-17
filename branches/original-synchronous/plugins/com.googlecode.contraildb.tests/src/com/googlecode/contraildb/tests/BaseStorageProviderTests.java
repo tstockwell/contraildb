@@ -30,7 +30,7 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
  * 
  * @author Ted Stockwell
  */
-abstract public class ContrailStorageProviderTests extends ContrailTestCase {
+abstract public class BaseStorageProviderTests extends ContrailTestCase {
 	
 	IStorageProvider _rawStorage;
 	

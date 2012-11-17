@@ -32,7 +32,9 @@ import kilim.Pausable;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskDomain;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
@@ -52,7 +54,7 @@ import com.googlecode.contraildb.core.storage.provider.RamStorageProvider;
  * @author Ted Stockwell
  */
 @SuppressWarnings("rawtypes")
-public class ContrailStorageTests extends TestCase {
+public class ContrailStorageTests extends ContrailTestCase {
 	
 	StorageSystem _storage;
 	IStorageProvider _rawStorage;
@@ -72,17 +74,26 @@ public class ContrailStorageTests extends TestCase {
 		super.tearDown();
 	}
 	
-	public void testObjectStorage() throws Exception {
-			IEntityStorage.Session storage= 
-				new EntityStorage(_storage.getStorageProvider()).connect();
-		
-			Identifier id= Identifier.create("person-0.1");
-			Entity object_0_1= new Entity(id);
-			storage.store(object_0_1);
-			IEntity fetched= storage.fetch(id).getb();
-			assertNotNull(fetched);
-			storage.flush();
-			
+	public void testObjectStorage() throws Throwable {
+		runTest(new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				IResult<IEntityStorage.Session> storageResult= 
+						new EntityStorage(_storage.getStorageProvider()).connect();
+				Identifier id= Identifier.create("person-0.1");
+				Entity object_0_1= new Entity(id);
+				
+				IEntityStorage.Session storage= storageResult.get();
+				storage.store(object_0_1);
+				
+				IResult<IEntity> fetchResult= storage.fetch(id);
+				IResult<Void> close= storage.close();
+				
+				IEntity fetched= fetchResult.get();
+				assertNotNull(fetched);
+				
+				close.get();
+			}
+		});
 	}
 	
 	public void testSimpleCreate() throws Exception {
@@ -168,7 +179,7 @@ public class ContrailStorageTests extends TestCase {
 	 */
 	public void testSimplestLocks() throws Throwable {
 		
-		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
+		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect().getb();
 		for (int f= 0; f < 10; f++) {			
 			Entity rootFolder= new Entity(Identifier.create());
 			storage.store(rootFolder);
@@ -191,45 +202,37 @@ public class ContrailStorageTests extends TestCase {
 	 */
 	@SuppressWarnings("unchecked")
 	public void testConcurrentLocks() throws Throwable {
-		
-		// test that only one lock is ever granted at a time
-		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
-		for (int f= 0; f < 10; f++) {			
-			Entity rootFolder= new Entity(Identifier.create());
-			storage.store(rootFolder);
-			final LockFolder lockFolder= new LockFolder(rootFolder);
-			storage.store(lockFolder);
-			storage.flush();
-			
-			final List count= Collections.synchronizedList(new ArrayList());
-			ExecutorService executorService= Executors.newFixedThreadPool(20);
-			final Throwable[] error= new Throwable[1]; 
-			for (int t= 0; t < 20; t++) {
-				executorService.execute(new Runnable() {
-					public void run() {
-						try {
-							String processId= Identifier.create().toString();
-							count.add(lockFolder.lock(processId, true));
-							assertEquals("More than one lock was granted", 1, count.size());
-							Thread.sleep(10);
-							count.remove(0);
-							lockFolder.unlock(processId);
-						} catch (Throwable t) {
-							synchronized (error) {
-								if (error[0] == null) {
-									error[0]= t;
-									t.printStackTrace();
-								}
+		runTest(new ContrailAction() {
+			@Override
+			protected void action() throws Pausable, Exception {
+				// test that only one lock is ever granted at a time
+				IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect().get();
+				for (int f= 0; f < 10; f++) {			
+					Entity rootFolder= new Entity(Identifier.create());
+					storage.store(rootFolder);
+					final LockFolder lockFolder= new LockFolder(rootFolder);
+					storage.store(lockFolder);
+					storage.flush();
+					
+					final List count= Collections.synchronizedList(new ArrayList());
+					TaskDomain.Session tasks= new TaskDomain().beginSession();
+					for (int t= 0; t < 20; t++) {
+						tasks.submit(new ContrailAction() {
+							@Override
+							protected void action() throws Pausable, Exception {
+								String processId= Identifier.create().toString();
+								count.add(lockFolder.lock(processId, true));
+								assertEquals("More than one lock was granted", 1, count.size());
+								ContrailTask.sleep(10);
+								count.remove(0);
+								lockFolder.unlock(processId);
 							}
-						}
+						});
 					}
-				});
+					tasks.complete().get();
+				}
 			}
-			executorService.shutdown();
-			executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.MILLISECONDS);
-			if (error[0] != null)
-				throw error[0];
-		}
+		});
 	}
 	
 	public void testBasicTransaction() throws Exception {
