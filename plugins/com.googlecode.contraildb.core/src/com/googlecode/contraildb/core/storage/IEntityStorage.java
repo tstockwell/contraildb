@@ -3,6 +3,8 @@ package com.googlecode.contraildb.core.storage;
 import java.io.IOException;
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
@@ -35,7 +37,8 @@ public interface IEntityStorage {
 	/**
 	 * Start a storage session. 
 	 */
-	public IResult<Session> connect() throws IOException;
+	public Session connect();
+	public IResult<Session> connectA();
 	
 	
 	static public interface Session {
@@ -44,26 +47,35 @@ public interface IEntityStorage {
 		 * MUST be called when the session is no longer needed.
 		 * Any pending changed are flushed before closing.
 		 */
-		public IResult<Void> close() throws IOException; 
+		public void close() throws Pausable;
+		public IResult<Void> closeA(); 
 	
 		/**
 		 * Flush any pending changes to physical storage.
 		 */
-		public IResult<Void> flush() throws IOException;
+		public void flush() throws Pausable;
+		public IResult<Void> flushA();
 		
-		public IResult<Void> delete(Identifier path);
+		public void delete(Identifier path) throws Pausable;
+		public IResult<Void> deleteA(Identifier path);
 		
-		public IResult<Void> deleteAllChildren(Identifier path);
+		public void deleteAllChildren(Identifier path) throws Pausable;
+		public IResult<Void> deleteAllChildrenA(Identifier path);
 
-		public <E extends IEntity> IResult<E> fetch(Identifier path);
+		public <E extends IEntity> E fetch(Identifier path) throws Pausable;
+		public <E extends IEntity> IResult<E> fetchA(Identifier path);
 
-		public <E extends IEntity> IResult<Collection<E>> fetchChildren(final Identifier path);
+		public <E extends IEntity> Collection<E> fetchChildren(final Identifier path) throws Pausable;
+		public <E extends IEntity> IResult<Collection<E>> fetchChildrenA(final Identifier path);
 
-		public <E extends IEntity> IResult<Void> store(E entity);
+		public <E extends IEntity> void store(E entity) throws Pausable;
+		public <E extends IEntity> IResult<Void> storeA(E entity);
 
-		public IResult<Collection<Identifier>> listChildren(Identifier path);
+		public Collection<Identifier> listChildren(Identifier path) throws Pausable;
+		public IResult<Collection<Identifier>> listChildrenA(Identifier path);
 
-		public <E extends IEntity> IResult<Boolean> create(E entity, long waitMillis);
+		public <E extends IEntity> boolean create(E entity, long waitMillis) throws Pausable;
+		public <E extends IEntity> IResult<Boolean> createA(E entity, long waitMillis);
 
 	}
 

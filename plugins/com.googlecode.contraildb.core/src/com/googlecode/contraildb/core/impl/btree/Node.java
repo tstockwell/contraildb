@@ -5,7 +5,11 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.UUID;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
@@ -49,11 +53,13 @@ implements Cloneable
 	Node<K> getNextSibling() throws IOException { if (_next == null) return null; return StorageUtils.syncFetch(getStorage(), _next); }
 	K getLookupKey() throws IOException { if (_next == null) return getLargestKey(); return getNextSibling().getSmallestKey(); }		
 
-	public void onLoad(Identifier identifier)
-	throws IOException 
-	{
-		super.onLoad(identifier);
-		_index= StorageUtils.syncFetch(storage, _indexId);
+	public IResult<Void> onLoad(final Identifier identifier) {
+		return new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				Node.super.onLoad(identifier);
+				_index= (BPlusTree<K, ?>) storage.fetch(_indexId).get();
+			}
+		}.submit();
 	}
 
 	K getSmallestKey() { return _keys[0]; }

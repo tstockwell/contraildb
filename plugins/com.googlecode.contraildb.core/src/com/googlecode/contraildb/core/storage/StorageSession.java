@@ -9,6 +9,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.ConflictingCommitException;
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
@@ -228,7 +230,7 @@ public class StorageSession implements IEntityStorage.Session {
 	public <C extends IEntity> IResult<C> fetch(final Identifier path) {
 		return new ContrailTask<C>() {
 			@SuppressWarnings("unchecked")
-			protected C run() throws IOException {
+			protected C run() throws Pausable, IOException {
 				Identifier contrailPath= Identifier.create(path, CONTRAIL_FOLDER);
 				IResult<Collection<Identifier>> childrenResult= _storage.listChildren(contrailPath);
 				Collection<Identifier> children= childrenResult.get();

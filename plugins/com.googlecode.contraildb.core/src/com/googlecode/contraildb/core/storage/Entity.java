@@ -12,6 +12,7 @@ import java.util.Collection;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -91,26 +92,23 @@ public class Entity implements IEntity, ILifecycle {
 	
 	
 	@Override
-	public void setStorage(IEntityStorage.Session storage) {
+	public IResult<Void> setStorage(IEntityStorage.Session storage) {
 		this.storage= storage;
+		return TaskUtils.DONE;
 	}
 	
 	@Override
-	public void onDelete()
-	throws IOException 
+	public IResult<Void> onDelete()
 	{
-		// do nothing
+		return TaskUtils.DONE;
 	}
 	@Override
-	public void onInsert(Identifier identifier)
-	throws IOException {
-		// do nothing
+	public IResult<Void> onInsert(Identifier identifier) {
+		return TaskUtils.DONE;
 	}
 	@Override
-	public void onLoad(Identifier identifier)
-	throws IOException 
-	{
-		// do nothing
+	public IResult<Void> onLoad(Identifier identifier) {
+		return TaskUtils.DONE;
 	}
 
 

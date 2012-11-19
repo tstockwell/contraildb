@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.ContrailQuery;
 import com.googlecode.contraildb.core.Identifier;
@@ -124,13 +126,18 @@ public class IndexSearcher {
 		return new PropertyIndex(tree);
 	}
 
-	private PropertyIndex createPropertyIndex(String propertyName) 
+	private IResult<PropertyIndex> createPropertyIndex(final String propertyName) 
 	throws IOException 
 	{
-		Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+propertyName);
-		BPlusTree tree= BPlusTree.createBPlusTree(_storageSession, indexId);
-		PropertyIndex propertyIndex= new PropertyIndex(tree);
-		return propertyIndex;
+		return new ContrailTask<PropertyIndex>() {
+			@Override
+			protected PropertyIndex run() throws Pausable, Exception {
+				Identifier indexId= Identifier.create("net/sf/contrail/core/indexes/"+propertyName);
+				BPlusTree tree= BPlusTree.createBPlusTree(_storageSession, indexId).get();
+				PropertyIndex propertyIndex= new PropertyIndex(tree);
+				return propertyIndex;
+			}
+		}.submit();
 	}
 
 	public <T extends Item> void unindex(Iterable<T> entities) throws IOException {
