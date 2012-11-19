@@ -84,7 +84,7 @@ implements Cloneable
 			else
 				overflow.insertEntry(index-_size, key, value);
 				
-			getStorage().store(overflow);
+			getStorage().store(overflow).getb();
 		}
 		
 		update();
@@ -118,7 +118,7 @@ implements Cloneable
 		}
 		_next= overflow.getId();
 		
-		getStorage().store(overflow);
+		getStorage().store(overflow).getb();
 		
 		return overflow;
 	}

@@ -190,8 +190,10 @@ public class IndexSearcher {
 			fetched.add(result);
 		}
 		ArrayList<T> results= new ArrayList<T>();
-		for (IResult<T> result: fetched)
-			results.add(result.get());
+		for (IResult<T> result: fetched) {
+			T t= result.get();
+			results.add(t);
+		}
 		
 		List<SortPredicate> sorts= query.getSortPredicates();
 		if (!sorts.isEmpty()) 

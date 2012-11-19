@@ -17,6 +17,7 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.TaskDomain;
+import com.googlecode.contraildb.core.async.TaskTracker;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.PathUtils;
 import com.googlecode.contraildb.core.utils.Logging;
@@ -171,16 +172,20 @@ public class StorageSession implements IEntityStorage.Session {
 			throw new ContrailException("Session is read only: "+_revisionNumber);
 		return _trackerSession.submit(new ContrailAction() {
 			protected void action() throws Exception {
+				TaskTracker tasks= new TaskTracker();
+				
 				// we just insert a holder for the item and then insert revisions as children of the CONTRAIL_FOLDER folder
 				Identifier originalPath= entity.getId();
-				_storage.store(originalPath, new Entity(originalPath));
+				tasks.track(_storage.store(originalPath, new Entity(originalPath)));
 				
 				Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
-				_storage.store(contrailFolder, new Entity(contrailFolder));
+				tasks.track(_storage.store(contrailFolder, new Entity(contrailFolder)));
 				
 				// we then insert revisions as children
 				Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
-				_storage.store(revisionPath, entity);
+				tasks.track(_storage.store(revisionPath, entity));
+				
+				tasks.await();
 			}
 		});
 	}
@@ -193,7 +198,7 @@ public class StorageSession implements IEntityStorage.Session {
 		Identifier originalPath= item.getId();
 		Identifier contrailFolder= Identifier.create(originalPath, CONTRAIL_FOLDER);
 		Identifier revisionPath= Identifier.create(contrailFolder, "store-"+_revisionNumber);
-		_storage.store(revisionPath, item);
+		_storage.store(revisionPath, item).getb();
 	}
 	
 	public void deleteAllChildren(Collection<Identifier> paths) throws IOException {
@@ -335,8 +340,8 @@ public class StorageSession implements IEntityStorage.Session {
 			throw new ContrailException("Revision is read only: "+_revisionNumber);
 		
 		ArrayList<IResult> allResults= new ArrayList<IResult>();
-		IResult<Collection<Identifier>> children= listChildren(path);
-		for (Identifier child: children.get())
+		Collection<Identifier> children= listChildren(path).get();
+		for (Identifier child: children)
 			allResults.add(delete(child));
 		return TaskUtils.combineResults(allResults);
 	}

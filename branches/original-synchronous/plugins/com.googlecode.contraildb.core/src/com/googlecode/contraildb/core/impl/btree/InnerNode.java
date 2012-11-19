@@ -85,7 +85,7 @@ extends Node<K>
 				overflow.setEntry(index-_size, keyForChildNode, childId);
 				overflow.insertEntry(index-_size+1, keyForSiblingNode, newSiblingId);
 			}
-			getStorage().store(overflow);
+			getStorage().store(overflow).getb();
 		}
 		update();
 		return overflow;

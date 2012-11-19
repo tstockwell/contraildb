@@ -6,7 +6,6 @@ import junit.framework.TestSuite;
 public class AllTests extends TestSuite {
     public static Test suite() {
         TestSuite ret = new AllTests();
-        ret.addTestSuite(ReproduceVerifyError.class);
         ret.addTestSuite(NumberDecoderTest.class);
         ret.addTestSuite(KilimConcurrencyTests.class);
         ret.addTestSuite(ContrailTasksTests.class);

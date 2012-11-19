@@ -29,8 +29,9 @@ import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
  * Implementation Note:
  * I've realized that the caching done by this class is gonna have to change.
  * Caching is problematic since there can be multiple processes writing to storage. 
- * Based on the defined semantics for IStorageSPI,  caching stored objects is 
- * not a problem but caching lists of children is 
+ * Based on the defined semantics for IStorageProvider,  we cannot caching 
+ * lists of children.  Also, when fetching a stored object we should check to make 
+ * sure that it has not been overwritten since the last time we cached it. 
  */
 
 /**
@@ -40,10 +41,10 @@ import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
  * ...handles the serialization of Java objects to byte streams.
  * 
  * ...introduces some JPA-like lifecycle management. If a stored object
- * implements the Lifecycle interface then the Lifecycle methods will be invoked
+ * implements the ILifecycle interface then the ILifecycle methods will be invoked
  * at appropriate points.
  * 
- * ...cache objects in order to avoid as much serialization and deserialization
+ * ...caches objects in order to avoid as much serialization and deserialization
  * as possible.
  * 
  * ...can be used by multiple clients in multiple threads, each client should
@@ -51,10 +52,12 @@ import com.googlecode.contraildb.core.utils.tasks.ExternalizationTask;
  * to use an instance of ObjectStorage from multiple threads. It is also safe to
  * use an instance of ObjectStorage.Session from multiple threads.
  * 
- * ...is multithreaded. This implementation manages the order in which its
- * internal tasks are executed so that operations are performed in a way that
- * allows for as much parallelization as possible in order to maximize
- * performance.
+ * ...is concurrent. This implementation manages the order in which its
+ * internal tasks are executed so that operations are performed in a way that 
+ * preserves sequential serialization (in other words, the operations appear to 
+ * have all been executed sequentially, in the order that they arrived) while 
+ * also allowing for as much parallelization as possible in order to maximize 
+ * performance.  
  * 
  * @author Ted Stockwell
  */
@@ -82,23 +85,20 @@ public class ObjectStorage {
 		return new ContrailTask<Session>() {
 			@Override
 			protected Session run() throws Pausable, Exception {
-				IStorageProvider.Session storageSession = _storageProvider
-						.connect().get();
+				IStorageProvider.Session storageSession = _storageProvider.connect().get();
 				return new Session(_tracker.beginSession(), storageSession);
 			}
-		}.getResult();
+		}.submit();
 	}
 
 	public IResult<Session> connect(final EntityStorage.Session entitySession) {
 		return new ContrailTask<Session>() {
 			@Override
 			protected Session run() throws Pausable, Exception {
-				IStorageProvider.Session storageSession = _storageProvider
-						.connect().get();
-				return new Session(_tracker.beginSession(), storageSession,
-						entitySession);
+				IStorageProvider.Session storageSession = _storageProvider.connect().get();
+				return new Session(_tracker.beginSession(), storageSession, entitySession);
 			}
-		}.getResult();
+		}.submit();
 	}
 
 	public IStorageProvider getStorageProvider() {
@@ -130,8 +130,7 @@ public class ObjectStorage {
 
 			return _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
 				protected void action() throws Pausable, IOException {
-					ILifecycle lifecycle = (item instanceof ILifecycle) ? (ILifecycle) item
-							: null;
+					ILifecycle lifecycle = (item instanceof ILifecycle) ? (ILifecycle) item : null;
 					if (lifecycle != null)
 						lifecycle.setStorage(_outerStorage);
 
@@ -173,17 +172,16 @@ public class ObjectStorage {
 			});
 		}
 
-		private <T extends Serializable> IResult<T> readStorable(
-				final Identifier id, final byte[] contents) throws IOException {
+		private <T extends Serializable> IResult<T> readStorable(final Identifier id, final byte[] contents) 
+		throws IOException 
+		{
 			if (contents == null)
 				return TaskUtils.NULL;
 
 			return new ContrailTask<T>() {
 				@Override
 				protected T run() throws Pausable, Exception {
-					T s = ExternalizationManager
-							.readExternal(new DataInputStream(
-									new ByteArrayInputStream(contents)));
+					T s = ExternalizationManager.readExternal(new DataInputStream(new ByteArrayInputStream(contents)));
 					boolean isStorable = s instanceof ILifecycle;
 					if (isStorable)
 						((ILifecycle) s).setStorage(_outerStorage);
@@ -202,8 +200,7 @@ public class ObjectStorage {
 			return _trackerSession.submit(new ContrailTask<Map<Identifier, T>>(
 					path, Operation.LIST) {
 				protected Map<Identifier, T> run() throws IOException, Pausable {
-					Collection<Identifier> children = _storageSession
-							.listChildren(path).get();
+					Collection<Identifier> children = _storageSession.listChildren(path).get();
 					HashMap<Identifier, IResult<byte[]>> fetched = new HashMap<Identifier, IResult<byte[]>>();
 					for (Identifier childId : children)
 						fetched.put(childId, _storageSession.fetch(childId));
@@ -269,8 +266,7 @@ public class ObjectStorage {
 							.submit();
 					boolean created = false;
 
-					boolean stored = _storageSession.create(identifier, bytes,
-							waitMillis).get();
+					boolean stored = _storageSession.create(identifier, bytes, waitMillis).get();
 					if (stored) {
 						boolean hasLifecycle = item instanceof ILifecycle;
 						if (hasLifecycle)

@@ -38,6 +38,7 @@ import com.googlecode.contraildb.core.SessionAlreadyClosedException;
 import com.googlecode.contraildb.core.IContrailService.Mode;
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskTracker;
 import com.googlecode.contraildb.core.storage.IEntity;
 import com.googlecode.contraildb.core.storage.StorageSession;
 import com.googlecode.contraildb.core.storage.StorageUtils;
@@ -246,6 +247,9 @@ implements IContrailSession
 			_storageSession.store(t);
 		
 		_searcher.index(entities);
+		
+		// dont return until above calls to store have completed
+		_storageSession.flush(); 
 	}
 
 	@Override

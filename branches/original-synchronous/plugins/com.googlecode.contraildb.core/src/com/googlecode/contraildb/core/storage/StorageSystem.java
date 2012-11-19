@@ -183,7 +183,7 @@ public class StorageSystem {
 					startRevision= revision;
 		}
 		RevisionFolder revision= new RevisionFolder(_root, lastRevision.revisionNumber+1, startRevision.revisionNumber);
-		_entitySession.store(revision);
+		_entitySession.store(revision).getb();
 
 		/*
 		 * Mark the new revision AND the starting revision as in use by this session.
@@ -233,7 +233,7 @@ public class StorageSystem {
 		
 		// write journal
 		final RevisionJournal journal= new RevisionJournal(revision, storageSession);
-		_entitySession.store(journal);
+		_entitySession.store(journal).getb();
 		
 		// lock root, no other revisions may be committed while root is locked.
 		_root.lock(sessionId, true);
@@ -273,7 +273,7 @@ public class StorageSystem {
 				throw new ConflictingCommitException();
 			
 			// write commit marker
-			_entitySession.store(new CommitMarker(revision, lastCommitNumber+1));
+			_entitySession.store(new CommitMarker(revision, lastCommitNumber+1)).getb();
 
 			// unlock revision and remove session id from start revision
 			revision.removeSession(sessionId);

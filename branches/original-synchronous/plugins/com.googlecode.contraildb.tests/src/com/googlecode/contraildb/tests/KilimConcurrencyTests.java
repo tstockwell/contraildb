@@ -17,11 +17,11 @@
  ******************************************************************************/
 package com.googlecode.contraildb.tests;
 
-import com.googlecode.contraildb.core.utils.TestTask;
-
 import kilim.Mailbox;
 import kilim.Pausable;
 import kilim.Task;
+
+import com.googlecode.contraildb.core.utils.TestTask;
 
 /**
  * Basic Kilim tests for verifying Kilim features and runtime characteristics.
@@ -29,6 +29,34 @@ import kilim.Task;
  * @author Ted Stockwell
  */
 public class KilimConcurrencyTests extends ContrailTestCase {
+	static class BadClass {
+		
+		public void doSomething() throws Pausable ,Exception {
+			new String(getBytes());
+		}
+		public byte[] getBytes() throws Pausable {
+			return "lkj;lkjad;fa".getBytes();
+		}
+	}
+	static class GoodClass {
+		
+		public void doSomething() throws Pausable, Exception {
+			byte[] bytes= getBytes();
+			new String(bytes);
+		}
+		public byte[] getBytes() throws Pausable {
+			return "lkj;lkjad;fa".getBytes();
+		}
+	}
+	static class NormalClass {
+		
+		public void doSomething() throws Exception {
+			new String(getBytes());
+		}
+		public byte[] getBytes() {
+			return "lkj;lkjad;fa".getBytes();
+		}
+	}
 
 	public static class Chain extends Task {
 		Mailbox<String> inBox, outBox;
@@ -74,4 +102,28 @@ public class KilimConcurrencyTests extends ContrailTestCase {
 		
 		runTest(new TestTask());
 	}
+	
+	
+	public void testVerifyError() {
+		/*
+		 * This line will throw the following error at runtime...
+		 * java.lang.VerifyError: (class: com/googlecode/contraildb/tests/BadClass, method: doSomething signature: (Lkilim/Fiber;)V) Mismatched stack types
+		 *   at com.googlecode.contraildb.tests.ReproduceVerifyError.testVerifyError(ReproduceVerifyError.java:8)
+		 */
+		new BadClass();
+	}
+	
+	
+
+	public void testSleep() throws Throwable {
+		runTest(new Task() {
+			public void execute() throws Pausable, Exception {
+				long start= System.currentTimeMillis();
+				Task.sleep(1000);
+				long time= System.currentTimeMillis() - start;
+				assertTrue("ContrailTask.sleep didnt sleep long enough, only slept for "+time+" milliseconds", start+1000 <= System.currentTimeMillis());
+			}
+		});
+	}
+	
 }
