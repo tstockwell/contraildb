@@ -92,7 +92,8 @@ implements IStorageProvider
 		public IResult<Void> store(final Identifier identifier, final IResult<byte[]> content) {
 			return _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
 				protected void action() throws Pausable, IOException  {
-					doStore(identifier, content.get());
+					byte[] bs= content.get();
+					doStore(identifier, bs);
 				}
 			});
 		}
@@ -128,7 +129,8 @@ implements IStorageProvider
 					while (true) {
 						boolean created= _trackerSession.submit(new ContrailTask<Boolean>(id, Operation.CREATE) {
 							protected Boolean run() throws Pausable, IOException {
-								return doCreate(id, content.get());  
+								byte[] bs= content.get();  
+								return doCreate(id, bs);  
 							}
 						}).get();
 						if (created)

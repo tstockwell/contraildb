@@ -40,8 +40,7 @@ public class ContrailTestCase extends TestCase {
         } else {
             Object res = exitMsg.result;
             if (res instanceof Throwable) {
-                ((Throwable)res).printStackTrace();
-                fail(exitMsg.toString());
+            	throw (Throwable)res;
             }
         }
 	}

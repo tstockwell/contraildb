@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskTracker;
 import com.googlecode.contraildb.core.utils.Logging;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
@@ -49,7 +50,8 @@ public class RootFolder extends Entity  {
 	public RevisionFolder getRevisionFolder(long revisionNumber) 
 	throws IOException 
 	{
-		return (RevisionFolder) storage.fetch(RevisionFolder.createId(this, revisionNumber)).get();
+		RevisionFolder folder= (RevisionFolder) storage.fetch(RevisionFolder.createId(this, revisionNumber)).get();
+		return folder;
 	}
 
 	/**
@@ -109,15 +111,19 @@ public class RootFolder extends Entity  {
 
 	@Override
 	public void onInsert(Identifier identifier) throws IOException {
+		TaskTracker tasks= new TaskTracker();
+		
 		super.onInsert(identifier);
-		storage.store(_revisionsFolder);
-		storage.store(_deletionsFolder);
-		storage.store(_lockFolder);
+		tasks.track(storage.store(_revisionsFolder));
+		tasks.track(storage.store(_deletionsFolder));
+		tasks.track(storage.store(_lockFolder));
 		
 		RevisionFolder revision= new RevisionFolder(this, 0L, 0L);  
-		storage.store(revision);
-		storage.store(new CommitMarker(revision, 0L));
-		storage.store(new RevisionJournal(revision));
+		tasks.track(storage.store(revision));
+		tasks.track(storage.store(new CommitMarker(revision, 0L)));
+		tasks.track(storage.store(new RevisionJournal(revision)));
+		
+		tasks.awaitb();
 	}
 
 	@Override
@@ -133,12 +139,14 @@ public class RootFolder extends Entity  {
 	}
 
 	public void markRevisionForDeletion(long revisionNumber) throws IOException {
-		storage.store(new Entity(Identifier.create(_deletionsFolder.id, Long.toString(revisionNumber))));
+		storage.store(new Entity(Identifier.create(_deletionsFolder.id, Long.toString(revisionNumber)))).getb();
 	}
 
 	public void deleteRevision(RevisionFolder revision) throws IOException {
-		storage.delete(revision.getId());
-		storage.delete(Identifier.create(_deletionsFolder.id, Long.toString(revision.revisionNumber)));
+		new TaskTracker(
+				storage.delete(revision.getId()),
+				storage.delete(Identifier.create(_deletionsFolder.id, Long.toString(revision.revisionNumber)))
+		).awaitb();
 	}
 	
 

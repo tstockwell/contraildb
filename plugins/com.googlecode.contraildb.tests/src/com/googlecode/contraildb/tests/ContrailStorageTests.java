@@ -35,6 +35,7 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.TaskDomain;
+import com.googlecode.contraildb.core.async.TaskTracker;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.EntityStorage;
@@ -405,10 +406,13 @@ public class ContrailStorageTests extends ContrailTestCase {
 							storage.store(id, s);
 							
 							// now, list the folder's children and make sure our object is listed
+							// The storage implementation should insure that the listChildren 
+							// request is executed after the above call to store has completed, 
+							// therefore there is no need to explicitly call get() on the store 
+							// result.
 							Collection<Identifier> children= storage.listChildren(folderId).get();
 							assertTrue(children.contains(id));
 						}
-						
 					}
 				}.submit());
 			}

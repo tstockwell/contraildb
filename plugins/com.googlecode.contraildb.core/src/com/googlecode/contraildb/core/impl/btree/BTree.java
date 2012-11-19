@@ -41,14 +41,14 @@ extends BPlusTree<T, Serializable>
 	throws IOException 
 	{
 		BTree<K> btree= new BTree<K>(identifier, pageSize);
-		storageSession.store(btree);
+		storageSession.store(btree).getb();
 		return btree;
 	}
 	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, Identifier identifier) 
 	throws IOException 
 	{
 		BTree<K> btree= new BTree<K>(identifier, DEFAULT_SIZE);
-		storageSession.store(btree);
+		storageSession.store(btree).getb();
 		return btree;
 	}
 	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, int pageSize) 

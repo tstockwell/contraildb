@@ -83,6 +83,7 @@ implements Iterable<T>
 	{
 		BPlusTree<K,V> btree= new BPlusTree<K,V>(id, pageSize, hasLeafValues);
 		storageSession.store(btree);
+		storageSession.flush();
 		return btree;
 	}
 	public static <K extends Comparable, V> BPlusTree<K,V> createInstance(
@@ -129,7 +130,7 @@ implements Iterable<T>
 	{
 		super.onInsert(identifier);
 		if (_root != null)
-			storage.store(_root);
+			storage.store(_root).getb();
 	}
 
 	@Override
@@ -159,7 +160,7 @@ implements Iterable<T>
 		if (_root == null) {
 			_root = new Node<T>(this);
 			_rootId = _root.getId();
-			getStorage().store(_root);
+			getStorage().store(_root).getb();
 			_root.insert(key, value);
 			update();
 			return;
@@ -168,7 +169,7 @@ implements Iterable<T>
 		Node<T> overflow = _root.insert(key, value);
 		if (overflow != null) {
 			InnerNode<T> newRoot= new InnerNode<T>(this);
-			getStorage().store(newRoot);
+			getStorage().store(newRoot).getb();
 			if (_root.isLeaf()) {
 				newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
 			}

@@ -86,7 +86,7 @@ public class Entity implements IEntity, ILifecycle {
 	}
 	
 	public void update() throws IOException {
-		storage.store(this);
+		storage.store(this).getb();
 	}
 	
 	

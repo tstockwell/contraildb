@@ -66,20 +66,20 @@ public class ContrailTasksTests extends ContrailTestCase {
 				});
 				_trackerSession.submit(new ContrailAction(id, Operation.FLUSH) {
 					protected void action() throws Pausable, Exception {
-						assertEquals(1, count);
+						assertEquals(1, count.intValue());
 						ContrailTask.sleep(50);
 						count.incrementAndGet();
 					}
 				});
 				_trackerSession.submit(new ContrailAction(id, Operation.READ) {
 					protected void action() throws Pausable, Exception {
-						assertEquals(2, count);
+						assertEquals(2, count.intValue());
 						ContrailTask.sleep(50);
 						count.incrementAndGet();
 					}
 				});
 				_trackerSession.complete().get();
-				assertEquals(3, count);
+				assertEquals(3, count.intValue());
 			}
 		});
 	}
@@ -90,7 +90,7 @@ public class ContrailTasksTests extends ContrailTestCase {
 			protected void action() throws Pausable, Exception {
 				long start= System.currentTimeMillis();
 				ContrailTask.sleep(100);
-				assertTrue("ContrailTask.sleep didnt sleep long enough", start+100 < System.currentTimeMillis());
+				assertTrue("ContrailTask.sleep didnt sleep long enough", start+100 <= System.currentTimeMillis());
 			}
 		});
 	}

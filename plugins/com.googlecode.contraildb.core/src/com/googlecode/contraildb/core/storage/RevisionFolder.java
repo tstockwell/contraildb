@@ -3,6 +3,7 @@ package com.googlecode.contraildb.core.storage;
 import java.io.DataInput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -70,9 +71,8 @@ public class RevisionFolder extends Entity {
 		super.onInsert(identifier);
 		new TaskTracker(
 				storage.store(_sessionsFolder),
-				storage.store(_lockFolder)).;
-		
-		tasks.getb();
+				storage.store(_lockFolder)
+		).awaitb();
 	}
 	@Override
 	public void onLoad(Identifier identifier) throws IOException {
@@ -94,7 +94,7 @@ public class RevisionFolder extends Entity {
 
 	
 	public void addSession(String sessionId) throws IOException {
-		storage.store(new Entity(Identifier.create(_sessionsFolder.id, sessionId)));
+		storage.store(new Entity(Identifier.create(_sessionsFolder.id, sessionId))).getb();
 	}
 	public void removeSession(String sessionId) throws IOException {
 		storage.delete(Identifier.create(_sessionsFolder.id, sessionId));
@@ -103,7 +103,8 @@ public class RevisionFolder extends Entity {
 //TODO  This method should check to see if the session claims are expired
 //A session can only hold a revision active for a limited amount of time, about a minute.			
 		
-		return !_sessionsFolder.listChildren().get().isEmpty();
+		Collection<Identifier> identifiers= _sessionsFolder.listChildren().get();
+		return !identifiers.isEmpty();
 	}
 	public static void sortByDescendingCommitNumber(List<RevisionFolder> revisions) 
 	throws IOException 
@@ -132,7 +133,8 @@ public class RevisionFolder extends Entity {
 		});
 	}
 	private CommitMarker getCommitMarker() throws IOException {
-		return (CommitMarker) storage.fetch(CommitMarker.createId(this)).get();
+		CommitMarker marker= (CommitMarker) storage.fetch(CommitMarker.createId(this)).get();
+		return marker;
 	}
 	public boolean isCommitted() throws IOException {
 		return getCommitMarker() != null;
@@ -144,7 +146,8 @@ public class RevisionFolder extends Entity {
 		return commitMarker.finalCommitNumber;
 	}
 	public RevisionJournal getRevisionJournal() throws IOException {
-		return (RevisionJournal) storage.fetch(RevisionJournal.createId(this)).get();
+		RevisionJournal journal= (RevisionJournal) storage.fetch(RevisionJournal.createId(this)).get();
+		return journal;
 	}
 
 
