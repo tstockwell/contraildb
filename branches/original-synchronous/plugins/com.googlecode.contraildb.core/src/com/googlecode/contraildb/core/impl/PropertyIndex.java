@@ -45,7 +45,7 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 		Identifier value= _btree.cursor(Direction.FORWARD).find(key);
 		if (value == null) { 
 			// the key has no value currently associated with it, just store the identifier
-			_btree.insert(key, document);
+			_btree.insert(key, document).get();
 			return;
 		} 
 		
@@ -63,7 +63,7 @@ public class PropertyIndex<K extends Comparable<K> & Serializable>
 		BTree<Identifier> set= BTree.createInstance(_btree.getStorage(), setId);
 		set.insert(value);
 		set.insert(document);
-		_btree.insert(key, setId);
+		_btree.insert(key, setId).get();
 	}
 
 

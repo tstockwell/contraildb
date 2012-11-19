@@ -2,6 +2,8 @@ package com.googlecode.contraildb.core.storage.provider;
 
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
 
@@ -35,7 +37,8 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	public IResult<IStorageProvider.Session> connect();
+	public IStorageProvider.Session connect();
+	public IResult<IStorageProvider.Session> connectA();
 	
 	
 	static public interface Session {
@@ -44,23 +47,27 @@ public interface IStorageProvider {
 		 * MUST be called when the session is no longer needed.
 		 * Any pending changed are flushed before closing.
 		 */
-		public IResult<Void> close(); 
+		public void close() throws Pausable;
+		public IResult<Void> closeA(); 
 		
 		/**
 		 * Returns the complete paths to all the children of the given path.
 		 */
-		public IResult<Collection<Identifier>> listChildren(Identifier path);
+		public Collection<Identifier> listChildren(Identifier path) throws Pausable;
+		public IResult<Collection<Identifier>> listChildrenA(Identifier path);
 		
 		/**
 		 * @return the contents of of the given path, or null if the file does not exist.
 		 */
-		public IResult<byte[]> fetch(Identifier path);
+		public byte[] fetch(Identifier path) throws Pausable;
+		public IResult<byte[]> fetchA(Identifier path);
 
 		/**
 		 * Stores the given contents at the given location.
 		 * The file is created if it does not already exist.
 		 */
-		public IResult<Void> store(Identifier path, IResult<byte[]> content);
+		public void store(Identifier path, IResult<byte[]> content) throws Pausable;
+		public IResult<Void> storeA(Identifier path, IResult<byte[]> content);
 
 		/**
 		 * Stores the given contents at the given location if the file 
@@ -75,17 +82,20 @@ public interface IStorageProvider {
 		 * 		true if the file was created, false if the file already exists 
 		 * 		and was not deleted within the wait period.
 		 */
-		public IResult<Boolean> create(Identifier i, IResult<byte[]> content, long waitMillis);
+		public boolean create(Identifier i, IResult<byte[]> content, long waitMillis) throws Pausable;
+		public IResult<Boolean> createA(Identifier i, IResult<byte[]> content, long waitMillis);
 
 		/**
 		 * Deletes the contents stored at the given locations.
 		 */
-		public IResult<Void> delete(Identifier path);
+		public void delete(Identifier path) throws Pausable;
+		public IResult<Void> deleteA(Identifier path);
 		
 		/**
 		 * Flush any pending changes made by this session to physical storage.
 		 */
-		public IResult<Void> flush();
+		public void flush() throws Pausable;
+		public IResult<Void> flushA();
 
 
 	}

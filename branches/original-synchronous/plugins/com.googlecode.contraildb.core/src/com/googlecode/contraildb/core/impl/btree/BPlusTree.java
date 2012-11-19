@@ -7,8 +7,13 @@ import java.io.PrintStream;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
@@ -77,28 +82,35 @@ implements Iterable<T>
 	/**
 	 * Create a new persistent index.
 	 */
-	private static final <K extends Comparable, V> BPlusTree<K,V> createInstance(
-	IEntityStorage.Session storageSession, Identifier id, int pageSize, boolean hasLeafValues) 
-	throws IOException 
+	private static final <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
+			final IEntityStorage.Session storageSession, 
+			final Identifier id, 
+			final int pageSize, 
+			final boolean hasLeafValues
+	) throws IOException 
 	{
-		BPlusTree<K,V> btree= new BPlusTree<K,V>(id, pageSize, hasLeafValues);
-		storageSession.store(btree);
-		storageSession.flush();
-		return btree;
+		return new ContrailTask<BPlusTree<K,V>>() {
+			@Override
+			protected BPlusTree<K, V> run() throws Pausable, Exception {
+				BPlusTree<K,V> btree= new BPlusTree<K,V>(id, pageSize, hasLeafValues);
+				storageSession.store(btree).get();
+				return btree;
+			}
+		}.submit();
 	}
-	public static <K extends Comparable, V> BPlusTree<K,V> createInstance(
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
 	IEntityStorage.Session storageSession, int pageSize) 
 	throws IOException 
 	{
 		return createInstance(storageSession, Identifier.create(), pageSize, true);
 	}
-	public static <K extends Comparable, V> BPlusTree<K,V> createBPlusTree(
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createBPlusTree(
 	IEntityStorage.Session storageSession, Identifier identifier) 
 	throws IOException 
 	{
 		return createInstance(storageSession, identifier, DEFAULT_SIZE, true);
 	}
-	public static <K extends Comparable, V> BPlusTree<K,V> createInstance(
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
 	IEntityStorage.Session storageSession) 
 	throws IOException 
 	{
@@ -116,71 +128,87 @@ implements Iterable<T>
 	protected BPlusTree() { }
 
 	@Override
-	public void onLoad(Identifier identifier)
-	throws IOException 
+	public IResult<Void> onLoad(final Identifier identifier)
 	{
-		super.onLoad(identifier);
-		if (_rootId != null)
-			_root = StorageUtils.syncFetch(storage, _rootId);
+		return new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				BPlusTree.super.onLoad(identifier).get();
+				if (_rootId != null) 
+					_root= (Node<T>) storage.fetch(_rootId).get();
+			}
+		}.submit();
 	}
 
 	@Override
-	public void onInsert(Identifier identifier)
-	throws IOException 
-	{
-		super.onInsert(identifier);
-		if (_root != null)
-			storage.store(_root).getb();
+	public IResult<Void> onInsert(final Identifier identifier) {
+		return new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				BPlusTree.super.onInsert(identifier);
+				if (_root != null)
+					storage.store(_root).getb();
+			}
+		}.submit();
 	}
 
 	@Override
-	public void onDelete()
-	throws IOException 
-	{
-		if (_root != null)
-			_root.delete();
-		super.onDelete();
+	public IResult<Void> onDelete() {
+		return new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				if (_root != null)
+					_root.delete();
+				BPlusTree.super.onDelete();
+			}
+		}.submit();
 	}
 
 	/**
 	 * Insert an entry in the BTree.
 	 */
 	public synchronized void insert(T key) throws IOException {
-		insert(key, (V) NO_VALUE);
+		insert(key, (V) NO_VALUE).get();
 	}
 	
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public synchronized void insert(T key, V value) throws IOException {
-		if (key == null) 
-			throw new IllegalArgumentException("Argument 'key' is null");
+	public synchronized IResult<Void> inserta(final T key, final V value) {
+		return new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				synchronized (BPlusTree.this) {
+					if (key == null) 
+						throw new IllegalArgumentException("Argument 'key' is null");
 
-		// BTree is currently empty, create a new root BPage
-		if (_root == null) {
-			_root = new Node<T>(this);
-			_rootId = _root.getId();
-			getStorage().store(_root).getb();
-			_root.insert(key, value);
-			update();
-			return;
-		}
+					// BTree is currently empty, create a new root BPage
+					if (_root == null) {
+						_root = new Node<T>(BPlusTree.this);
+						_rootId = _root.getId();
+						getStorage().store(_root).getb();
+						_root.insert(key, value);
+						update();
+						return;
+					}
 
-		Node<T> overflow = _root.insert(key, value);
-		if (overflow != null) {
-			InnerNode<T> newRoot= new InnerNode<T>(this);
-			getStorage().store(newRoot).getb();
-			if (_root.isLeaf()) {
-				newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
+					Node<T> overflow = _root.insert(key, value);
+					if (overflow != null) {
+						InnerNode<T> newRoot= new InnerNode<T>(BPlusTree.this);
+						getStorage().store(newRoot).getb();
+						if (_root.isLeaf()) {
+							newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
+						}
+						else {
+							newRoot.insertEntry(0, _root.getLargestKey(), _root.getId());
+						}
+						newRoot.insertEntry(1, overflow.getLargestKey(), overflow.getId());
+						_root= newRoot;
+						_rootId = newRoot.getId();
+						update();
+					}
+				}
 			}
-			else {
-				newRoot.insertEntry(0, _root.getLargestKey(), _root.getId());
-			}
-			newRoot.insertEntry(1, overflow.getLargestKey(), overflow.getId());
-			_root= newRoot;
-			_rootId = newRoot.getId();
-			update();
-		}
+		}.submit();
+	}
+	public void insert(T key, V value) throws Pausable {
+		inserta(key, value).get();
 	}
 
 	/**

@@ -114,14 +114,16 @@ public class RootFolder extends Entity  {
 		TaskTracker tasks= new TaskTracker();
 		
 		super.onInsert(identifier);
-		tasks.track(storage.store(_revisionsFolder));
-		tasks.track(storage.store(_deletionsFolder));
-		tasks.track(storage.store(_lockFolder));
+		tasks.trackAll(
+			storage.store(_revisionsFolder),
+			storage.store(_deletionsFolder),
+			storage.store(_lockFolder));
 		
 		RevisionFolder revision= new RevisionFolder(this, 0L, 0L);  
-		tasks.track(storage.store(revision));
-		tasks.track(storage.store(new CommitMarker(revision, 0L)));
-		tasks.track(storage.store(new RevisionJournal(revision)));
+		tasks.trackAll(
+			storage.store(revision),
+			storage.store(new CommitMarker(revision, 0L)),
+			storage.store(new RevisionJournal(revision)));
 		
 		tasks.awaitb();
 	}
