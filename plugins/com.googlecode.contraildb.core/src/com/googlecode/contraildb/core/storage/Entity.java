@@ -10,6 +10,8 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.util.Collection;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.TaskUtils;
@@ -70,44 +72,59 @@ public class Entity implements IEntity, ILifecycle {
 	}
 	
 
-	public IResult<Collection<Identifier>> listChildren() throws IOException {
-		return storage.listChildren(id);
+	public IResult<Collection<Identifier>> listChildrenA() {
+		return storage.listChildrenA(id);
+	}
+	final public Collection<Identifier> listChildren() throws Pausable {
+		return listChildrenA().get();
 	}
 	
-	public IResult<Collection<Entity>> getChildren() throws IOException {
-		return storage.fetchChildren(id);
+	public IResult<Collection<Entity>> getChildrenA() {
+		return storage.fetchChildrenA(id);
+	}
+	final public Collection<Entity> getChildren() throws Pausable {
+		return getChildrenA().get();
 	}
 	
-	public void delete() throws IOException {
-		storage.delete(getId());
+	public IResult<Void> deleteA() {
+		return storage.deleteA(getId());
+	}
+	final public void delete() throws Pausable {
+		deleteA();
 	}
 	
-	public void deleteAllChildren() throws IOException {
-		storage.deleteAllChildren(id);
+	public IResult<Void> deleteAllChildrenA() {
+		return storage.deleteAllChildrenA(id);
+	}
+	final public void deleteAllChildren() throws Pausable {
+		deleteAllChildrenA().get();
 	}
 	
-	public void update() throws IOException {
-		storage.store(this).getb();
+	public IResult<Void> updateA() {
+		return storage.storeA(this);
+	}
+	final public void update() throws Pausable {
+		updateA().get();
 	}
 	
 	
 	@Override
-	public IResult<Void> setStorage(IEntityStorage.Session storage) {
+	public IResult<Void> setStorageA(IEntityStorage.Session storage) {
 		this.storage= storage;
 		return TaskUtils.DONE;
 	}
 	
 	@Override
-	public IResult<Void> onDelete()
+	public IResult<Void> onDeleteA()
 	{
 		return TaskUtils.DONE;
 	}
 	@Override
-	public IResult<Void> onInsert(Identifier identifier) {
+	public IResult<Void> onInsertA(Identifier identifier) {
 		return TaskUtils.DONE;
 	}
 	@Override
-	public IResult<Void> onLoad(Identifier identifier) {
+	public IResult<Void> onLoadA(Identifier identifier) {
 		return TaskUtils.DONE;
 	}
 

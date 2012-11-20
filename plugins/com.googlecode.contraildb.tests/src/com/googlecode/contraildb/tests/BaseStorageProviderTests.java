@@ -51,13 +51,13 @@ abstract public class BaseStorageProviderTests extends ContrailTestCase {
 	public void testProviderStorage() throws Throwable {
 		runTest(new Task() {
 			public void execute() throws Pausable ,Exception {
-				IStorageProvider.Session storage= _rawStorage.connect().get();
+				IStorageProvider.Session storage= _rawStorage.connect();
 
 				String object_0_1= "person-0.1";
 				Identifier id= Identifier.create(object_0_1);
 				storage.store(id, TaskUtils.asResult(object_0_1.getBytes()));
-				storage.flush().join();
-				byte[] bs= storage.fetch(id).get();
+				storage.flush();
+				byte[] bs= storage.fetch(id);
 				assertEquals(object_0_1, new String(bs));
 
 				// repeat, only this time dont do the flush.
@@ -66,7 +66,7 @@ abstract public class BaseStorageProviderTests extends ContrailTestCase {
 				String object_0_2= "person-0.2";
 				id= Identifier.create(object_0_2);
 				storage.store(id, TaskUtils.asResult(object_0_2.getBytes()));
-				bs= storage.fetch(id).get();
+				bs= storage.fetch(id);
 				assertEquals(object_0_2, new String(bs));
 			}
 		});

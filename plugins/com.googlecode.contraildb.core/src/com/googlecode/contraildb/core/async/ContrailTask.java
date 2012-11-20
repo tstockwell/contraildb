@@ -122,7 +122,8 @@ abstract public class ContrailTask<T> {
 	private volatile boolean _done= false;
 	private volatile boolean _submitted= false;
 	private volatile boolean _running= false;
-	private final Result<T> _result= new Result<T>(); 
+	private final Result<T> _result= new Result<T>();
+	private TaskTracker _tracker= null;
 	
 	public ContrailTask(Identifier id, Operation operation, String name) {
 		if ((_id= id) == null)
@@ -138,6 +139,21 @@ abstract public class ContrailTask<T> {
 	
 	public ContrailTask() {
 		this(Identifier.create(), Operation.READ, null);
+	}
+	
+	/**
+	 * Adds the given result to an internal list of list 'child' tasks.
+	 * Contrail will insure that all child tasks complete before this task 
+	 * is allowed to complete. 
+	 */
+	protected void subtask(IResult result) {
+		if (_tracker == null)
+			_tracker= new TaskTracker();
+		_tracker.track(result);
+	}
+	
+	protected void awaitAll() throws Pausable {
+		_tracker.await();
 	}
 	
 	public void cancel() {
@@ -219,15 +235,17 @@ if (__logger.isLoggable(Level.FINER))
 	__logger.finer("run task "+hashCode()+", id "+_id+", op "+_operation+", thread "+Thread.currentThread().getName() );		
 		try {
 			final Object[] result= new Object[] { null };
-			final Exception[] err= new Exception[] { null };
+			final Throwable[] err= new Throwable[] { null };
 			final Mailbox<Boolean> outBox= new Mailbox<Boolean>();
 			new InternalTask(this) {
 				@Override
 				public void execute() throws Pausable, Exception {
 					try {
 						result[0]= ContrailTask.this.run();
+						if (_tracker != null)
+							_tracker.await();
 					}
-					catch (Exception x) {
+					catch (Throwable x) {
 						err[0]= x;
 					}
 					finally {

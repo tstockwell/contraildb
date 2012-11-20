@@ -25,6 +25,7 @@ import kilim.Task;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.Operation;
 import com.googlecode.contraildb.core.async.TaskDomain;
 
@@ -93,6 +94,31 @@ public class ContrailTasksTests extends ContrailTestCase {
 				assertTrue("ContrailTask.sleep didnt sleep long enough", start+100 <= System.currentTimeMillis());
 			}
 		});
+	}
+
+	/**
+	 * At one time there was a bug in the Contrail Async API such that 
+	 * if a java.lang.Error was thrown from within a Task, then the associated 
+	 * call to IResult.get(), to get the result of the task, did not throw an 
+	 * exception.  This test makes sure that throwing a java.lang.Error causes 
+	 * an exception to be thrown from the associate Task.get(). 
+	 */
+	public void testErrorHandling() {
+		IResult<Void> result= new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				throw new java.lang.Error("catch this");
+			}
+		}.submit();
+		boolean success= true;
+		try {
+			result.getb();
+			success= false;
+		}
+		catch (Throwable t) {
+			// if things are working then we should get here...
+		}
+		if (!success)
+			fail("IResult.getb() should have thrown an exception");
 	}
 	
 }

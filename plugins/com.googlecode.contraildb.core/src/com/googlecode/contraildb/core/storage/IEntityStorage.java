@@ -1,6 +1,5 @@
 package com.googlecode.contraildb.core.storage;
 
-import java.io.IOException;
 import java.util.Collection;
 
 import kilim.Pausable;
@@ -37,7 +36,7 @@ public interface IEntityStorage {
 	/**
 	 * Start a storage session. 
 	 */
-	public Session connect();
+	public Session connect() throws Pausable;
 	public IResult<Session> connectA();
 	
 	
@@ -58,6 +57,9 @@ public interface IEntityStorage {
 		
 		public void delete(Identifier path) throws Pausable;
 		public IResult<Void> deleteA(Identifier path);
+		
+		public <E extends IEntity> void delete(E entity) throws Pausable;
+		public <E extends IEntity>IResult<Void> deleteA(E entity);
 		
 		public void deleteAllChildren(Identifier path) throws Pausable;
 		public IResult<Void> deleteAllChildrenA(Identifier path);

@@ -27,6 +27,11 @@ implements IStorageProvider
 	// list of items for which we want notification of changes
 	private TaskDomain _tracker= new TaskDomain();
 	
+	@Override
+	public IStorageProvider.Session connect() throws Pausable {
+		return connectA().get();
+	}
+	
 	abstract public class Session
 	implements IStorageProvider.Session
 	{
@@ -47,16 +52,20 @@ implements IStorageProvider
 		
 
 		@Override
-		public IResult<Void> flush() {
+		public IResult<Void> flushA() {
 			return 	_trackerSession.submit(new ContrailAction(null, Operation.FLUSH) {
 				@Override protected void action() throws Pausable, Exception {
 					doFlush();
 				}
 			});
 		}
+		public void flush() throws Pausable {
+			flushA().get();
+		}
+		
 
 		@Override
-		public IResult<Void> close() {
+		public IResult<Void> closeA() {
 			return new ContrailAction(null, Operation.FLUSH) {
 				@Override protected void action() throws Pausable, Exception {
 					try {
@@ -68,28 +77,40 @@ implements IStorageProvider
 				}
 			}.submit(); 
 		}
+		@Override
+		public void close() throws Pausable {
+			closeA().get();
+			
+		}
 		
 		@Override
-		public IResult<Collection<Identifier>> listChildren(final Identifier path) {
+		public IResult<Collection<Identifier>> listChildrenA(final Identifier path) {
 			return _trackerSession.submit(new ContrailTask<Collection<Identifier>>(path, Operation.LIST) {
 				protected Collection<Identifier> run() throws Pausable, IOException {
 					return doList(path);
 				}
 			});
 		}
+		@Override
+		public Collection<Identifier> listChildren(Identifier path) throws Pausable {
+			return listChildrenA(path).get();
+		}
 		
 		@Override
-		public IResult<byte[]> fetch(final Identifier path) {
-			ContrailTask<byte[]> action= new ContrailTask<byte[]>(path, Operation.READ) {
+		public IResult<byte[]> fetchA(final Identifier path) {
+			return _trackerSession.submit(new ContrailTask<byte[]>(path, Operation.READ) {
 				protected byte[] run() throws Pausable, IOException {
 					return doFetch(path);
 				}
-			};
-			return _trackerSession.submit(action);
+			});
+		}
+		@Override
+		public byte[] fetch(Identifier path) throws Pausable {
+			return fetchA(path).get();
 		}
 
 		@Override
-		public IResult<Void> store(final Identifier identifier, final IResult<byte[]> content) {
+		public IResult<Void> storeA(final Identifier identifier, final IResult<byte[]> content) {
 			return _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
 				protected void action() throws Pausable, IOException  {
 					byte[] bs= content.get();
@@ -97,14 +118,22 @@ implements IStorageProvider
 				}
 			});
 		}
+		@Override
+		public void store(Identifier path, IResult<byte[]> content) throws Pausable {
+			storeA(path, content).get();
+		}
 
 		@Override
-		public IResult<Void> delete(final Identifier path) {
+		public IResult<Void> deleteA(final Identifier path) {
 			return _trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
 				protected void action() throws Pausable, IOException {
 					doDelete(path);
 				}
 			});
+		}
+		@Override
+		public void delete(Identifier path) throws Pausable {
+			deleteA(path).get();
 		}
 		
 		/**
@@ -121,7 +150,7 @@ implements IStorageProvider
 		 * 		and was not deleted within the wait period.
 		 */
 		@Override
-		public IResult<Boolean> create(final Identifier id, final IResult<byte[]> content, final long waitMillis) 
+		public IResult<Boolean> createA(final Identifier id, final IResult<byte[]> content, final long waitMillis) 
 		{
 			return new ContrailTask<Boolean>() {
 				@Override protected Boolean run() throws Pausable, Exception {
@@ -140,6 +169,10 @@ implements IStorageProvider
 					}
 				}
 			}.submit();
+		}
+		@Override
+		public boolean create(Identifier id, IResult<byte[]> content, long waitMillis) throws Pausable {
+			return createA(id, content, waitMillis).get();
 		}
 	}
 }

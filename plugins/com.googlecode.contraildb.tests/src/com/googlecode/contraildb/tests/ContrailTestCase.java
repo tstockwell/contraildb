@@ -31,21 +31,28 @@ import com.googlecode.contraildb.core.async.ContrailTask;
 @SuppressWarnings("rawtypes")
 public class ContrailTestCase extends TestCase {
 
-	protected void runTest(Task task) throws Throwable {
+	protected Object runTest(Task task) throws Exception {
 		task.start();
 		ExitMsg exitMsg= task.joinb();
 		
+		Object result= null;
         if (exitMsg == null) {
             fail("Timed Out");
         } else {
             Object res = exitMsg.result;
-            if (res instanceof Throwable) {
-            	throw (Throwable)res;
+            if (res instanceof Exception) {
+            	throw (Exception)res;
             }
+            if (res instanceof Error)
+            	throw (Error)res;
+            if (res instanceof Throwable)
+            	throw new RuntimeException("test failed with some wierd kind of exception type", (Throwable)res);
+            result= res;
         }
+        return result;
 	}
 	
-	protected void runTest(ContrailTask task) throws Throwable {
+	protected void runTest(ContrailTask task) {
 		task.submit().getb();
 	}
 
