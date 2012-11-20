@@ -37,7 +37,7 @@ public interface IStorageProvider {
 	/**
 	 * Start a storage session. 
 	 */
-	public IStorageProvider.Session connect();
+	public IStorageProvider.Session connect() throws Pausable;
 	public IResult<IStorageProvider.Session> connectA();
 	
 	

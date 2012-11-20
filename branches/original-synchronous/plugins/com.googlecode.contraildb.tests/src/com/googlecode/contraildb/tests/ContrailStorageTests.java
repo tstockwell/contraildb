@@ -86,25 +86,24 @@ public class ContrailStorageTests extends ContrailTestCase {
 				IEntityStorage.Session storage= storageResult.get();
 				storage.store(object_0_1);
 				
-				IResult<IEntity> fetchResult= storage.fetch(id);
-				IResult<Void> close= storage.close();
-				
-				IEntity fetched= fetchResult.get();
+				IEntity fetched= storage.fetch(id);
+				storage.close();
 				assertNotNull(fetched);
-				
-				close.get();
 			}
 		});
 	}
 	
 	public void testSimpleCreate() throws Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect().getb();
-		for (int f= 0; f < 10; f++) {			
-			final Identifier folderId= Identifier.create(Integer.toString(f));
-			IResult<Boolean> result= storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0);
-			assertTrue(result.getb());
-		}
-		
+		runTest(new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				final IStorageProvider.Session storage= _rawStorage.connect();
+				for (int f= 0; f < 10; f++) {			
+					final Identifier folderId= Identifier.create(Integer.toString(f));
+					boolean result= storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0);
+					assertTrue(result);
+				}
+			}
+		});
 	}
 	
 	/**
@@ -112,19 +111,24 @@ public class ContrailStorageTests extends ContrailTestCase {
 	 * threads at once.
 	 */
 	public void testConcurrentFileCreation() throws Exception {
-		final IStorageProvider.Session storage= _rawStorage.connect().getb();
-		for (int f= 0; f < 10; f++) {			
-			final Identifier folderId= Identifier.create(Integer.toString(f));
-			ArrayList<IResult<Boolean>> results= new ArrayList<IResult<Boolean>>();
-			for (int t= 0; t < 20; t++) 
-				results.add(storage.create(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0));
-			int count= 0;
-			for (IResult<Boolean> result: results)
-				if (result.getb())
-					count++;
-			assertEquals(1, count);
-		}
-		
+		runTest(new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				final IStorageProvider.Session storage= _rawStorage.connect();
+				for (int f= 0; f < 10; f++) {			
+					final Identifier folderId= Identifier.create(Integer.toString(f));
+					ArrayList<IResult<Boolean>> results= new ArrayList<IResult<Boolean>>();
+					for (int t= 0; t < 20; t++) 
+						results.add(storage.createA(folderId, TaskUtils.asResult(new byte[] { ' ' }), 0));
+					int count= 0;
+					for (IResult<Boolean> result: results) {
+						boolean success= result.get(); 
+						if (success)
+							count++;
+					}
+					assertEquals(1, count);
+				}
+			}
+		});
 	}
 	
 	/**
@@ -133,46 +137,35 @@ public class ContrailStorageTests extends ContrailTestCase {
 	 */
 	@SuppressWarnings("unchecked")
 	public void testConcurrentCreateAndDelete() throws Throwable {
-		final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
-		
-		// test that only thread can create the same file at a time
-		for (int f= 0; f < 10; f++) {			
-			final Identifier identifier= Identifier.create("file-"+f);
-			final IStorageProvider.Session session= _rawStorage.connect().getb();
-			final List count= Collections.synchronizedList(new ArrayList());
-			ExecutorService executorService= Executors.newFixedThreadPool(20);
-			final Throwable[] error= new Throwable[] { null }; 
-			for (int t= 0; t < 20; t++) {
-				executorService.execute(new Runnable() {
-					public void run() {
-						try {
-							IResult<Boolean> result= session.create(identifier, content, Integer.MAX_VALUE);
-							assertTrue(result.getb());
-							count.add(true);
-							assertEquals("More than one lock was granted", 1, count.size());
-							try { Thread.sleep(10); } catch (InterruptedException x) { }
-							count.remove(0);
-							session.delete(identifier);
-						}
-						catch (Throwable t) {
-							synchronized (error) {
-								if (error[0] == null) {
-									error[0]= t;
-									t.printStackTrace();
-								}
+		runTest(new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				final IResult<byte[]> content= TaskUtils.asResult("hello".getBytes());
+				
+				// test that only a single thread can create the same file at a time
+				for (int f= 0; f < 10; f++) {			
+					final Identifier identifier= Identifier.create("file-"+f);
+					final IStorageProvider.Session session= _rawStorage.connect();
+					final List count= Collections.synchronizedList(new ArrayList());
+					TaskTracker tracker= new TaskTracker();
+					for (int t= 0; t < 20; t++) {
+						tracker.track(new ContrailAction() {
+							@Override
+							protected void action() throws Pausable, Exception {
+								boolean result= session.create(identifier, content, Integer.MAX_VALUE);
+								assertTrue(result);
+								count.add(true);
+								assertEquals("More than one lock was granted", 1, count.size());
+								try { Thread.sleep(10); } catch (InterruptedException x) { }
+								count.remove(0);
+								session.delete(identifier);
 							}
-						}
+						}.submit());
 					}
-				});
+					tracker.await();
+					session.close();
+				}
 			}
-			executorService.shutdown();
-			executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.MILLISECONDS);
-			if (error[0] != null)
-				throw error[0];
-			
-			session.close();
-		}
-		
+		});
 	}
 	
 	/**
@@ -345,16 +338,19 @@ public class ContrailStorageTests extends ContrailTestCase {
 	}
 	
 	public void testFetchObjectStore() throws Exception {
-		
-		for (int i= 1; i <= 100; i++) {
-			ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect().getb();
-			Identifier entity= Identifier.create("person-"+i);
-			objectStorage.store(entity, entity);
-			if (objectStorage.fetch(entity) == null) 
-				fail("Entity not found : "+entity);
-			objectStorage.flush();
-			objectStorage.close();
-		}
+		runTest(new ContrailAction() {
+			protected void action() throws Pausable, Exception {
+				for (int i= 1; i <= 100; i++) {
+					ObjectStorage.Session objectStorage= new ObjectStorage(_rawStorage).connect();
+					Identifier entity= Identifier.create("person-"+i);
+					objectStorage.store(entity, entity);
+					if (objectStorage.fetch(entity) == null) 
+						fail("Entity not found : "+entity);
+					objectStorage.flush();
+					objectStorage.close();
+				}
+			}
+		});
 	}
 	
 	

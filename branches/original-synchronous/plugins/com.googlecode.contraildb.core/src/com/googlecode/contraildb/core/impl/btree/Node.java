@@ -9,6 +9,7 @@ import kilim.Pausable;
 
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
+import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.StorageUtils;
@@ -53,11 +54,11 @@ implements Cloneable
 	Node<K> getNextSibling() throws IOException { if (_next == null) return null; return StorageUtils.syncFetch(getStorage(), _next); }
 	K getLookupKey() throws IOException { if (_next == null) return getLargestKey(); return getNextSibling().getSmallestKey(); }		
 
-	public IResult<Void> onLoad(final Identifier identifier) {
+	public IResult<Void> onLoadA(final Identifier identifier) {
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
-				Node.super.onLoad(identifier);
-				_index= (BPlusTree<K, ?>) storage.fetch(_indexId).get();
+				Node.super.onLoadA(identifier);
+				_index= (BPlusTree<K, ?>) storage.fetch(_indexId);
 			}
 		}.submit();
 	}
@@ -71,81 +72,104 @@ implements Cloneable
 	 * Insert the given key and value.
 	 * @return new right sibling node if the key was inserted and provoked an overflow.
 	 */
-	public Node<K> insert(K key, Object value) throws IOException {
-		int index = indexOf(key);
-		Node<K> overflow= null;
+	public IResult<Node<K>> insertA(final K key, final Object value) {
+		return new ContrailTask<Node<K>>() {
+			@Override
+			protected Node<K> run() throws Pausable, Exception {
+				int index = indexOf(key);
+				Node<K> overflow= null;
 
-		if (index < _size && BPlusTree.compare(key, _keys[index]) == 0) { // key already exists
-			_values[index] = value;
-		}
-		else if (!isFull()) {
-			insertEntry(index, key, value);
-		}
-		else { // page is full, we must divide the page
-			overflow= split();
+				if (index < _size && BPlusTree.compare(key, _keys[index]) == 0) { // key already exists
+					_values[index] = value;
+				}
+				else if (!isFull()) {
+					insertEntry(index, key, value);
+				}
+				else { // page is full, we must divide the page
+					overflow= split();
 
-			if (index <= _size) {
-				insertEntry(index, key, value);
-			}
-			else
-				overflow.insertEntry(index-_size, key, value);
+					if (index <= _size) {
+						insertEntry(index, key, value);
+					}
+					else
+						overflow.insertEntry(index-_size, key, value);
+						
+					getStorage().store(overflow);
+				}
 				
-			getStorage().store(overflow).getb();
-		}
-		
-		update();
-		return overflow;
+				update();
+				return overflow;
+			}
+		}.submit();
+	}
+	public Node<K> insert(K key, Object value) throws Pausable {
+		return insertA(key, value).get();
 	}
 
 	/**
 	 * Split this node into two and return the new node
 	 * @throws IOException 
 	 */
-	Node<K> split() throws IOException {
-		int half = _index._pageSize >> 1;
-		Node<K> overflow= clone(this);
-		overflow._size= _size-half;
-		System.arraycopy(_keys, half, overflow._keys, 0, overflow._size);
-		System.arraycopy(_values, half, overflow._values, 0, overflow._size);
-		_size= half;
-		
-		for (int i= _keys.length; _size < i--;) {
-			_keys[i]= null;
-			_values[i]= null;
-		}
-		
-		// link newly created node
-		overflow._next = _next;
-		overflow._previous = getId();
-		if (_next != null) {
-			Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
-			next._previous = overflow.getId();
-			next.update();
-		}
-		_next= overflow.getId();
-		
-		getStorage().store(overflow).getb();
-		
-		return overflow;
+	IResult<Node<K>> splitA() {
+		return new ContrailTask<Node<K>>() {
+			@Override
+			protected Node<K> run() throws Pausable, Exception {
+				int half = _index._pageSize >> 1;
+				Node<K> overflow= Node.this.clone(Node.this);
+				overflow._size= _size-half;
+				System.arraycopy(_keys, half, overflow._keys, 0, overflow._size);
+				System.arraycopy(_values, half, overflow._values, 0, overflow._size);
+				_size= half;
+				
+				for (int i= _keys.length; _size < i--;) {
+					_keys[i]= null;
+					_values[i]= null;
+				}
+				
+				// link newly created node
+				overflow._next = _next;
+				overflow._previous = getId();
+				if (_next != null) {
+					Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
+					next._previous = overflow.getId();
+					next.update();
+				}
+				_next= overflow.getId();
+				
+				getStorage().store(overflow);
+				
+				return overflow;
+			}
+		}.submit();
+	}
+	Node<K> split() throws Pausable {
+		return splitA().get();
 	}
 
 	/**
 	 * Merge the given node into this node.
 	 */
-	void merge(Node<K> rightSibling) throws IOException {
-		if (_index._pageSize < _size + rightSibling._size)
-			throw new IllegalStateException("Combined node size exceeds index page size");
+	IResult<Void> mergeA(final Node<K> rightSibling) {
+		return new ContrailAction() {
+			@Override protected void action() throws Pausable, Exception {
+				if (_index._pageSize < _size + rightSibling._size)
+					throw new IllegalStateException("Combined node size exceeds index page size");
 
-		System.arraycopy(rightSibling._keys, 0, _keys, _size, rightSibling._size);
-		System.arraycopy(rightSibling._values, 0, _values, _size, rightSibling._size);
-		_size+= rightSibling._size;
-		
-		// link newly created node
-		if ((_next = rightSibling._next) != null) {
-			Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
-			next._previous = getId();
-			next.update();
-		}
+				System.arraycopy(rightSibling._keys, 0, _keys, _size, rightSibling._size);
+				System.arraycopy(rightSibling._values, 0, _values, _size, rightSibling._size);
+				_size+= rightSibling._size;
+				
+				// link newly created node
+				if ((_next = rightSibling._next) != null) {
+					Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
+					next._previous = getId();
+					next.update();
+				}
+			}
+		}.submit();
+	}
+	void merge(Node<K> rightSibling) throws Pausable {
+		mergeA(rightSibling).get();
 	}
 	
 	/**
@@ -201,15 +225,23 @@ implements Cloneable
 	 * Remove the entry associated with the given key.
 	 * @return true if underflow
 	 */
-	boolean remove(K key) throws IOException {
-		int index = indexOf(key);
-		if (index < _size) {
-			if (BPlusTree.compare(_keys[index], key) == 0) {
-				removeEntry(index);
-				update();
+	IResult<Boolean> removeA(final K key) {
+		return new ContrailTask<Boolean>() {
+			@Override
+			protected Boolean run() throws Pausable, Exception {
+				int index = indexOf(key);
+				if (index < _size) {
+					if (BPlusTree.compare(_keys[index], key) == 0) {
+						removeEntry(index);
+						update();
+					}
+				}
+				return _size < _index._pageSize / 2;
 			}
-		}
-		return _size < _index._pageSize / 2;
+		}.submit();
+	}
+	boolean remove(K key) throws Pausable {
+		return removeA(key).get();
 	}
 
 	void dump(PrintStream out, int depth) throws IOException {

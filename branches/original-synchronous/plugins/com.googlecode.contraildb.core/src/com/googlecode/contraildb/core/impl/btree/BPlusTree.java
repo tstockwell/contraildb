@@ -14,6 +14,7 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
+import com.googlecode.contraildb.core.async.TaskTracker;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
@@ -82,39 +83,46 @@ implements Iterable<T>
 	/**
 	 * Create a new persistent index.
 	 */
-	private static final <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
+	private static final <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstanceA(
 			final IEntityStorage.Session storageSession, 
 			final Identifier id, 
 			final int pageSize, 
 			final boolean hasLeafValues
-	) throws IOException 
-	{
+	) {
 		return new ContrailTask<BPlusTree<K,V>>() {
 			@Override
 			protected BPlusTree<K, V> run() throws Pausable, Exception {
 				BPlusTree<K,V> btree= new BPlusTree<K,V>(id, pageSize, hasLeafValues);
-				storageSession.store(btree).get();
+				storageSession.store(btree);
 				return btree;
 			}
 		}.submit();
 	}
-	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
-	IEntityStorage.Session storageSession, int pageSize) 
-	throws IOException 
-	{
-		return createInstance(storageSession, Identifier.create(), pageSize, true);
+	
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstanceA(IEntityStorage.Session storageSession, int pageSize) {
+		return createInstanceA(storageSession, Identifier.create(), pageSize, true);
 	}
-	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createBPlusTree(
-	IEntityStorage.Session storageSession, Identifier identifier) 
-	throws IOException 
+	final public static <K extends Comparable, V> BPlusTree<K,V> createInstance(IEntityStorage.Session storageSession, int pageSize) throws Pausable 
 	{
-		return createInstance(storageSession, identifier, DEFAULT_SIZE, true);
+		return (BPlusTree<K, V>) createInstanceA(storageSession, pageSize).get();
 	}
-	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstance(
-	IEntityStorage.Session storageSession) 
-	throws IOException 
+	
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createBPlusTreeA(IEntityStorage.Session storageSession, Identifier identifier) 
 	{
-		return createInstance(storageSession, Identifier.create(), DEFAULT_SIZE, true);
+		return createInstanceA(storageSession, identifier, DEFAULT_SIZE, true);
+	}
+	final public static <K extends Comparable, V> BPlusTree<K,V> createBPlusTree(IEntityStorage.Session storageSession, Identifier identifier) throws Pausable 
+	{
+		return (BPlusTree<K, V>) createBPlusTreeA(storageSession, identifier).get();
+	}
+	
+	public static <K extends Comparable, V> IResult<BPlusTree<K,V>> createInstanceA(IEntityStorage.Session storageSession) 
+	{
+		return createInstanceA(storageSession, Identifier.create(), DEFAULT_SIZE, true);
+	}
+	final public static <K extends Comparable, V> BPlusTree<K,V> createInstance(IEntityStorage.Session storageSession) throws Pausable
+	{
+		return (BPlusTree<K, V>) createInstanceA(storageSession).get();
 	}
 
 	protected BPlusTree(Identifier identifier, int pageSize, boolean hasLeafValues) throws IOException {
@@ -128,35 +136,35 @@ implements Iterable<T>
 	protected BPlusTree() { }
 
 	@Override
-	public IResult<Void> onLoad(final Identifier identifier)
+	public IResult<Void> onLoadA(final Identifier identifier)
 	{
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
-				BPlusTree.super.onLoad(identifier).get();
+				BPlusTree.super.onLoadA(identifier).get();
 				if (_rootId != null) 
-					_root= (Node<T>) storage.fetch(_rootId).get();
+					_root= (Node<T>) storage.fetch(_rootId);
 			}
 		}.submit();
 	}
 
 	@Override
-	public IResult<Void> onInsert(final Identifier identifier) {
+	public IResult<Void> onInsertA(final Identifier identifier) {
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
-				BPlusTree.super.onInsert(identifier);
+				BPlusTree.super.onInsertA(identifier);
 				if (_root != null)
-					storage.store(_root).getb();
+					storage.store(_root);
 			}
 		}.submit();
 	}
 
 	@Override
-	public IResult<Void> onDelete() {
+	public IResult<Void> onDeleteA() {
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
 				if (_root != null)
 					_root.delete();
-				BPlusTree.super.onDelete();
+				BPlusTree.super.onDeleteA();
 			}
 		}.submit();
 	}
@@ -164,14 +172,17 @@ implements Iterable<T>
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public synchronized void insert(T key) throws IOException {
-		insert(key, (V) NO_VALUE).get();
+	public IResult<Void> insertA(T key) {
+		return insertA(key, (V) NO_VALUE);
+	}
+	final public void insert(T key) throws Pausable {
+		insertA(key, (V) NO_VALUE).get();
 	}
 	
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public synchronized IResult<Void> inserta(final T key, final V value) {
+	public IResult<Void> insertA(final T key, final V value) {
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
 				synchronized (BPlusTree.this) {
@@ -182,7 +193,7 @@ implements Iterable<T>
 					if (_root == null) {
 						_root = new Node<T>(BPlusTree.this);
 						_rootId = _root.getId();
-						getStorage().store(_root).getb();
+						getStorage().store(_root);
 						_root.insert(key, value);
 						update();
 						return;
@@ -191,7 +202,7 @@ implements Iterable<T>
 					Node<T> overflow = _root.insert(key, value);
 					if (overflow != null) {
 						InnerNode<T> newRoot= new InnerNode<T>(BPlusTree.this);
-						getStorage().store(newRoot).getb();
+						getStorage().store(newRoot);
 						if (_root.isLeaf()) {
 							newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
 						}
@@ -208,25 +219,35 @@ implements Iterable<T>
 		}.submit();
 	}
 	public void insert(T key, V value) throws Pausable {
-		inserta(key, value).get();
+		insertA(key, value).get();
 	}
 
 	/**
 	 * Remove an entry with the given key from the BTree.
 	 */
-	public synchronized void remove(T key) throws IOException {
-		if (key == null) 
-			throw new IllegalArgumentException("Argument 'key' is null");
+	public IResult<Void> removeA(final T key) {
+		return new ContrailAction() {
+			@Override
+			protected void action() throws Pausable, Exception {
+				synchronized (BPlusTree.this) {
+					if (key == null) 
+						throw new IllegalArgumentException("Argument 'key' is null");
 
-		if (_root == null)
-			return;
+					if (_root == null)
+						return;
 
-		boolean underflow= _root.remove(key);
-		if (underflow && _root.isEmpty()) {
-			_root.delete();
-			_root = null;
-		}
-		update();
+					boolean underflow= _root.remove(key);
+					if (underflow && _root.isEmpty()) {
+						_root.delete();
+						_root = null;
+					}
+					update();
+				}
+			}
+		}.submit();
+	}
+	public void remove(final T key) throws Pausable {
+		removeA(key).get();
 	}
 
 	@Override
@@ -256,15 +277,21 @@ implements Iterable<T>
 		};
 	}
 
+
 	/**
 	 * Deletes all BPages in this BTree, then deletes the tree from the record
 	 * manager
 	 */
-	public synchronized void delete() throws IOException {
-		if (_root != null)
-			_root.delete();
-		_root= null;
-		super.delete();
+	public IResult<Void> deleteA() {
+		return new ContrailAction() {
+			protected void action() throws Pausable {
+				if (_root != null)
+					subtask(_root.deleteA());
+				_root= null;
+				subtask(BPlusTree.super.deleteA());
+				awaitAll();
+			}
+		}.submit();
 	}
 
 	/**

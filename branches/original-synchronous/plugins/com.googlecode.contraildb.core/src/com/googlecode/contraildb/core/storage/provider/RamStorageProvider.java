@@ -19,7 +19,7 @@ public class RamStorageProvider extends AbstractStorageProvider {
 	IdentifierIndexedStorage<byte[]> _storage= new IdentifierIndexedStorage<byte[]>(); 
 	
 	@Override
-	public IResult<IStorageProvider.Session> connect() {
+	public IResult<IStorageProvider.Session> connectA() {
 		return TaskUtils.asResult(new RamStorageSession());
 	}
 	

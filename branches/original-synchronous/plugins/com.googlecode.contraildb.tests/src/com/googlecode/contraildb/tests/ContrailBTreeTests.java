@@ -44,7 +44,7 @@ public class ContrailBTreeTests extends ContrailTestCase {
 		runTest(new ContrailAction() {
 			@Override
 			protected void action() throws Pausable, Exception {
-				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
+				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
 				BPlusTree<String, String> tree= BPlusTree.createInstance(storage);
 				IBTreePlusCursor<String, String> cursor= tree.cursor(Direction.FORWARD);
 				
@@ -90,7 +90,7 @@ public class ContrailBTreeTests extends ContrailTestCase {
 		runTest(new ContrailAction() {
 			@Override
 			protected void action() throws Pausable, Exception {
-				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
+				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
 				BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 				IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 				
@@ -137,7 +137,7 @@ public class ContrailBTreeTests extends ContrailTestCase {
 		runTest(new ContrailAction() {
 			@Override
 			protected void action() throws Pausable, Exception {
-				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
+				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
 				BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 				IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 				
@@ -183,7 +183,7 @@ public class ContrailBTreeTests extends ContrailTestCase {
 		runTest(new ContrailAction() {
 			@Override
 			protected void action() throws Pausable, Exception {
-				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
+				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
 				BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 				IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 				
@@ -225,7 +225,7 @@ public class ContrailBTreeTests extends ContrailTestCase {
 		runTest(new ContrailAction() {
 			@Override
 			protected void action() throws Pausable, Exception {
-				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
+				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
 				BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 				IBTreePlusCursor<Integer, Integer> finder= tree.cursor(Direction.FORWARD);
 				
@@ -266,7 +266,7 @@ public class ContrailBTreeTests extends ContrailTestCase {
 		runTest(new ContrailAction() {
 			@Override
 			protected void action() throws Pausable, Exception {
-				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect().get();
+				IEntityStorage.Session storage= new EntityStorage(new RamStorageProvider()).connect();
 				BPlusTree<Integer, Integer> tree= BPlusTree.createInstance(storage, 4);
 				
 				String lastDump= "";
