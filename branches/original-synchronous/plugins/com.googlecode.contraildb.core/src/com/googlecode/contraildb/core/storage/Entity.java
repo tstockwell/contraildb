@@ -70,41 +70,25 @@ public class Entity implements IEntity, ILifecycle {
 	public IEntityStorage.Session getStorage() {
 		return storage;
 	}
-	
 
-	public IResult<Collection<Identifier>> listChildrenA() {
-		return storage.listChildrenA(id);
-	}
-	final public Collection<Identifier> listChildren() throws Pausable {
-		return listChildrenA().get();
+	public Collection<Identifier> listChildren() throws Pausable {
+		return storage.listChildren(id);
 	}
 	
-	public IResult<Collection<Entity>> getChildrenA() {
-		return storage.fetchChildrenA(id);
-	}
-	final public Collection<Entity> getChildren() throws Pausable {
-		return getChildrenA().get();
+	public Collection<Entity> getChildren() throws Pausable {
+		return storage.fetchChildren(id);
 	}
 	
-	public IResult<Void> deleteA() {
-		return storage.deleteA(getId());
-	}
-	final public void delete() throws Pausable {
-		deleteA();
+	public void delete() throws Pausable {
+		storage.delete(getId());
 	}
 	
-	public IResult<Void> deleteAllChildrenA() {
-		return storage.deleteAllChildrenA(id);
-	}
-	final public void deleteAllChildren() throws Pausable {
-		deleteAllChildrenA().get();
+	public void deleteAllChildren() throws Pausable {
+		storage.deleteAllChildren(id);
 	}
 	
-	public IResult<Void> updateA() {
-		return storage.storeA(this);
-	}
-	final public void update() throws Pausable {
-		updateA().get();
+	public void update() throws Pausable {
+		storage.store(this);
 	}
 	
 	

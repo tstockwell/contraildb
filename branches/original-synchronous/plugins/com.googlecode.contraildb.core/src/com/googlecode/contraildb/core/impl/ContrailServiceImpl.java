@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Stack;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.IContrailService;
 import com.googlecode.contraildb.core.IContrailSession;
@@ -42,7 +44,7 @@ public class ContrailServiceImpl implements IContrailService {
 	StorageSystem _storageSystem;
 	
 	public ContrailServiceImpl(IStorageProvider storageProvider) 
-	throws IOException 
+	throws Pausable 
 	{
 		_storageSystem= new StorageSystem(storageProvider);
 	}
