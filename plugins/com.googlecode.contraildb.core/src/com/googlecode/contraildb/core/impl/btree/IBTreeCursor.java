@@ -1,6 +1,6 @@
 package com.googlecode.contraildb.core.impl.btree;
 
-import java.io.IOException;
+import kilim.Pausable;
 
 /**
  * Simple API for navigating through the elements in a BTree.
@@ -28,24 +28,34 @@ public interface IBTreeCursor<K> {
 		public EmptyCursor(Direction d) { _direction= d; } 
 		public boolean after(K e) { return false; }
 		public boolean before(K e) { return false; }
-		public K keyValue() { return null; }
-		public boolean first() { return false; }
+		public K keyValue() throws Pausable { return null; }
+		public boolean first() throws Pausable { return false; }
 		public Direction getDirection() { return _direction; }
-		public boolean hasNext() { return false; }
+		public boolean hasNext() throws Pausable { return false; }
 		public boolean last() { return false; }
-		public boolean next() { return false; }
-		public boolean to(K e) { return false; }
+		public boolean next() throws Pausable { return false; }
+		public boolean to(K e) throws Pausable { return false; }
 	}
 	public class SingleValueCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 		private T _t;
 		private int _state= 0;
 		public SingleValueCursor(T t) { _t= t;  }
-		public T keyValue() { return _t; }
-		public boolean first() { if (1 < _state) return false; _state= 1; return true; }
+		public T keyValue() throws Pausable { return _t; }
+		public boolean first() throws Pausable { 
+			if (1 < _state) 
+				return false; 
+			_state= 1; 
+			return true; 
+		}
 		public Direction getDirection() { return Direction.FORWARD; }
-		public boolean hasNext() { return (_state == 0); }
-		public boolean next() { if (1 <= _state) return false; _state= 1; return true; }
-		public boolean to(T e) {
+		public boolean hasNext() throws Pausable { return (_state == 0); }
+		public boolean next() throws Pausable { 
+			if (1 <= _state) 
+				return false; 
+			_state= 1; 
+			return true; 
+		}
+		public boolean to(T e) throws Pausable {
 			if (1 < _state)
 				return false;
 			int i= BPlusTree.compare(e, _t);
@@ -75,13 +85,13 @@ public interface IBTreeCursor<K> {
 	
 	Direction getDirection();
 	
-	boolean hasNext() throws IOException;
+	boolean hasNext() throws Pausable;
 	
 	/**
 	 * @return 
 	 * 	the value of the key associated with the current cursor position.
 	 */
-	K keyValue() throws IOException;
+	K keyValue() throws Pausable;
 	
     /**
      * Moves the cursor to the next element.
@@ -89,7 +99,7 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean next() throws IOException;
+    boolean next() throws Pausable;
 	
     /**
      * Moves the cursor to the given element or, if the element does not exist, the next element..
@@ -97,7 +107,7 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean to(K e) throws IOException;
+    boolean to(K e) throws Pausable;
 
     /**
      * Moves the cursor to the first element.
@@ -105,6 +115,6 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean first() throws IOException;
+    boolean first() throws Pausable;
 
 }

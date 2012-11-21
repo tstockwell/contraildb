@@ -12,7 +12,6 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.Entity;
-import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
@@ -51,8 +50,19 @@ implements Cloneable
 	Node<K> clone(Node<K> node) { return  new Node<K>(node._index); }
 	boolean isLeaf() { return true; }  
 	public BPlusTree<K,?> getIndex() { return _index; }
-	Node<K> getNextSibling() throws IOException { if (_next == null) return null; return StorageUtils.syncFetch(getStorage(), _next); }
-	K getLookupKey() throws IOException { if (_next == null) return getLargestKey(); return getNextSibling().getSmallestKey(); }		
+	
+	Node<K> getNextSibling() throws Pausable { 
+		if (_next == null) 
+			return null; 
+		return getStorage().fetch(_next); 
+	}
+	
+	K getLookupKey() throws Pausable { 
+		if (_next == null) 
+			return getLargestKey();
+		Node<K> next= getNextSibling();
+	    return next.getSmallestKey(); 
+	}		
 
 	public IResult<Void> onLoadA(final Identifier identifier) {
 		return new ContrailAction() {
@@ -130,7 +140,7 @@ implements Cloneable
 				overflow._next = _next;
 				overflow._previous = getId();
 				if (_next != null) {
-					Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
+					Node<?> next = getStorage().fetch(_next);
 					next._previous = overflow.getId();
 					next.update();
 				}
@@ -161,7 +171,7 @@ implements Cloneable
 				
 				// link newly created node
 				if ((_next = rightSibling._next) != null) {
-					Node<?> next = StorageUtils.syncFetch(getStorage(), _next);
+					Node<?> next = getStorage().fetch(_next);
 					next._previous = getId();
 					next.update();
 				}
@@ -244,7 +254,7 @@ implements Cloneable
 		return removeA(key).get();
 	}
 
-	void dump(PrintStream out, int depth) throws IOException {
+	void dump(PrintStream out, int depth) throws Pausable {
 		String prefix = "";
 		for (int i = 0; i < depth; i++) {
 			prefix += "    ";
@@ -254,9 +264,10 @@ implements Cloneable
 				out.println(prefix + i+": [" + _keys[i] + "] " + _values[i]);
 	}
 
-	Node<K> getChildNode(int index) throws IOException {
+	Node<K> getChildNode(int index) throws Pausable {
 		assert 0 < index;
-		return StorageUtils.syncFetch(getStorage(), (Identifier)_values[index]);
+		Node<K> node= getStorage().fetch((Identifier)_values[index]);
+		return node;
 	}
 
 

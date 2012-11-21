@@ -4,6 +4,9 @@
 package com.googlecode.contraildb.core.impl.btree;
 
 import java.io.IOException;
+import java.util.concurrent.locks.ReentrantLock;
+
+import kilim.Pausable;
 
 import com.googlecode.contraildb.core.storage.StorageUtils;
 
@@ -11,8 +14,9 @@ import com.googlecode.contraildb.core.storage.StorageUtils;
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class CursorImpl<T extends Comparable, V> 
 implements IBTreePlusCursor<T,V> {
-	BPlusTree _tree;
-	Direction _direction;
+	private final BPlusTree _tree;
+	private final Direction _direction;
+	private final ReentrantLock _lock = new ReentrantLock();	
 	
 	public CursorImpl(BPlusTree index, Direction direction) {
 		_direction= direction;
@@ -21,31 +25,31 @@ implements IBTreePlusCursor<T,V> {
 	Node<T> _page;
 	int _index;
 
-	@Override
-	public V elementValue() throws IOException {
+	@Override synchronized public V elementValue() throws Pausable {
 		return (V) _page._values[_index];
 	}
 	
-	private void initFirst() throws IOException {
+	private void initFirst() throws Pausable {
 		_index= -1;
 		if ((_page= _tree.getRoot()) != null) {
 			while (!_page.isLeaf()) 
 				_page= _page.getChildNode(0);
 		}
 	}
-	protected void initLast() throws IOException {
+	protected void initLast() throws Pausable {
 		if ((_page= _tree.getRoot()) != null) {
-			while (!_page.isLeaf()) 
+			while (!_page.isLeaf()) {
 				_page= _page.getChildNode(_page._size-1);
+			}
 			_index= _page._size;
 		}
 	}
 
-	@Override 
-	public T keyValue() throws IOException {
+	@Override synchronized public T keyValue() throws Pausable {
 		return _page._keys[_index];
 	}
-	protected boolean previous() throws IOException {
+	
+	protected boolean previous() throws Pausable {
 		if (_page == null)
 			initLast();
 		if (_page == null)
@@ -62,7 +66,7 @@ implements IBTreePlusCursor<T,V> {
 		return true;
 	}
 	
-	protected boolean ge(T e) throws IOException {
+	protected boolean ge(T e) throws Pausable {
 		if ((_page= _tree.getRoot()) == null)
 			return false;
 		
@@ -74,9 +78,10 @@ implements IBTreePlusCursor<T,V> {
 		
 		return 0 <= _index && _index < _page._size && (BPlusTree.compare(e, _page._keys[_index]) == 0); 
 	}
-	protected boolean le(T e) throws IOException {
-		
-		if (ge(e)) {
+	
+	protected boolean le(T e) throws Pausable {
+		boolean isGE= ge(e);
+		if (isGE) {
 			T t= keyValue();
 			if (BPlusTree.compare(t, e) == 0)
 				return true;
@@ -84,13 +89,18 @@ implements IBTreePlusCursor<T,V> {
 				return true;
 			return false;
 		}
-		return last();
+		boolean isLast= last();
+		return isLast;
 	}
 	
 	@Override
-	public boolean next() throws IOException {
-		if (Direction.REVERSE == _direction)
-			return previous();
+	public boolean next() throws Pausable {
+	/*synchronized*/_lock.lock(); try {
+			
+		if (Direction.REVERSE == _direction) {
+			boolean isPrev= previous();
+			return isPrev;
+		}
 		
 		if (_page == null) 
 			return first();
@@ -98,16 +108,20 @@ implements IBTreePlusCursor<T,V> {
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
 				return false;
-			_page = StorageUtils.syncFetch(_page.getStorage(), _page._next);
+			_page = _page.getStorage().fetch(_page._next);
 			_index = -1;
 		}
 		
 		_index++;
 		return true;
+		
+	} finally { _lock.unlock(); }
 	}
 
 	@Override
-	public boolean hasNext() throws IOException {
+	public boolean hasNext() throws Pausable {
+	/*synchronized*/_lock.lock(); try {
+		
 		if (Direction.REVERSE == _direction)
 			return hasPrevious();
 		
@@ -119,13 +133,16 @@ implements IBTreePlusCursor<T,V> {
 		if (_page._size-1 <= _index) {
 			if (_page._next == null)  
 				return false;
-			_page = StorageUtils.syncFetch(_page.getStorage(), _page._next);
+			_page = _page.getStorage().fetch(_page._next);
 			_index = -1;
 		}
 		return true;
-	}
+		
+	} finally { _lock.unlock(); }}
 
-	public boolean hasPrevious() throws IOException {
+	public boolean hasPrevious() throws Pausable {
+	/*synchronized*/_lock.lock(); try {
+		
 		if (_page == null)
 			initLast();
 		if (_page == null)
@@ -134,14 +151,16 @@ implements IBTreePlusCursor<T,V> {
 		if (_index <= 0) {
 			if (_page._previous == null) 
 				return false;
-			_page = StorageUtils.syncFetch(_page.getStorage(), _page._previous);
+			_page = _page.getStorage().fetch(_page._previous);
 			_index = _page._size;
 		}
 		return true;
-	}
+		
+	} finally { _lock.unlock(); }}
 
-	@Override
-	public boolean first() throws IOException {
+	@Override public boolean first() throws Pausable {
+	/*synchronized*/_lock.lock(); try {
+		
 		if (Direction.REVERSE == _direction)
 			return last();
 		
@@ -149,9 +168,10 @@ implements IBTreePlusCursor<T,V> {
 		if (_page == null)
 			return false;
 		return next();
-	}
+		
+	} finally { _lock.unlock(); }}
 
-	protected boolean last() throws IOException {
+	protected boolean last() throws Pausable {
 		if (Direction.REVERSE == _direction)
 			return first();
 		
@@ -160,34 +180,44 @@ implements IBTreePlusCursor<T,V> {
 			return false;
 		return previous();
 	}
-	@Override
-	public IBTreePlusCursor.Direction getDirection() {
+	
+	@Override public IBTreePlusCursor.Direction getDirection() {
 		return _direction;
 	}
-	@Override
-	public boolean to(T e) throws IOException {
-		if (Direction.REVERSE == _direction)
-			return le(e);
-		return ge(e);
-	}
+	
+	@Override public boolean to(T e) throws Pausable {
+	/*synchronized*/_lock.lock(); try {
+		
+		if (Direction.REVERSE == _direction) {
+			boolean isLE= le(e); 
+			return isLE;
+		}
+		boolean isGE= ge(e); 
+		return isGE;
+		
+	} finally { _lock.unlock(); }}
 	
 	/**
 	 * Find the value associated with the given key.
 	 * Always starts the search from the beginning 
 	 */
 	@Override
-	public synchronized V find(T key) throws IOException {
+	public V find(T key) throws Pausable {
+	/*synchronized*/_lock.lock(); try {
+		
 		if (Direction.REVERSE == _direction) {
 			initLast();
 		}
 		else
 			initFirst();
+		
 		if (!to(key))
 			return null;
 		T k= keyValue();
 		if (BPlusTree.compare(key, k) != 0)
 			return null;
 		return elementValue();
-	}
+		
+	} finally { _lock.unlock(); }}
 	
 }

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.concurrent.locks.ReentrantLock;
 
 import kilim.Pausable;
 
@@ -15,6 +16,7 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.TaskTracker;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
@@ -39,7 +41,7 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class BPlusTree<T extends Comparable, V> 
 extends Entity
-implements Iterable<T>
+//implements Iterable<T>
 {
 	private static final long serialVersionUID = 1L;
 	private static final String NO_VALUE= "__no_value"; 
@@ -79,6 +81,7 @@ implements Iterable<T>
 	private boolean _hasLeafValues;
 
 	private transient Node<T> _root;
+	private final ReentrantLock _lock = new ReentrantLock();	
 
 	/**
 	 * Create a new persistent index.
@@ -140,10 +143,13 @@ implements Iterable<T>
 	{
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
+			/*synchronized*/_lock.lock(); try {
+				
 				BPlusTree.super.onLoadA(identifier).get();
 				if (_rootId != null) 
 					_root= (Node<T>) storage.fetch(_rootId);
-			}
+				
+			} finally { _lock.unlock(); }}
 		}.submit();
 	}
 
@@ -151,10 +157,13 @@ implements Iterable<T>
 	public IResult<Void> onInsertA(final Identifier identifier) {
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
+			/*synchronized*/_lock.lock(); try {
+				
 				BPlusTree.super.onInsertA(identifier);
 				if (_root != null)
 					storage.store(_root);
-			}
+				
+			} finally { _lock.unlock(); }}
 		}.submit();
 	}
 
@@ -162,137 +171,122 @@ implements Iterable<T>
 	public IResult<Void> onDeleteA() {
 		return new ContrailAction() {
 			protected void action() throws Pausable, Exception {
-				if (_root != null)
-					_root.delete();
-				BPlusTree.super.onDeleteA();
-			}
+			/*synchronized*/_lock.lock(); try {
+					if (_root != null)
+						_root.delete();
+					BPlusTree.super.onDeleteA();
+			} finally { _lock.unlock(); }}
 		}.submit();
 	}
 
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public IResult<Void> insertA(T key) {
-		return insertA(key, (V) NO_VALUE);
-	}
 	final public void insert(T key) throws Pausable {
-		insertA(key, (V) NO_VALUE).get();
+		insert(key, (V) NO_VALUE);
 	}
 	
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public IResult<Void> insertA(final T key, final V value) {
-		return new ContrailAction() {
-			protected void action() throws Pausable, Exception {
-				synchronized (BPlusTree.this) {
-					if (key == null) 
-						throw new IllegalArgumentException("Argument 'key' is null");
-
-					// BTree is currently empty, create a new root BPage
-					if (_root == null) {
-						_root = new Node<T>(BPlusTree.this);
-						_rootId = _root.getId();
-						getStorage().store(_root);
-						_root.insert(key, value);
-						update();
-						return;
-					}
-
-					Node<T> overflow = _root.insert(key, value);
-					if (overflow != null) {
-						InnerNode<T> newRoot= new InnerNode<T>(BPlusTree.this);
-						getStorage().store(newRoot);
-						if (_root.isLeaf()) {
-							newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
-						}
-						else {
-							newRoot.insertEntry(0, _root.getLargestKey(), _root.getId());
-						}
-						newRoot.insertEntry(1, overflow.getLargestKey(), overflow.getId());
-						_root= newRoot;
-						_rootId = newRoot.getId();
-						update();
-					}
-				}
-			}
-		}.submit();
-	}
 	public void insert(T key, V value) throws Pausable {
-		insertA(key, value).get();
-	}
+    /*synchronized*/_lock.lock(); try {
+
+		if (key == null) 
+			throw new IllegalArgumentException("Argument 'key' is null");
+
+		// BTree is currently empty, create a new root BPage
+		if (_root == null) {
+			_root = new Node<T>(BPlusTree.this);
+			_rootId = _root.getId();
+			getStorage().store(_root);
+			_root.insert(key, value);
+			update();
+			return;
+		}
+
+		Node<T> overflow = _root.insert(key, value);
+		if (overflow != null) {
+			InnerNode<T> newRoot= new InnerNode<T>(BPlusTree.this);
+			getStorage().store(newRoot);
+			if (_root.isLeaf()) {
+				newRoot.insertEntry(0, overflow.getSmallestKey(), _root.getId());
+			}
+			else {
+				newRoot.insertEntry(0, _root.getLargestKey(), _root.getId());
+			}
+			newRoot.insertEntry(1, overflow.getLargestKey(), overflow.getId());
+			_root= newRoot;
+			_rootId = newRoot.getId();
+			update();
+		}
+
+	} finally { _lock.unlock(); }}
 
 	/**
 	 * Remove an entry with the given key from the BTree.
 	 */
-	public IResult<Void> removeA(final T key) {
-		return new ContrailAction() {
-			@Override
-			protected void action() throws Pausable, Exception {
-				synchronized (BPlusTree.this) {
-					if (key == null) 
-						throw new IllegalArgumentException("Argument 'key' is null");
-
-					if (_root == null)
-						return;
-
-					boolean underflow= _root.remove(key);
-					if (underflow && _root.isEmpty()) {
-						_root.delete();
-						_root = null;
-					}
-					update();
-				}
-			}
-		}.submit();
-	}
 	public void remove(final T key) throws Pausable {
-		removeA(key).get();
-	}
+	/*synchronized*/_lock.lock(); try {
 
-	@Override
-	public java.util.Iterator<T> iterator() {
-		final IBTreeCursor<T> navigator= cursor(Direction.FORWARD);
-		return new Iterator<T>() {
-			public boolean hasNext() {
-				try {
-					return navigator.hasNext();
-				} catch (IOException e) {
-					throw new ContrailException("Error navigating index", e);
-				}
-			}
-			public T next() {
-				try {
-					if (!navigator.next())
-						throw new NoSuchElementException();
-					return navigator.keyValue();
-				} catch (IOException e) {
-					throw new ContrailException("Error navigating index", e);
-				}
-			}
-			@Override
-			public void remove() {
-				throw new UnsupportedOperationException();
-			}
-		};
-	}
+		if (key == null) 
+			throw new IllegalArgumentException("Argument 'key' is null");
+
+		if (_root == null)
+			return;
+
+		boolean underflow= _root.remove(key);
+		if (underflow && _root.isEmpty()) {
+			_root.delete();
+			_root = null;
+		}
+		update();
+		
+	} finally { _lock.unlock(); }}
+
+//	@Override
+//	public java.util.Iterator<T> iterator() {
+//		final IBTreeCursor<T> navigator= cursor(Direction.FORWARD);
+//		return new Iterator<T>() {
+//			public boolean hasNext() {
+//				try {
+//					return navigator.hasNext();
+//				} catch (IOException e) {
+//					throw new ContrailException("Error navigating index", e);
+//				}
+//			}
+//			public T next() {
+//				try {
+//					if (!navigator.next())
+//						throw new NoSuchElementException();
+//					return navigator.keyValue();
+//				} catch (IOException e) {
+//					throw new ContrailException("Error navigating index", e);
+//				}
+//			}
+//			@Override
+//			public void remove() {
+//				throw new UnsupportedOperationException();
+//			}
+//		};
+//	}
 
 
 	/**
 	 * Deletes all BPages in this BTree, then deletes the tree from the record
 	 * manager
 	 */
-	public IResult<Void> deleteA() {
-		return new ContrailAction() {
-			protected void action() throws Pausable {
-				if (_root != null)
-					subtask(_root.deleteA());
-				_root= null;
-				subtask(BPlusTree.super.deleteA());
-				awaitAll();
-			}
-		}.submit();
-	}
+	public void delete() throws Pausable {
+	/*synchronized*/_lock.lock(); try {
+		
+		// delete root
+		if (_root != null) 
+			_root.delete();
+		
+		_root= null;
+		super.delete();
+		
+	} finally { _lock.unlock(); }}
 
 	/**
 	 * Return the size of a node in the btree.
@@ -301,17 +295,17 @@ implements Iterable<T>
 		return _pageSize;
 	}
 
-	protected Node<T> getRoot() throws IOException {
+	protected Node<T> getRoot() {
 		return _root;
 	}
 
-	public void dump(PrintStream out) throws IOException {
+	public void dump(PrintStream out) throws Pausable {
 		Node<T> root = getRoot();
 		if (root != null) 
 			root.dump(out, 0);
 	}
 
-	public boolean isEmpty() throws IOException {
+	public boolean isEmpty() {
 		if (_root == null)
 			return true;
 		return _root.isEmpty();
@@ -324,15 +318,13 @@ implements Iterable<T>
 	
 	@Override
 	public String toString() {
-		try {
-			ByteArrayOutputStream bout= new ByteArrayOutputStream();
-			dump(new PrintStream(bout));
-			return bout.toString();
-		}
-		catch (IOException x) {
-			// not gonna happen
-		}
-		return super.toString();
+		final ByteArrayOutputStream bout= new ByteArrayOutputStream();
+		new ContrailAction() {
+			@Override protected void action() throws Pausable {
+				dump(new PrintStream(bout));
+			}
+		}.submit().getb();
+		return bout.toString();
 	}
 
 

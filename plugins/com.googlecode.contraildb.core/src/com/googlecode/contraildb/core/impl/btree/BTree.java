@@ -4,7 +4,11 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.io.Serializable;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
+import com.googlecode.contraildb.core.async.ContrailTask;
+import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
@@ -37,28 +41,36 @@ extends BPlusTree<T, Serializable>
 		}
 	}
 	
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, Identifier identifier, int pageSize) 
-	throws IOException 
+	public static <K extends Comparable> IResult<BTree<K>> createInstanceA(final IEntityStorage.Session storageSession, final Identifier identifier, final int pageSize) 
 	{
-		BTree<K> btree= new BTree<K>(identifier, pageSize);
-		storageSession.store(btree).getb();
-		return btree;
+		return new ContrailTask<BTree<K>>() {
+			@Override
+			protected BTree<K> run() throws Pausable, Exception {
+				BTree<K> btree= new BTree<K>(identifier, pageSize);
+				storageSession.store(btree);
+				return btree;
+			}
+		}.submit();
 	}
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, Identifier identifier) 
-	throws IOException 
+	final public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, Identifier identifier, int pageSize) 
+	throws Pausable
 	{
-		BTree<K> btree= new BTree<K>(identifier, DEFAULT_SIZE);
-		storageSession.store(btree).getb();
-		return btree;
+		return (BTree<K>) createInstanceA(storageSession, identifier, pageSize).get();
 	}
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, int pageSize) 
-	throws IOException 
+	
+	final public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, Identifier identifier) 
+	throws Pausable 
+	{
+		return createInstance(storageSession, identifier, DEFAULT_SIZE);
+	}
+	final public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession, int pageSize) 
+	throws Pausable 
 	{
 		return createInstance(storageSession, Identifier.create(), pageSize);
 	}
 	
-	public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession) 
-	throws IOException 
+	final public static <K extends Comparable> BTree<K> createInstance(IEntityStorage.Session storageSession) 
+	throws Pausable 
 	{
 		return createInstance(storageSession, Identifier.create(), DEFAULT_SIZE);
 	}

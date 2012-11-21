@@ -1,8 +1,9 @@
 package com.googlecode.contraildb.core.impl;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
+
+import kilim.Pausable;
 
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
 import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
@@ -25,22 +26,19 @@ public class NotCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 		filterCursors.toArray(_cursors);
 	}
 
-	@Override
-	public T keyValue() throws IOException {
+	@Override public T keyValue() throws Pausable {
 		if (_cursors.length <= 0)
 			throw new NoSuchElementException();
 		return _cursors[0].keyValue();
 	}
 
-	@Override
-	public boolean first() throws IOException {
+	@Override public boolean first() throws Pausable {
 		if (!_cursors[0].first())
 			return false;
 		return to(_cursors[0].keyValue());
 	}
 
-	@Override
-	public boolean to(T e) throws IOException {
+	@Override public boolean to(T e) throws Pausable {
 		if (!_cursors[0].to(e))
 			return false;
 
@@ -65,13 +63,11 @@ public class NotCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 		}
 	}
 
-	@Override
-	public boolean hasNext() throws IOException {
+	@Override public boolean hasNext() throws Pausable {
 		throw new UnsupportedOperationException();
 	}
 
-	@Override
-	public boolean next() throws IOException {
+	@Override public boolean next() throws Pausable {
 		
 		while (_cursors[0].next()) {
 			if (to(_cursors[0].keyValue())) 

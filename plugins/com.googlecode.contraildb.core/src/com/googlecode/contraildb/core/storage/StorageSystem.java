@@ -78,15 +78,16 @@ public class StorageSystem {
 
 
 	public StorageSystem(final IStorageProvider rawStorage) 
-	throws IOException 
+	throws Pausable 
 	{
 		_entityStorage= new EntityStorage(rawStorage);
-		_entitySession= _entityStorage.connect().getb();
+		_entitySession= _entityStorage.connect();
 		Identifier rootId= Identifier.create("net/sf/contrail/core/storage/rootFolder");
-		_root= StorageUtils.syncFetch(_entitySession, rootId);
+		_root= _entitySession.fetch(rootId);
 		if (_root == null) {
-			_entitySession.store(_root= new RootFolder(rootId));
-			_entitySession.flush().getb();
+			_root= new RootFolder(rootId);
+			_entitySession.store(_root);
+			_entitySession.flush();
 		}
 	}
 	

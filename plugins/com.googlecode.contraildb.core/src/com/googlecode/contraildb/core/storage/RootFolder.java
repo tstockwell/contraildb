@@ -34,7 +34,7 @@ public class RootFolder extends Entity  {
 	transient Entity _deletionsFolder;
 	transient LockFolder _lockFolder;
 	
-	RootFolder(Identifier path) throws IOException {
+	RootFolder(Identifier path) {
 		super(path);
 		_revisionsFolder= new Entity(Identifier.create(id, "revisions"));
 		_deletionsFolder= new Entity(Identifier.create(id, "deletions"));
