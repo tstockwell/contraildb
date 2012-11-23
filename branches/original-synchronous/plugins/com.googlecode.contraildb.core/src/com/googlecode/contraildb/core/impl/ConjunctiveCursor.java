@@ -35,14 +35,14 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 	}
 
 	@Override
-	public boolean first() throws Pausable {
+	public boolean first() throws Pausable, IOException {
 		if (!_cursors[0].first())
 			return false;
 		return to(_cursors[0].keyValue());
 	}
 
 	@Override
-	public boolean to(T e) throws Pausable {
+	public boolean to(T e) throws Pausable, IOException {
 		if (!_cursors[0].to(e))
 			return false;
 
@@ -71,7 +71,7 @@ public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCurso
 		throw new UnsupportedOperationException();
 	}
 
-	@Override public boolean next() throws Pausable {
+	@Override public boolean next() throws Pausable, IOException {
 		
 		while (_cursors[0].next()) {
 			if (to(_cursors[0].keyValue())) 

@@ -78,12 +78,11 @@ public class ContrailStorageTests extends ContrailTestCase {
 	public void testObjectStorage() throws Throwable {
 		runTest(new ContrailAction() {
 			protected void action() throws Pausable, Exception {
-				IResult<IEntityStorage.Session> storageResult= 
+				IEntityStorage.Session storage= 
 						new EntityStorage(_storage.getStorageProvider()).connect();
 				Identifier id= Identifier.create("person-0.1");
 				Entity object_0_1= new Entity(id);
 				
-				IEntityStorage.Session storage= storageResult.get();
 				storage.store(object_0_1);
 				
 				IEntity fetched= storage.fetch(id);
@@ -172,22 +171,25 @@ public class ContrailStorageTests extends ContrailTestCase {
 	 * Just verify that storage-based locks basically work and dont barf. 
 	 */
 	public void testSimplestLocks() throws Throwable {
-		
-		IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect().getb();
-		for (int f= 0; f < 10; f++) {			
-			Entity rootFolder= new Entity(Identifier.create());
-			storage.store(rootFolder);
-			final LockFolder lockFolder= new LockFolder(rootFolder);
-			storage.store(lockFolder);
-			storage.flush();
-			
-			for (int t= 0; t < 20; t++) {
-				String processId= Identifier.create().toString();
-				boolean lockd= lockFolder.lock(processId, true);
-				assertTrue(lockd);
-				lockFolder.unlock(processId);
+		runTest(new ContrailAction() {
+			@Override protected void action() throws Pausable, Exception {
+				IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
+				for (int f= 0; f < 10; f++) {			
+					Entity rootFolder= new Entity(Identifier.create());
+					storage.store(rootFolder);
+					final LockFolder lockFolder= new LockFolder(rootFolder);
+					storage.store(lockFolder);
+					storage.flush();
+					
+					for (int t= 0; t < 20; t++) {
+						String processId= Identifier.create().toString();
+						boolean lockd= lockFolder.lock(processId, true);
+						assertTrue(lockd);
+						lockFolder.unlock(processId);
+					}
+				}
 			}
-		}
+		});
 	}
 	
 	/**
@@ -200,7 +202,7 @@ public class ContrailStorageTests extends ContrailTestCase {
 			@Override
 			protected void action() throws Pausable, Exception {
 				// test that only one lock is ever granted at a time
-				IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect().get();
+				IEntityStorage.Session storage= new EntityStorage(_rawStorage).connect();
 				for (int f= 0; f < 10; f++) {			
 					Entity rootFolder= new Entity(Identifier.create());
 					storage.store(rootFolder);
@@ -385,71 +387,77 @@ public class ContrailStorageTests extends ContrailTestCase {
 	 * Reproduces a bug where a stored object was not returned from the listChildren method.
 	 */
 	public void testConcurrentObjectStoreListChildren() throws IOException {
-		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
-		final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect().getb();
-		ArrayList<IResult> tasks= new ArrayList<IResult>();
-		for (int f= 0; f < 10; f++) {			
-			final Identifier folderId= Identifier.create(Integer.toString(f));
-			for (int t= 0; t < 10; t++) {
-				final int task= t; 
-				tasks.add(new ContrailAction() {
-					protected void action() throws Pausable, Exception {
-						for (int i= 0; i < 10; i++) {
-							
-							// store an object in a folder
-							String s= Integer.toString(task)+"-"+i;
-							Identifier id= Identifier.create(folderId, s);
-							storage.store(id, s);
-							
-							// now, list the folder's children and make sure our object is listed
-							// The storage implementation should insure that the listChildren 
-							// request is executed after the above call to store has completed, 
-							// therefore there is no need to explicitly call get() on the store 
-							// result.
-							Collection<Identifier> children= storage.listChildren(folderId).get();
-							assertTrue(children.contains(id));
-						}
+		runTest(new ContrailAction() {
+			@Override protected void action() throws Pausable, Exception {
+				//final ObjectStorage storage= new ObjectStorage(_rawStorage);
+				final ObjectStorage.Session storage= new ObjectStorage(_rawStorage).connect();
+				ArrayList<IResult> tasks= new ArrayList<IResult>();
+				for (int f= 0; f < 10; f++) {			
+					final Identifier folderId= Identifier.create(Integer.toString(f));
+					for (int t= 0; t < 10; t++) {
+						final int task= t; 
+						tasks.add(new ContrailAction() {
+							protected void action() throws Pausable, Exception {
+								for (int i= 0; i < 10; i++) {
+									
+									// store an object in a folder
+									String s= Integer.toString(task)+"-"+i;
+									Identifier id= Identifier.create(folderId, s);
+									storage.store(id, s);
+									
+									// now, list the folder's children and make sure our object is listed
+									// The storage implementation should insure that the listChildren 
+									// request is executed after the above call to store has completed, 
+									// therefore there is no need to explicitly call get() on the store 
+									// result.
+									Collection<Identifier> children= storage.listChildren(folderId);
+									assertTrue(children.contains(id));
+								}
+							}
+						}.submit());
 					}
-				}.submit());
+				}
+				TaskUtils.combineResults(tasks).getb();
 			}
-		}
-		TaskUtils.combineResults(tasks).getb();
-		
+		});
 	}
 	/**
 	 * Reproduces a bug where a stored object was not returned from the listChildren method.
 	 */
 	public void testConcurrentStoreAPIListChildren() throws IOException {
-		//final ObjectStorage storage= new ObjectStorage(_rawStorage);
-		final IStorageProvider.Session storage= _rawStorage.connect().getb();
-		ArrayList<IResult> tasks= new ArrayList<IResult>();
-		for (int f= 0; f < 10; f++) {			
-			final Identifier folderId= Identifier.create(Integer.toString(f));
-			for (int t= 0; t < 10; t++) {
-				final int task= t; 
-				tasks.add(new ContrailAction() {
-					protected void action() throws Pausable, Exception {
-						for (int i= 0; i < 10; i++) {
-							
-							// store an object in a folder
-							String s= Integer.toString(task)+"-"+i;
-							Identifier id= Identifier.create(folderId, s);
-							storage.store(id, TaskUtils.asResult(s.getBytes()));
-							
-							// now, list the folder's children and make sure our object is listed
-							Collection<Identifier> children= storage.listChildren(folderId).get();
-							if (!children.contains(id)) {
-								String msg= "Problem in listChildren.\nFolder does not contain "+id;
-								msg+= "\nFolder contains "+children;
-								fail(msg);
+		runTest(new ContrailAction() {
+			@Override protected void action() throws Pausable, Exception {
+				//final ObjectStorage storage= new ObjectStorage(_rawStorage);
+				final IStorageProvider.Session storage= _rawStorage.connect();
+				ArrayList<IResult> tasks= new ArrayList<IResult>();
+				for (int f= 0; f < 10; f++) {			
+					final Identifier folderId= Identifier.create(Integer.toString(f));
+					for (int t= 0; t < 10; t++) {
+						final int task= t; 
+						tasks.add(new ContrailAction() {
+							protected void action() throws Pausable, Exception {
+								for (int i= 0; i < 10; i++) {
+									
+									// store an object in a folder
+									String s= Integer.toString(task)+"-"+i;
+									Identifier id= Identifier.create(folderId, s);
+									storage.store(id, TaskUtils.asResult(s.getBytes()));
+									
+									// now, list the folder's children and make sure our object is listed
+									Collection<Identifier> children= storage.listChildren(folderId);
+									if (!children.contains(id)) {
+										String msg= "Problem in listChildren.\nFolder does not contain "+id;
+										msg+= "\nFolder contains "+children;
+										fail(msg);
+									}
+								}
 							}
-						}
+						}.submit());
 					}
-				}.submit());
+				}
+				TaskUtils.combineResults(tasks).getb();
 			}
-		}
-		TaskUtils.combineResults(tasks).getb();
-		
+		});
 	}
 	
 }

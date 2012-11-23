@@ -1,5 +1,6 @@
 package com.googlecode.contraildb.core.impl;
 
+import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
@@ -42,7 +43,7 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 		return _queue.first();
 	}
 
-	@Override public boolean first() throws Pausable {
+	@Override public boolean first() throws Pausable, IOException {
 		_queue.clear();
 		for (int i= 0; i < _cursors.length; i++) {
 			IForwardCursor<T> cursor= _cursors[i];
@@ -53,7 +54,7 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 		return !_queue.isEmpty();
 	}
 
-	@Override public boolean to(T e) throws Pausable {
+	@Override public boolean to(T e) throws Pausable, IOException {
 		
 		for (int i= 0; i < _cursors.length; i++) {
 			IForwardCursor<T> cursor= _cursors[i];
@@ -71,7 +72,7 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 		return false;
 	}
 
-	@Override public boolean hasNext() throws Pausable {
+	@Override public boolean hasNext() throws Pausable, IOException {
 		if (!_queue.isEmpty())
 			return true;
 		for (int i= 0; i < _cursors.length; i++) {
@@ -83,7 +84,7 @@ public class DisjunctiveCursor<T extends Comparable> implements IForwardCursor<T
 	}
 
 
-	@Override public boolean next() throws Pausable {
+	@Override public boolean next() throws Pausable, IOException {
 		if (!_queue.isEmpty()) {
 			_queue.remove(_queue.first());
 			if (!_queue.isEmpty()) 

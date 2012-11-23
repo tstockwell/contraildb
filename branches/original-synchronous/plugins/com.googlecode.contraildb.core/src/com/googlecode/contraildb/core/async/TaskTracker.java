@@ -41,6 +41,15 @@ public class TaskTracker {
 	public void await() throws Pausable {
 		TaskUtils.combineResults(_tasks).get();
 	}
+	
+	/**
+	 * Does not return until all tasks are complete.
+	 * @throws an exception of type t or a RuntimeException if an error occurs in any of the tasks.
+	 */
+	public <T extends Throwable> void await(Class<T> t) throws T, Pausable {
+		TaskUtils.combineResults(_tasks).get();
+	}
+	
 	/**
 	 * Blocking version of get
 	 */

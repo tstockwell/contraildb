@@ -51,26 +51,22 @@ implements Cloneable
 	boolean isLeaf() { return true; }  
 	public BPlusTree<K,?> getIndex() { return _index; }
 	
-	Node<K> getNextSibling() throws Pausable { 
+	Node<K> getNextSibling() throws Pausable, IOException { 
 		if (_next == null) 
 			return null; 
 		return getStorage().fetch(_next); 
 	}
 	
-	K getLookupKey() throws Pausable { 
+	K getLookupKey() throws Pausable, IOException { 
 		if (_next == null) 
 			return getLargestKey();
 		Node<K> next= getNextSibling();
 	    return next.getSmallestKey(); 
 	}		
 
-	public IResult<Void> onLoadA(final Identifier identifier) {
-		return new ContrailAction() {
-			protected void action() throws Pausable, Exception {
-				Node.super.onLoadA(identifier);
-				_index= (BPlusTree<K, ?>) storage.fetch(_indexId);
-			}
-		}.submit();
+	@Override public void onLoad(final Identifier identifier) throws Pausable, IOException {
+		Node.super.onLoad(identifier);
+		_index= (BPlusTree<K, ?>) storage.fetch(_indexId);
 	}
 
 	K getSmallestKey() { return _keys[0]; }
@@ -264,7 +260,7 @@ implements Cloneable
 				out.println(prefix + i+": [" + _keys[i] + "] " + _values[i]);
 	}
 
-	Node<K> getChildNode(int index) throws Pausable {
+	Node<K> getChildNode(int index) throws Pausable, IOException {
 		assert 0 < index;
 		Node<K> node= getStorage().fetch((Identifier)_values[index]);
 		return node;

@@ -78,7 +78,7 @@ public class StorageSystem {
 
 
 	public StorageSystem(final IStorageProvider rawStorage) 
-	throws Pausable 
+	throws Pausable, IOException 
 	{
 		_entityStorage= new EntityStorage(rawStorage);
 		_entitySession= _entityStorage.connect();

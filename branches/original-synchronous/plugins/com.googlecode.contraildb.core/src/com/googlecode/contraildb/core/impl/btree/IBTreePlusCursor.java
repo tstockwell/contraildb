@@ -1,5 +1,7 @@
 package com.googlecode.contraildb.core.impl.btree;
 
+import java.io.IOException;
+
 import kilim.Pausable;
 
 /**
@@ -14,6 +16,6 @@ public interface IBTreePlusCursor<K, V> extends IBTreeCursor<K> {
 	 */
 	V elementValue() throws Pausable;
 
-	V find(K key) throws Pausable;
+	V find(K key) throws IOException, Pausable;
 	
 }
