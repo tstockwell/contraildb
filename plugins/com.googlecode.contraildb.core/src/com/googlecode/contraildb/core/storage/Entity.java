@@ -13,8 +13,6 @@ import java.util.Collection;
 import kilim.Pausable;
 
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.IResult;
-import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -71,45 +69,43 @@ public class Entity implements IEntity, ILifecycle {
 		return storage;
 	}
 
-	public Collection<Identifier> listChildren() throws Pausable {
+	public Collection<Identifier> listChildren()  throws Pausable, IOException {
 		return storage.listChildren(id);
 	}
 	
-	public Collection<Entity> getChildren() throws Pausable {
+	public Collection<Entity> getChildren() throws Pausable, IOException {
 		return storage.fetchChildren(id);
 	}
 	
-	public void delete() throws Pausable {
+	public void delete() throws Pausable, IOException {
 		storage.delete(getId());
 	}
 	
-	public void deleteAllChildren() throws Pausable {
+	public void deleteAllChildren() throws Pausable, IOException {
 		storage.deleteAllChildren(id);
 	}
 	
-	public void update() throws Pausable {
+	public void update() throws Pausable, IOException {
 		storage.store(this);
 	}
 	
 	
 	@Override
-	public IResult<Void> setStorageA(IEntityStorage.Session storage) {
+	public void setStorage(IEntityStorage.Session storage) throws Pausable {
 		this.storage= storage;
-		return TaskUtils.DONE;
 	}
 	
 	@Override
-	public IResult<Void> onDeleteA()
-	{
-		return TaskUtils.DONE;
+	public void onDelete() throws IOException, Pausable  {
+		// do nothing
 	}
 	@Override
-	public IResult<Void> onInsertA(Identifier identifier) {
-		return TaskUtils.DONE;
+	public void onInsert(Identifier identifier) throws IOException, Pausable {
+		// do nothing
 	}
 	@Override
-	public IResult<Void> onLoadA(Identifier identifier) {
-		return TaskUtils.DONE;
+	public void onLoad(Identifier identifier) throws IOException, Pausable {
+		// do nothing
 	}
 
 

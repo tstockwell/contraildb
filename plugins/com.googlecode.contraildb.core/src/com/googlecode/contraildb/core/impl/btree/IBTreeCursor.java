@@ -1,5 +1,7 @@
 package com.googlecode.contraildb.core.impl.btree;
 
+import java.io.IOException;
+
 import kilim.Pausable;
 
 /**
@@ -85,7 +87,7 @@ public interface IBTreeCursor<K> {
 	
 	Direction getDirection();
 	
-	boolean hasNext() throws Pausable;
+	boolean hasNext() throws IOException, Pausable;
 	
 	/**
 	 * @return 
@@ -99,7 +101,7 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean next() throws Pausable;
+    boolean next() throws IOException, Pausable;
 	
     /**
      * Moves the cursor to the given element or, if the element does not exist, the next element..
@@ -107,7 +109,7 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean to(K e) throws Pausable;
+    boolean to(K e) throws IOException, Pausable;
 
     /**
      * Moves the cursor to the first element.
@@ -115,6 +117,6 @@ public interface IBTreeCursor<K> {
      * @return 
      * 	<code>false</code> if there is no such element.
      */
-    boolean first() throws Pausable;
+    boolean first() throws IOException, Pausable;
 
 }

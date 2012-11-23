@@ -19,10 +19,8 @@ package com.googlecode.contraildb.tests;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.Iterator;
 
 import kilim.Pausable;
-import kilim.Task;
 
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.impl.btree.BPlusTree;
@@ -61,7 +59,7 @@ public class ContrailBTreeTests extends ContrailTestCase {
 				assertEquals("value-1.1", cursor.find("key-1"));
 				assertEquals("value-2.0", cursor.find("key-2"));
 				
-				Iterator<String> iterator= tree.iterator();
+				IBTreePlusCursor<String,String> iterator= tree.cursor(Direction.FORWARD);
 				assertTrue(iterator.hasNext());
 				assertEquals("Churchill", iterator.next());
 				assertTrue(iterator.hasNext());

@@ -79,7 +79,7 @@ implements IBTreePlusCursor<T,V> {
 		return 0 <= _index && _index < _page._size && (BPlusTree.compare(e, _page._keys[_index]) == 0); 
 	}
 	
-	protected boolean le(T e) throws Pausable {
+	protected boolean le(T e) throws IOException, Pausable {
 		boolean isGE= ge(e);
 		if (isGE) {
 			T t= keyValue();
@@ -94,7 +94,7 @@ implements IBTreePlusCursor<T,V> {
 	}
 	
 	@Override
-	public boolean next() throws Pausable {
+	public boolean next() throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 			
 		if (Direction.REVERSE == _direction) {
@@ -119,7 +119,7 @@ implements IBTreePlusCursor<T,V> {
 	}
 
 	@Override
-	public boolean hasNext() throws Pausable {
+	public boolean hasNext() throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 		
 		if (Direction.REVERSE == _direction)
@@ -140,7 +140,7 @@ implements IBTreePlusCursor<T,V> {
 		
 	} finally { _lock.unlock(); }}
 
-	public boolean hasPrevious() throws Pausable {
+	public boolean hasPrevious() throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 		
 		if (_page == null)
@@ -158,7 +158,7 @@ implements IBTreePlusCursor<T,V> {
 		
 	} finally { _lock.unlock(); }}
 
-	@Override public boolean first() throws Pausable {
+	@Override public boolean first() throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 		
 		if (Direction.REVERSE == _direction)
@@ -171,7 +171,7 @@ implements IBTreePlusCursor<T,V> {
 		
 	} finally { _lock.unlock(); }}
 
-	protected boolean last() throws Pausable {
+	protected boolean last() throws IOException, Pausable {
 		if (Direction.REVERSE == _direction)
 			return first();
 		
@@ -185,7 +185,7 @@ implements IBTreePlusCursor<T,V> {
 		return _direction;
 	}
 	
-	@Override public boolean to(T e) throws Pausable {
+	@Override public boolean to(T e) throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 		
 		if (Direction.REVERSE == _direction) {
@@ -202,7 +202,7 @@ implements IBTreePlusCursor<T,V> {
 	 * Always starts the search from the beginning 
 	 */
 	@Override
-	public V find(T key) throws Pausable {
+	public V find(T key) throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 		
 		if (Direction.REVERSE == _direction) {

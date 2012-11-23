@@ -2,8 +2,9 @@ package com.googlecode.contraildb.core.storage;
 
 import java.io.IOException;
 
+import kilim.Pausable;
+
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.IResult;
 
 
 /**
@@ -11,8 +12,8 @@ import com.googlecode.contraildb.core.async.IResult;
  */
 public interface ILifecycle {
 	
-	IResult<Void> setStorageA(IEntityStorage.Session storage);
-	IResult<Void> onInsertA(Identifier identifier) throws IOException;
-	IResult<Void> onLoadA(Identifier identifier) throws IOException;
-	IResult<Void> onDeleteA() throws IOException;
+	void setStorage(IEntityStorage.Session storage) throws IOException, Pausable;
+	void onInsert(Identifier identifier) throws IOException, Pausable;
+	void onLoad(Identifier identifier) throws IOException, Pausable;
+	void onDelete() throws IOException, Pausable;
 }

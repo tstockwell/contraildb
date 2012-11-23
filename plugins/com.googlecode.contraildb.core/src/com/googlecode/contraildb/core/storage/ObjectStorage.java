@@ -4,9 +4,9 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,6 +18,7 @@ import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.Operation;
 import com.googlecode.contraildb.core.async.TaskDomain;
+import com.googlecode.contraildb.core.async.TaskTracker;
 import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
@@ -73,14 +74,11 @@ public class ObjectStorage {
 		_storageProvider = storageProvider;
 	}
 
-	public IResult<Session> connect(final EntityStorage.Session entitySession) {
-		return new ContrailTask<Session>() {
-			@Override
-			protected Session run() throws Pausable, Exception {
-				IStorageProvider.Session storageSession = _storageProvider.connect().get();
-				return new Session(_tracker.beginSession(), storageSession, entitySession);
-			}
-		}.submit();
+	public Session connect(final EntityStorage.Session entitySession) throws Pausable {
+		IStorageProvider.Session storageSession = _storageProvider.connect();
+		TaskDomain.Session domainSession=_tracker.beginSession();
+		Session session= new Session(domainSession, storageSession, entitySession);
+		return session;
 	}
 
 	public IStorageProvider getStorageProvider() {
@@ -99,226 +97,227 @@ public class ObjectStorage {
 			_outerStorage = outerStorage;
 		}
 
-		public <T extends Serializable> IResult<Void> store(final Identifier identifier, final T item) {
-			
-			return new ContrailAction() {
-				@Override
+		public <T extends Serializable> void store(final Identifier identifier, final T item)
+		throws Pausable, IOException
+		{
+
+			final Object originalCached= _cache.fetch(identifier);
+			_cache.store(identifier, item);
+
+			// fire off task to store item
+			IResult<Void> storeTask= _trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
 				protected void action() throws Pausable, Exception {
-					_trackerSession.submit(new ContrailAction(identifier, Operation.WRITE) {
-						protected void action() throws Pausable, Exception {
-							IResult<byte[]> serializeTask = new ExternalizationTask(item).submit();
-							_storageSession.store(identifier, serializeTask).get();
-						}
-					}).get();
-					
-					final Object originalCached= _cache.fetch(identifier);
-					try {
-						_cache.store(identifier, item);
-						
-						if (item instanceof ILifecycle) {
-							ILifecycle lifecycle = (ILifecycle) item;
-							lifecycle.setStorage(_outerStorage).get();
-							lifecycle.onInsert(identifier).get();
-						}
-					} 
-					catch (Exception e) {
-						if (originalCached == null) {
-							_cache.delete(identifier);
-						}
-						else
-							_cache.store(identifier, originalCached);
-						throw e;
-					}
-				}
-			}.submit();
-		}
-
-		public IResult<Void> delete(final Identifier path) {
-			return new ContrailAction() {
-				@Override
-				protected void action() throws Pausable, Exception {
-					final Object item = fetch(path).get();
-					_trackerSession.submit(new ContrailAction(path, Operation.DELETE) {
-						protected void action() throws IOException, Pausable {
-							_cache.delete(path);
-							_storageSession.delete(path);
-						}
-					}).get();
-
-					if (item instanceof ILifecycle)
-						((ILifecycle) item).onDelete().get();
-				}
-			}.submit();
-		}
-
-		public <T extends Serializable> IResult<T> fetch(final Identifier path) {
-			return _trackerSession.submit(new ContrailTask<T>(path, Operation.READ) {
-				protected T run() throws IOException, Pausable {
-					T storable = (T) _cache.fetch(path);
-					if (storable == null) {
-						byte[] content = _storageSession.fetch(path).get();
-						if (content != null) {
-							storable = (T) readStorable(path, content).get();
-						}
-					}
-					return storable;
+					IResult<byte[]> serializeTask = new ExternalizationTask(item).submit();
+					_storageSession.store(identifier, serializeTask);
 				}
 			});
+			
+			try {
+
+				if (item instanceof ILifecycle) {
+					ILifecycle lifecycle = (ILifecycle) item;
+					lifecycle.setStorage(_outerStorage);
+					lifecycle.onInsert(identifier);
+				}
+				
+				storeTask.get(); // wait for store task tocomplete
+			} 
+			catch (Exception e) {
+				if (originalCached == null) {
+					_cache.delete(identifier);
+				}
+				else
+					_cache.store(identifier, originalCached);
+				TaskUtils.throwSomething(e, IOException.class);
+			}
 		}
 
-		private <T extends Serializable> IResult<T> readStorable(final Identifier id, final byte[] contents) 
-		throws IOException 
+		public void delete(final Identifier path) throws IOException, Pausable {
+			Object item = fetch(path);
+			_cache.delete(path);
+			_storageSession.delete(path);
+			if (item instanceof ILifecycle)
+				((ILifecycle) item).onDelete();
+		}
+
+		public <T extends Serializable> T fetch(final Identifier path) 
+		throws Pausable, IOException 
+		{
+			T storable = (T) _cache.fetch(path);
+			if (storable == null) {
+				byte[] content = _storageSession.fetch(path);
+				if (content != null) {
+					storable = (T) readStorable(path, content);
+				}
+			}
+			return storable;
+		}
+
+		private <T extends Serializable> T readStorable(final Identifier id, final byte[] contents) 
+		throws Pausable, IOException 
 		{
 			if (contents == null)
-				return TaskUtils.NULL;
+				return null;
 
-			return new ContrailTask<T>() {
-				@Override
-				protected T run() throws Pausable, Exception {
-					T s = ExternalizationManager.readExternal(new DataInputStream(new ByteArrayInputStream(contents)));
-					boolean isStorable = s instanceof ILifecycle;
-					if (isStorable)
-						((ILifecycle) s).setStorage(_outerStorage).get();
+			T s = ExternalizationManager.readExternal(new DataInputStream(new ByteArrayInputStream(contents)));
+			boolean isStorable = s instanceof ILifecycle;
+			if (isStorable)
+				((ILifecycle) s).setStorage(_outerStorage);
 
-					_cache.store(id, s);
+			_cache.store(id, s);
 
-					if (isStorable) {
-						((ILifecycle) s).onLoad(id).get();
-					}
-					return s;
-				}
-			}.submit();
+			if (isStorable) {
+				((ILifecycle) s).onLoad(id);
+			}
+			return s;
 		}
 
-		public <T extends Serializable> IResult<Map<Identifier, T>> fetchChildren(final Identifier path) {
-			return _trackerSession.submit(new ContrailTask<Map<Identifier, T>>(path, Operation.LIST) {
-				protected Map<Identifier, T> run() throws IOException, Pausable {
-					Collection<Identifier> children = _storageSession.listChildren(path).get();
-					HashMap<Identifier, IResult<byte[]>> fetched = new HashMap<Identifier, IResult<byte[]>>();
-					for (Identifier childId : children)
-						fetched.put(childId, _storageSession.fetch(childId));
-					HashMap<Identifier, T> results = new HashMap<Identifier, T>();
-					for (Identifier childId : children) {
-						byte[] content = fetched.get(childId).get();
-						T t = (T) readStorable(childId, content).get();
-						results.put(childId, t);
-					}
-					return results;
+		public <T extends Serializable> Map<Identifier, T> fetchChildren(final Identifier path) 
+		throws Pausable, IOException 
+		{
+			final Map<Identifier, T> results = Collections.synchronizedMap(new HashMap<Identifier, T>());
+			try {
+				Collection<Identifier> children = _storageSession.listChildren(path);
+				final Map<Identifier, IResult<byte[]>> fetched = Collections.synchronizedMap(new HashMap<Identifier, IResult<byte[]>>());
+				for (Identifier childId : children) {
+					final Identifier id= childId;
+					fetched.put(id, new ContrailTask<byte[]>() {
+						@Override protected byte[] run() throws Pausable, Exception {
+							return _storageSession.fetch(id);
+						}
+					}.submit());
 				}
-			});
+				TaskTracker tracker= new TaskTracker();
+				for (Identifier childId : children) {
+					final Identifier id= childId;
+					tracker.submit(new ContrailAction() {
+						@Override protected void action() throws Pausable, Exception {
+							byte[] content = fetched.get(id).get();
+							T t = (T) readStorable(id, content);
+							results.put(id, t);
+						}
+					});
+				}
+				tracker.await();
+			}
+			catch (Throwable t) {
+				TaskUtils.throwSomething(t, IOException.class);
+			}
+			return results;
 		}
 
-		public IResult<Collection<Identifier>> listChildren(final Identifier path) {
+		public Collection<Identifier> listChildren(final Identifier path) throws Pausable {
 			return _storageSession.listChildren(path);
 		}
 
-		public IResult<Void> flush() {
-			return _trackerSession.submit(new ContrailAction(null, Operation.FLUSH) {
-				@Override
-				protected void action() throws Pausable, Exception {
-					_storageSession.flush();
+		public void flush() throws Pausable {
+			_storageSession.flush();
+		}
+
+		public void close() throws Pausable {
+			try {
+				_storageSession.flush();
+			} catch (Throwable t) {
+				Logging.warning(t);
+			}
+			try {
+				_trackerSession.close();
+			} catch (Throwable t) {
+				Logging.warning(t);
+			}
+			try {
+				_storageSession.close();
+			} catch (Throwable t) {
+				Logging.warning(t);
+			}
+			_trackerSession = null;
+			_storageSession = null;
+			_outerStorage = null;
+		}
+
+		public <T extends Serializable> boolean create(final Identifier identifier, final T item, final long waitMillis)
+		throws Pausable, IOException
+		{
+			// first do the create
+			boolean created= _trackerSession.submit(
+				new ContrailTask<Boolean>(identifier, Operation.CREATE) {
+					protected Boolean run() throws IOException, Pausable {
+						IResult<byte[]> bytes = new ExternalizationTask(item).submit();
+						boolean created = _storageSession.create(identifier, bytes, waitMillis);
+						_cache.store(identifier, item);
+						return created;
+					}
+				}).get();
+			
+			if (!created)
+				return false;
+
+			// if the create succeeds and the item implements ILifecycle then 
+			// also execute the ILifecycle.onInsert method.
+			// The ILifecycle.onInsert should not be executed from within the 
+			// create task since objects cannot create sub-objects until the 
+			// create task is completed.
+			if (item instanceof ILifecycle) { 
+				try {
+					ILifecycle iLifecycle= (ILifecycle)item;
+					iLifecycle.setStorage(_outerStorage);
+					iLifecycle.onInsert(identifier);
+				} 
+				catch (Exception e) {
+					_cache.delete(identifier);
+					TaskUtils.throwSomething(e, IOException.class);
 				}
-			});
+			}
+			
+			return true;
 		}
 
-		public IResult<Void> close() {
-			return _trackerSession.submit(new ContrailAction(null, Operation.FLUSH) {
-				@Override
-				protected void action() throws Pausable, Exception {
-					try {
-						_storageSession.flush();
-					} catch (Throwable t) {
-						Logging.warning(t);
+		public void delete(Identifier... paths) throws IOException, Pausable {
+			TaskTracker tracker= new TaskTracker();
+			for (Identifier identifier : paths) {
+				final Identifier id= identifier; 
+				tracker.submit(new ContrailAction() {
+					@Override protected void action() throws Pausable, IOException {
+						delete(id);
 					}
-					try {
-						_trackerSession.close();
-					} catch (Throwable t) {
-						Logging.warning(t);
+				});
+			}
+			tracker.await(IOException.class);
+		}
+
+		public void deleteAllChildren(Identifier... paths) 
+		throws IOException, Pausable 
+		{
+			deleteAllChildren(Arrays.asList(paths));
+		}
+
+		public void deleteAllChildren(Iterable<Identifier> paths) 
+		throws IOException, Pausable 
+		{
+			TaskTracker tracker= new TaskTracker();
+			for (Identifier identifier : paths) {
+				final Identifier id= identifier; 
+				tracker.submit(new ContrailAction() {
+					@Override protected void action() throws Pausable, IOException {
+						deleteAllChildren(id);
 					}
-					try {
-						_storageSession.close();
-					} catch (Throwable t) {
-						Logging.warning(t);
+				});
+			}
+			tracker.await(IOException.class);
+		}
+
+		public void deleteAllChildren(final Identifier path) throws Pausable, IOException {
+			TaskTracker tracker= new TaskTracker();
+			Collection<Identifier> identifiers = listChildren(path);
+			for (Identifier identifier : identifiers) {
+				final Identifier id= identifier; 
+				tracker.submit(new ContrailAction() {
+					@Override protected void action() throws Pausable, IOException {
+						deleteAllChildren(id);
 					}
-					_trackerSession = null;
-					_storageSession = null;
-					_outerStorage = null;
-				}
-			});
-		}
-
-		public <T extends Serializable> IResult<Boolean> create(final Identifier identifier, final T item, final long waitMillis) {
-			return new ContrailTask<Boolean>() {
-				@Override
-				protected Boolean run() throws Pausable, Exception {
-
-					// first do the create
-					boolean created= _trackerSession.submit(
-						new ContrailTask<Boolean>(identifier, Operation.CREATE) {
-							protected Boolean run() throws IOException, Pausable {
-								IResult<byte[]> bytes = new ExternalizationTask(item).submit();
-								boolean created = _storageSession.create(identifier, bytes, waitMillis).get();
-								_cache.store(identifier, item);
-								return created;
-							}
-						}).get();
-					
-					if (!created)
-						return false;
-
-					// if the create succeeds and the item implements ILifecycle then 
-					// also execute the ILifecycle.onInsert method.
-					// The ILifecycle.onInsert should not be executed from within the 
-					// create task since objects cannot create sub-objects until the 
-					// create task is completed.
-					if (item instanceof ILifecycle) { 
-						try {
-							ILifecycle iLifecycle= (ILifecycle)item;
-							iLifecycle.setStorage(_outerStorage).get();
-							iLifecycle.onInsert(identifier).get();
-						} 
-						catch (Exception e) {
-							_cache.delete(identifier);
-							throw e;
-						}
-					}
-					
-					return true;
-				}
-			}.submit();
-		}
-
-		public IResult<Void> delete(Identifier... paths) {
-			ArrayList<IResult> all = new ArrayList<IResult>();
-			for (Identifier identifier : paths)
-				all.add(delete(identifier));
-			return TaskUtils.combineResults(all);
-		}
-
-		public IResult<Void> deleteAllChildren(Identifier... paths) {
-			return deleteAllChildren(Arrays.asList(paths));
-		}
-
-		public IResult<Void> deleteAllChildren(Iterable<Identifier> paths) {
-			ArrayList<IResult> all = new ArrayList<IResult>();
-			for (Identifier identifier : paths)
-				all.add(deleteAllChildren(identifier));
-			return TaskUtils.combineResults(all);
-		}
-
-		public IResult<Void> deleteAllChildren(final Identifier path) {
-			return new ContrailAction() {
-				@Override
-				protected void action() throws Pausable, Exception {
-					ArrayList<IResult> all = new ArrayList<IResult>();
-					IResult<Collection<Identifier>> children = listChildren(path);
-					Collection<Identifier> identifiers = children.get();
-					for (Identifier identifier : identifiers) {
-						all.add(delete(identifier));
-					}
-					TaskUtils.combineResults(all).join();
-				}
-			}.submit();
+				});
+			}
+			tracker.await(IOException.class);
 		}
 
 	}

@@ -12,6 +12,7 @@ import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
 import com.googlecode.contraildb.core.async.TaskTracker;
+import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -148,26 +149,27 @@ extends Node<K>
 	
 	/**
 	 * Deletes this node and all children
+	 * @throws IOException, Pausable 
 	 */
-	public IResult<Void> deleteA() {
-		return new ContrailAction() {
-			@Override protected void action() throws Pausable, Exception {
-				
-				TaskTracker deletes= new TaskTracker();
-				for (int i= _size; 0 < i--;) {
-					deletes.track(new ContrailAction() {
-						@Override protected void action() throws Pausable {
-							
-							Node<?> childBPage = getStorage().fetch(id);
-							childBPage.delete();
-							
-					}}.submit());
-				}
-				deletes.await();
-				
-				InnerNode.super.delete();
+	@Override public void delete() throws IOException, Pausable {
+		try {
+			TaskTracker deletes= new TaskTracker();
+			for (int i= _size; 0 < i--;) {
+				deletes.track(new ContrailAction() {
+					@Override protected void action() throws Pausable, IOException {
+						Node<?> childBPage = getStorage().fetch(id);
+						childBPage.delete();
+						
+				}}.submit());
 			}
-		}.submit();
+			deletes.await();
+			
+			InnerNode.super.delete();
+			
+		} 
+		catch (Exception e) {
+			TaskUtils.throwSomething(e, IOException.class);
+		}
 	}
 
 	/**

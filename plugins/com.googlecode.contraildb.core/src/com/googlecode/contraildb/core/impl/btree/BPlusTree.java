@@ -4,23 +4,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
 import java.util.concurrent.locks.ReentrantLock;
 
 import kilim.Pausable;
 
-import com.googlecode.contraildb.core.ContrailException;
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.async.ContrailAction;
 import com.googlecode.contraildb.core.async.ContrailTask;
 import com.googlecode.contraildb.core.async.IResult;
-import com.googlecode.contraildb.core.async.TaskTracker;
-import com.googlecode.contraildb.core.async.TaskUtils;
 import com.googlecode.contraildb.core.impl.btree.IBTreeCursor.Direction;
 import com.googlecode.contraildb.core.storage.Entity;
 import com.googlecode.contraildb.core.storage.IEntityStorage;
-import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
@@ -139,57 +133,48 @@ extends Entity
 	protected BPlusTree() { }
 
 	@Override
-	public IResult<Void> onLoadA(final Identifier identifier)
+	public void onLoad(final Identifier identifier) throws Pausable, IOException 
 	{
-		return new ContrailAction() {
-			protected void action() throws Pausable, Exception {
-			/*synchronized*/_lock.lock(); try {
-				
-				BPlusTree.super.onLoadA(identifier).get();
-				if (_rootId != null) 
-					_root= (Node<T>) storage.fetch(_rootId);
-				
-			} finally { _lock.unlock(); }}
-		}.submit();
+		/*synchronized*/_lock.lock(); try {
+			
+			BPlusTree.super.onLoad(identifier);
+			if (_rootId != null) 
+				_root= (Node<T>) storage.fetch(_rootId);
+			
+		} finally { _lock.unlock(); }
 	}
 
 	@Override
-	public IResult<Void> onInsertA(final Identifier identifier) {
-		return new ContrailAction() {
-			protected void action() throws Pausable, Exception {
-			/*synchronized*/_lock.lock(); try {
-				
-				BPlusTree.super.onInsertA(identifier);
-				if (_root != null)
-					storage.store(_root);
-				
-			} finally { _lock.unlock(); }}
-		}.submit();
+	public void onInsert(final Identifier identifier) throws Pausable, IOException {
+		/*synchronized*/_lock.lock(); try {
+			
+			BPlusTree.super.onInsert(identifier);
+			if (_root != null)
+				storage.store(_root);
+			
+		} finally { _lock.unlock(); }
 	}
 
 	@Override
-	public IResult<Void> onDeleteA() {
-		return new ContrailAction() {
-			protected void action() throws Pausable, Exception {
-			/*synchronized*/_lock.lock(); try {
-					if (_root != null)
-						_root.delete();
-					BPlusTree.super.onDeleteA();
-			} finally { _lock.unlock(); }}
-		}.submit();
+	public void onDelete() throws IOException, Pausable {
+		/*synchronized*/_lock.lock(); try {
+			if (_root != null)
+				_root.delete();
+			BPlusTree.super.onDelete();
+		} finally { _lock.unlock(); }
 	}
 
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	final public void insert(T key) throws Pausable {
+	final public void insert(T key) throws IOException, Pausable {
 		insert(key, (V) NO_VALUE);
 	}
 	
 	/**
 	 * Insert an entry in the BTree.
 	 */
-	public void insert(T key, V value) throws Pausable {
+	public void insert(T key, V value) throws IOException, Pausable {
     /*synchronized*/_lock.lock(); try {
 
 		if (key == null) 
@@ -226,7 +211,7 @@ extends Entity
 	/**
 	 * Remove an entry with the given key from the BTree.
 	 */
-	public void remove(final T key) throws Pausable {
+	public void remove(final T key) throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 
 		if (key == null) 
@@ -276,7 +261,7 @@ extends Entity
 	 * Deletes all BPages in this BTree, then deletes the tree from the record
 	 * manager
 	 */
-	public void delete() throws Pausable {
+	public void delete() throws IOException, Pausable {
 	/*synchronized*/_lock.lock(); try {
 		
 		// delete root
