@@ -3,17 +3,11 @@ package com.googlecode.contraildb.tests;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.attrs.StackMapFrame;
-import org.objectweb.asm.attrs.StackMapTableAttribute;
-import org.objectweb.asm.attrs.StackMapType;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class CompileTestsDump implements Opcodes {
@@ -30,7 +24,7 @@ public class CompileTestsDump implements Opcodes {
 	
 	public static byte[] dump () throws Exception {
 
-		ClassWriter cw = new ClassWriter(false);
+		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
 		MethodVisitor mv;
 
 		cw.visit(V1_6, ACC_PUBLIC + ACC_SUPER, "com/googlecode/contraildb/tests/GeneratedTest", null, "java/lang/Object", null);
@@ -73,49 +67,49 @@ public class CompileTestsDump implements Opcodes {
 			mv.visitInsn(POP);
 			mv.visitInsn(RETURN);
 			
-			// CREATE STACKMAP FRAMES
-			{
-				List frames = new ArrayList();
-				{
-					List locals = new ArrayList();
-					{
-						StackMapType attrframe0Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Object);
-						attrframe0Info0.setObject("com/googlecode/contraildb/tests/GeneratedTest");
-						locals.add(attrframe0Info0);
-					}
-					List stack = Collections.EMPTY_LIST;
-					StackMapFrame attrframe0 = new StackMapFrame(l0, locals, stack);
-					frames.add(attrframe0);
-				}
-				{
-					List locals = new ArrayList();
-					{
-						StackMapType attrframe1Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Object);
-						attrframe1Info0.setObject("com/googlecode/contraildb/tests/GeneratedTest");
-						locals.add(attrframe1Info0);
-					}
-					List stack = Collections.EMPTY_LIST;
-					StackMapFrame attrframe1 = new StackMapFrame(l1, locals, stack);
-					frames.add(attrframe1);
-				}
-				{
-					List locals = new ArrayList();
-					{
-						StackMapType attrframe2Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Object);
-						attrframe2Info0.setObject("com/googlecode/contraildb/tests/GeneratedTest");
-						locals.add(attrframe2Info0);
-					}
-					List stack = new ArrayList();
-					{
-						StackMapType attrframe2Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Top);
-						stack.add(attrframe2Info0);
-					}
-					StackMapFrame attrframe2 = new StackMapFrame(l2, locals, stack);
-					frames.add(attrframe2);
-				}
-				StackMapTableAttribute attr = new StackMapTableAttribute(frames);
-				mv.visitAttribute(attr);
-			}
+//			// CREATE STACKMAP FRAMES
+//			{
+//				List frames = new ArrayList();
+//				{
+//					List locals = new ArrayList();
+//					{
+//						StackMapType attrframe0Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Object);
+//						attrframe0Info0.setObject("com/googlecode/contraildb/tests/GeneratedTest");
+//						locals.add(attrframe0Info0);
+//					}
+//					List stack = Collections.EMPTY_LIST;
+//					StackMapFrame attrframe0 = new StackMapFrame(l0, locals, stack);
+//					frames.add(attrframe0);
+//				}
+//				{
+//					List locals = new ArrayList();
+//					{
+//						StackMapType attrframe1Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Object);
+//						attrframe1Info0.setObject("com/googlecode/contraildb/tests/GeneratedTest");
+//						locals.add(attrframe1Info0);
+//					}
+//					List stack = Collections.EMPTY_LIST;
+//					StackMapFrame attrframe1 = new StackMapFrame(l1, locals, stack);
+//					frames.add(attrframe1);
+//				}
+//				{
+//					List locals = new ArrayList();
+//					{
+//						StackMapType attrframe2Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Object);
+//						attrframe2Info0.setObject("com/googlecode/contraildb/tests/GeneratedTest");
+//						locals.add(attrframe2Info0);
+//					}
+//					List stack = new ArrayList();
+//					{
+//						StackMapType attrframe2Info0 = StackMapType.getTypeInfo( StackMapType.ITEM_Top);
+//						stack.add(attrframe2Info0);
+//					}
+//					StackMapFrame attrframe2 = new StackMapFrame(l2, locals, stack);
+//					frames.add(attrframe2);
+//				}
+//				StackMapTableAttribute attr = new StackMapTableAttribute(frames);
+//				mv.visitAttribute(attr);
+//			}
 			
 			
 			mv.visitMaxs(1, 2);
