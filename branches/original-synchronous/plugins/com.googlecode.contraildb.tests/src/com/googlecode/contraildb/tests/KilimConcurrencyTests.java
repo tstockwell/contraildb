@@ -112,6 +112,13 @@ public class KilimConcurrencyTests extends ContrailTestCase {
 		 */
 		new BadClass();
 	}
+	public void testGoodClass() throws Exception {
+		runTest(new Task() {
+			public void execute() throws Pausable, Exception {
+				new GoodClass().doSomething();
+			}
+		});
+	}
 	
 	
 
