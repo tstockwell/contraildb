@@ -12,30 +12,18 @@ import com.googlecode.contraildb.core.utils.Logging;
  * 
  * @author ted.stockwell
  */
-class Promise[V] extends Result[V]{
-	
-	private boolean _done= false;
-	private V _result= null;
-	private boolean _success= false;
-	private boolean _cancelled= false;
-	private Throwable _error= null;
-	private List<IResultHandler> _completedHandlers= null;
-	private Mailbox<Boolean> _completeBox= new Mailbox<Boolean>();
-	
-	public Result() { 
-	}
-	
-	@Override public synchronized boolean isDone() {
-		return _done;
-	}
+class Promise[V] extends Result[V] {
+	val _tasks= new TaskMaster();
 	
 	/**
 	 * This method is called when the associated computation has been cancelled.
 	 */
-	public synchronized void cancel() {
-		if (!_done) {
+	def cancel() {
+	  _tasks {
+		if (!done()) {
 			complete(false, true, null, null);
 		}
+	  }
 	}
 	/**
 	 * This method is called when the associated computation has successfully completed.
