@@ -12,7 +12,7 @@ import com.googlecode.contraildb.core.utils.Logging;
  * 
  * @author ted.stockwell
  */
-class Promise[V] extends Result[V] {
+class Promise[V] extends Result[V] with Player {
 	val _tasks= new TaskMaster();
 	
 	/**
