@@ -2,17 +2,13 @@ package com.googlecode.contraildb.core.storage;
 
 import java.io.DataInput;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -24,7 +20,6 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
  * 
  * @author Ted Stockwell
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
 public class RevisionFolder extends Entity {
 	private static final long serialVersionUID = 1L;
 	
@@ -57,7 +52,7 @@ public class RevisionFolder extends Entity {
 	public String toString() {
 		String s= ""+revisionNumber+"{start-commit-number="+startCommitNumber;
 		try {
-			boolean b= isCommitted().get();
+			boolean b= isCommitted();
 			s+= ", isCommitted="+b;
 		}
 		catch (Throwable t) { }
@@ -66,126 +61,89 @@ public class RevisionFolder extends Entity {
 	}
 	
 	@Override
-	public IResult<Void> onInsert(Identifier identifier) {
-		return new Handler(super.onInsert(identifier)) {
-			protected IResult onSuccess() throws Exception {
-				spawn(storage.store(_sessionsFolder));
-				spawn(storage.store(_lockFolder));
-				return TaskUtils.DONE;
-			};
-		}.toResult();
+	public void onInsert(Identifier identifier) throws IOException {
+		super.onInsert(identifier);
+		storage.store(_sessionsFolder);
+		storage.store(_lockFolder);
 	}
 	@Override
-	public IResult<Void> onLoad(Identifier identifier) {
-		return new Handler(super.onLoad(identifier)) {
-			protected IResult onSuccess() throws Exception {
-				final IResult<Entity> sf= storage.fetch(Identifier.create(id, "sessions"));
-				final IResult<LockFolder> lf= storage.fetch(LockFolder.createId(RevisionFolder.this));
-				spawn(new Handler(sf,lf) {
-					protected IResult onSuccess() throws Exception {
-						_sessionsFolder= sf.getResult();
-						_lockFolder= lf.getResult();
-						return TaskUtils.DONE;
-					};
-				});
-				return TaskUtils.DONE;
-			};
-		}.toResult();
+	public void onLoad(Identifier identifier) throws IOException {
+		super.onLoad(identifier);
+		IResult<Entity> sf= storage.fetch(Identifier.create(id, "sessions"));
+		IResult<LockFolder> lf= storage.fetch(LockFolder.createId(this));
+		
+		_sessionsFolder= sf.get();
+		_lockFolder= lf.get();
 	}
 
-	public IResult<Boolean> lock(String processId, boolean waitForLock) 
+	public boolean lock(String processId, boolean waitForLock) 
+	throws IOException 
 	{
 		return _lockFolder.lock(processId, waitForLock);
 	}
-	public IResult<Void> unlock(String processId) {
-		return _lockFolder.unlock(processId);
+	public void unlock(String processId) throws IOException {
+		_lockFolder.unlock(processId);
 	}
 
 	
-	public IResult<Void> addSession(String sessionId) {
-		return storage.store(new Entity(Identifier.create(_sessionsFolder.id, sessionId)));
+	public void addSession(String sessionId) throws IOException {
+		storage.store(new Entity(Identifier.create(_sessionsFolder.id, sessionId)));
 	}
-	public IResult<Void> removeSession(String sessionId) {
-		return storage.delete(Identifier.create(_sessionsFolder.id, sessionId));
+	public void removeSession(String sessionId) throws IOException {
+		storage.delete(Identifier.create(_sessionsFolder.id, sessionId));
 	}
-	public IResult<Boolean> isActive()  {
+	public boolean isActive() throws IOException {
 //TODO  This method should check to see if the session claims are expired
 //A session can only hold a revision active for a limited amount of time, about a minute.			
-		final IResult<Collection<Identifier>> listResult= _sessionsFolder.listChildren();
-		return new Handler(listResult) {
-			protected IResult onSuccess() throws Exception {
-				return TaskUtils.asResult(!listResult.getResult().isEmpty());
-			};
-		}.toResult();
+		
+		return !_sessionsFolder.listChildren().get().isEmpty();
 	}
-	public static IResult<Void> sortByDescendingCommitNumber(final List<RevisionFolder> revisions) 
+	public static void sortByDescendingCommitNumber(List<RevisionFolder> revisions) 
+	throws IOException 
 	{
-		// pre-populate commit markers so that we can ignore IOExceptions during sort
 		final HashMap<Long, Long> commitNumbersByRevisionNumber= new HashMap<Long, Long>();
-		final ArrayList<IResult> tasks= new ArrayList<IResult>();
-		for (final RevisionFolder revision: revisions)  {
-			final IResult<CommitMarker> getCommitMarker= revision.getCommitMarker();
-			tasks.add(new Handler(getCommitMarker) {
-				protected IResult onSuccess() throws Exception {
-					long commitNumber= -1;
-					CommitMarker commitMarker= getCommitMarker.getResult();
-					if (commitMarker != null)
-						commitNumber= commitMarker.finalCommitNumber;
-					commitNumbersByRevisionNumber.put(revision.revisionNumber, commitNumber);
-					return TaskUtils.DONE;
-				}
-			}.toResult());
+		// pre-populate commit markers so that we can ignore IOExceptions during sort
+		for (RevisionFolder revision: revisions)  {
+			long commitNumber= -1;
+			CommitMarker commitMarker= revision.getCommitMarker();
+			if (commitMarker != null)
+				commitNumber= commitMarker.finalCommitNumber;
+			commitNumbersByRevisionNumber.put(revision.revisionNumber, commitNumber);
 		}
-		return new Handler(TaskUtils.combineResults(tasks)) {
-			protected IResult onSuccess() throws Exception {
-				
-				// sort in decending order by final commit number;
-				Collections.sort(revisions, new Comparator<RevisionFolder>() {
-					public int compare(RevisionFolder o1, RevisionFolder o2) {
-						long n1= commitNumbersByRevisionNumber.get(o1.revisionNumber);
-						long n2= commitNumbersByRevisionNumber.get(o2.revisionNumber);
-						if (n1 < n2)
-							return 1;
-						if (n1 > n2)
-							return -1;
-						return 0;
-					}
-				});
-				
-				return TaskUtils.DONE;
-			};
-		}.toResult();
+		
+		// sort in decending order by final commit number;
+		Collections.sort(revisions, new Comparator<RevisionFolder>() {
+			public int compare(RevisionFolder o1, RevisionFolder o2) {
+				long n1= commitNumbersByRevisionNumber.get(o1.revisionNumber);
+				long n2= commitNumbersByRevisionNumber.get(o2.revisionNumber);
+				if (n1 < n2)
+					return 1;
+				if (n1 > n2)
+					return -1;
+				return 0;
+			}
+		});
 	}
-	private IResult<CommitMarker> getCommitMarker() {
-		return storage.fetch(CommitMarker.createId(this));
+	private CommitMarker getCommitMarker() throws IOException {
+		return (CommitMarker) storage.fetch(CommitMarker.createId(this)).get();
 	}
-	public IResult<Boolean> isCommitted() {
-		final IResult<CommitMarker> commitMarker= getCommitMarker();
-		return new Handler(commitMarker) {
-			protected IResult onSuccess() throws Exception {
-				return TaskUtils.asResult(commitMarker.getResult() != null);
-			};
-		}.toResult();
+	public boolean isCommitted() throws IOException {
+		return getCommitMarker() != null;
 	}
-	public IResult<Long> getFinalCommitNumber() {
-		final IResult<CommitMarker> getCommitMarker= getCommitMarker();
-		return new Handler(getCommitMarker) {
-			protected IResult onSuccess() throws Exception {
-				CommitMarker commitMarker= getCommitMarker.getResult();
-				if (commitMarker == null)
-					return TaskUtils.asResult(-1L);
-				return TaskUtils.asResult(commitMarker.finalCommitNumber);
-			};
-		}.toResult();
+	public long getFinalCommitNumber() throws IOException {
+		CommitMarker commitMarker= getCommitMarker();
+		if (commitMarker == null)
+			return -1L;
+		return commitMarker.finalCommitNumber;
 	}
-	public IResult<RevisionJournal> getRevisionJournal() {
-		return storage.fetch(RevisionJournal.createId(this));
+	public RevisionJournal getRevisionJournal() throws IOException {
+		return (RevisionJournal) storage.fetch(RevisionJournal.createId(this)).get();
 	}
 
 
 
 	public static final Serializer<RevisionFolder> SERIALIZER= new Serializer<RevisionFolder>() {
-		private final int typeCode= RevisionFolder.class.getName().hashCode();
+		private final String typeCode= RevisionFolder.class.getName();
 		public RevisionFolder readExternal(java.io.DataInput in) 
 		throws IOException {
 			RevisionFolder journal= new RevisionFolder();
@@ -204,7 +162,7 @@ public class RevisionFolder extends Entity {
 			journal.startCommitNumber= in.readLong();
 			journal.revisionNumber= in.readLong();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

@@ -10,13 +10,9 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.Result;
-import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.utils.IResult;
 import com.googlecode.contraildb.core.utils.Logging;
-import com.googlecode.contraildb.core.utils.OrderedResults;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -29,7 +25,6 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
  * 	...a 'deletions' folder that contains a subfolder for each 
  * 		deleted revision that has not yet been cleaned up. 
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
 public class RootFolder extends Entity  {
 	private static final long serialVersionUID = 1L;
 	private static Logger __logger= Logging.getLogger();
@@ -51,161 +46,105 @@ public class RootFolder extends Entity  {
 		return _revisionsFolder;
 	}
 
-	public IResult<RevisionFolder> getRevisionFolder(long revisionNumber) 
+	public RevisionFolder getRevisionFolder(long revisionNumber) 
+	throws IOException 
 	{
-		return storage.fetch(RevisionFolder.createId(this, revisionNumber));
+		return (RevisionFolder) storage.fetch(RevisionFolder.createId(this, revisionNumber)).get();
 	}
 
 	/**
 	 * Returns list of revision folder in descending order by revision number 
 	 */
-	public IResult<List<RevisionFolder>> getRevisionFolders() 
+	public List<RevisionFolder> getRevisionFolders() 
+	throws IOException 
 	{
-		final IResult<Collection<Identifier>> deletedResult= _deletionsFolder.listChildren();
-		final IResult<Collection<Entity>> childrenResult= _revisionsFolder.getChildren();
-		return new Handler(deletedResult, childrenResult) {
-			protected IResult onSuccess() throws Exception {
-				Collection<Identifier> deleted= deletedResult.getResult();
-				Collection<Entity> children= childrenResult.getResult();
-				ArrayList<RevisionFolder> revisions= new ArrayList<RevisionFolder>();
-				for (Entity child: children) {
-					if (child instanceof RevisionFolder) {
-						Identifier deleteMarker= Identifier.create(_deletionsFolder.id, child.getId().getName());
-						if (!deleted.contains(deleteMarker)) {
-							revisions.add((RevisionFolder)child);
-						}
-					}
+		Collection<Identifier> deleted= _deletionsFolder.listChildren().get();
+		Collection<Entity> children= _revisionsFolder.getChildren().get();
+		ArrayList<RevisionFolder> revisions= new ArrayList<RevisionFolder>();
+		for (Entity child: children) {
+			if (child instanceof RevisionFolder) {
+				Identifier deleteMarker= Identifier.create(_deletionsFolder.id, child.getId().getName());
+				if (!deleted.contains(deleteMarker)) {
+					revisions.add((RevisionFolder)child);
 				}
-				Collections.sort(revisions, new Comparator<RevisionFolder>() {
-					public int compare(RevisionFolder o1, RevisionFolder o2) {
-						long n1= o1.revisionNumber;
-						long n2= o2.revisionNumber;
-						if (n1 < n2)
-							return 1;
-						if (n1 > n2)
-							return -1;
-						return 0;
-					}
-				});
-				return TaskUtils.asResult(revisions);
-			};
-		}.toResult();
+			}
+		}
+		Collections.sort(revisions, new Comparator<RevisionFolder>() {
+			public int compare(RevisionFolder o1, RevisionFolder o2) {
+				long n1= o1.revisionNumber;
+				long n2= o2.revisionNumber;
+				if (n1 < n2)
+					return 1;
+				if (n1 > n2)
+					return -1;
+				return 0;
+			}
+		});
+		return revisions;
 	}
 	
-	public IResult<Boolean> lock(final String processId, boolean waitForLock) {
-		final IResult<Boolean> lock= _lockFolder.lock(processId, waitForLock);
-		return new Handler(lock) {
-			protected IResult onSuccess() throws Exception {
-				if (lock.getResult() && __logger.isLoggable(Level.FINER))
-					__logger.finer("root locked by "+processId);
-				return lock;
-			};
-		}.toResult();
+	public boolean lock(String processId, boolean waitForLock) 
+	throws IOException {
+		boolean lock= _lockFolder.lock(processId, waitForLock);
+		if (lock && __logger.isLoggable(Level.FINER))
+			__logger.finer("root locked by "+processId);
+		return lock;
 	}
-	public IResult<Void> unlock(final String processId) {
-		return new Handler(_lockFolder.unlock(processId)) {
-			protected IResult onSuccess() throws Exception {
-				if (__logger.isLoggable(Level.FINER))
-					__logger.finer("root unlocked by "+processId);
-				return TaskUtils.DONE;
-			};
-		}.toResult();
+	public void unlock(String processId) throws IOException {
+		_lockFolder.unlock(processId);
+		if (__logger.isLoggable(Level.FINER))
+			__logger.finer("root unlocked by "+processId);
 	}
 
-	public IResult<RevisionFolder> getLastCommittedRevision() {
-		final IResult<List<RevisionFolder>> getRevisionFolders= getRevisionFolders();
-		return new Handler(getRevisionFolders) {
-			protected IResult onSuccess() throws Exception {
-				final RevisionFolder[] folder= new RevisionFolder[] { null };
-				final OrderedResults syncResults= new OrderedResults();
-				for (final RevisionFolder revision: getRevisionFolders.getResult()) {
-					final IResult<Boolean> isCommitted= revision.isCommitted();
-					final IResult<Boolean> latch= syncResults.create();
-					new Handler(isCommitted, latch) {
-						protected void onComplete() throws Exception {
-							if (isCommitted.getResult()) {
-								if (folder[0] == null) {
-									folder[0]= revision;
-								}
-								else {
-									final IResult<Long> folderFinalCommitNumber= folder[0].getFinalCommitNumber();
-									final IResult<Long> revisionFinalCommitNumber= revision.getFinalCommitNumber();
-									new Handler(folderFinalCommitNumber, revisionFinalCommitNumber) {
-										protected void onComplete() throws Exception {
-											if (folderFinalCommitNumber.getResult() < revisionFinalCommitNumber.getResult())
-												folder[0]= revision;
-										};
-									};
-								}
-							}
-							else 
-								syncResults.next();
-						};
-					};
-				}
-				
-				return new Handler(syncResults.complete()) {
-					protected IResult onSuccess() throws Exception {
-						return TaskUtils.asResult(folder[0]);
-					};
-				}.toResult();
-			};
-		}.toResult();
+	public RevisionFolder getLastCommittedRevision() throws IOException {
+		RevisionFolder folder= null;
+		for (RevisionFolder revision: getRevisionFolders()) {
+			if (!revision.isCommitted())
+				continue;
+			if (folder == null || folder.getFinalCommitNumber() < revision.getFinalCommitNumber())
+				folder= revision;
+		}
+		return folder;
 	}
 
 	@Override
-	public IResult<Void> onInsert(Identifier identifier) {
-		return new Handler(super.onInsert(identifier)) {
-			protected IResult onSuccess() throws Exception {
-				spawn(storage.store(_revisionsFolder));
-				spawn(storage.store(_deletionsFolder));
-				spawn(storage.store(_lockFolder));
-				
-				RevisionFolder revision= new RevisionFolder(RootFolder.this, 0L, 0L);  
-				spawn(storage.store(revision));
-				spawn(storage.store(new CommitMarker(revision, 0L)));
-				spawn(storage.store(new RevisionJournal(revision)));
-				return TaskUtils.DONE;
-			};
-		}.toResult();
+	public void onInsert(Identifier identifier) throws IOException {
+		super.onInsert(identifier);
+		storage.store(_revisionsFolder);
+		storage.store(_deletionsFolder);
+		storage.store(_lockFolder);
+		
+		RevisionFolder revision= new RevisionFolder(this, 0L, 0L);  
+		storage.store(revision);
+		storage.store(new CommitMarker(revision, 0L));
+		storage.store(new RevisionJournal(revision));
 	}
 
 	@Override
-	public IResult<Void> onLoad(final Identifier identifier) {
-		return new Handler(super.onLoad(identifier)) {
-			protected IResult onSuccess() throws Exception {
-				final IResult<Entity> rf= storage.fetch(Identifier.create(identifier, "revisions"));
-				final IResult<Entity> df= storage.fetch(Identifier.create(identifier, "deletions"));
-				final IResult<LockFolder> lf= storage.fetch(LockFolder.createId(RootFolder.this));
-				spawn(new Handler(rf, df, lf) {
-					protected IResult onSuccess() throws Exception {
-						_revisionsFolder= rf.getResult();
-						_deletionsFolder= df.getResult();
-						_lockFolder= lf.getResult();
-						return TaskUtils.DONE;
-					};
-				}.toResult());
-				
-				return TaskUtils.DONE;
-			};
-		}.toResult();
+	public void onLoad(Identifier identifier) throws IOException {
+		super.onLoad(identifier);
+		IResult<Entity> rf= storage.fetch(Identifier.create(identifier, "revisions"));
+		IResult<Entity> df= storage.fetch(Identifier.create(identifier, "deletions"));
+		IResult<LockFolder> lf= storage.fetch(LockFolder.createId(this));
+		
+		_revisionsFolder= rf.get();
+		_deletionsFolder= df.get();
+		_lockFolder= lf.get();
 	}
 
-	public IResult<Void> markRevisionForDeletion(long revisionNumber) {
-		return storage.store(new Entity(Identifier.create(_deletionsFolder.id, Long.toString(revisionNumber))));
+	public void markRevisionForDeletion(long revisionNumber) throws IOException {
+		storage.store(new Entity(Identifier.create(_deletionsFolder.id, Long.toString(revisionNumber))));
 	}
 
-	public IResult<Void> deleteRevision(RevisionFolder revision) {
-		ArrayList<IResult> results= new ArrayList<IResult>();
-		results.add(storage.delete(revision.getId()));
-		results.add(storage.delete(Identifier.create(_deletionsFolder.id, Long.toString(revision.revisionNumber))));
-		return TaskUtils.combineResults(results);
+	public void deleteRevision(RevisionFolder revision) throws IOException {
+		storage.delete(revision.getId());
+		storage.delete(Identifier.create(_deletionsFolder.id, Long.toString(revision.revisionNumber)));
 	}
 	
 
 
 	public static final Serializer<RootFolder> SERIALIZER= new Serializer<RootFolder>() {
-		private final int typeCode= RootFolder.class.getName().hashCode();
+		private final String typeCode= RootFolder.class.getName();
 		public RootFolder readExternal(java.io.DataInput in) 
 		throws IOException {
 			RootFolder journal= new RootFolder();
@@ -220,7 +159,7 @@ public class RootFolder extends Entity  {
 		throws IOException {
 			Entity.SERIALIZER.readExternal(in, journal);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

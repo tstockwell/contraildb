@@ -3,15 +3,9 @@ package com.googlecode.contraildb.core.impl.btree;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.ConditionalHandler;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.Immediate;
-import com.googlecode.contraildb.core.async.ResultHandler;
-import com.googlecode.contraildb.core.async.TaskUtils;
+import com.googlecode.contraildb.core.storage.StorageUtils;
 import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 
 
@@ -20,28 +14,28 @@ import com.googlecode.contraildb.core.utils.ExternalizationManager.Serializer;
 /**
  * An inner node in a BTree
  */
-@SuppressWarnings({"rawtypes","unchecked"})
+@SuppressWarnings("rawtypes")
 public class InnerNode<K extends Comparable>
 extends Node<K>
 {
 	final static long serialVersionUID = 1L;
 	
-	public InnerNode(KeyValueSet<K,?> btree) {
+	public InnerNode(BPlusTree<K,?> btree) {
 		super(btree);
 	}
 	
 	protected InnerNode() { }
 
-	@Immediate @Override boolean isLeaf() { return false; }
-	@Immediate @Override Node<K> clone(Node<K> node) { return  new InnerNode<K>(node._index); }
-	@Override IResult<K> getLookupKey() { return TaskUtils.asResult(getLargestKey()); }		
-	@Immediate @Override int indexOf(K key) { 
+	@Override boolean isLeaf() { return false; }
+	@Override Node<K> clone(Node<K> node) { return  new InnerNode<K>(node._index); }
+	@Override K getLookupKey() throws IOException { return getLargestKey(); }		
+	@Override int indexOf(K key) { 
 		int left = 0;
 		int right = _size - 1;
 
 		while (left <= right) {
 			int middle = (left + right) / 2;
-			int i= KeyValueSet.compare(_keys[middle], key);
+			int i= BPlusTree.compare(_keys[middle], key);
 			if (i == 0) {
 				left= middle+1;
 				break;
@@ -62,146 +56,86 @@ extends Node<K>
 	 * Insert the given key and value.
 	 * @return new Node if the key was inserted and provoked an overflow.
 	 */
-	@Override public IResult<Node<K>> insert(final K key, final Object value) {
-		final int index = indexOf(key);
+	@Override public Node<K> insert(K key, Object value) throws IOException {
+		int index = indexOf(key);
 		
-		return new ResultHandler<Node<K>>(getChildNode(index)) {
-			protected IResult onSuccess(final Node<K> child) throws Exception {
-				
-				return new ResultHandler<Node<K>>(child.insert(key, value)) {
-					protected IResult onSuccess(final Node<K> newSibling) throws Exception {
-						if (newSibling == null)  // no overflow means we're done with insertion
-							return TaskUtils.NULL;
-						
-						// there was an overflow, we need to insert the overflow page
-						final IResult<K> getKeyForChild= child.getLookupKey();
-						final IResult<K> getKeyForSibling= newSibling.getLookupKey();
-						return new Handler(getKeyForChild, getKeyForSibling) {
-							protected IResult onSuccess() throws Exception {
-								final K keyForChildNode= getKeyForChild.getResult();
-								final K keyForSiblingNode= getKeyForSibling.getResult();
-								
-								final Identifier newSiblingId = newSibling.getId();
-								
-								final Identifier childId = child.getId();
-								
-								IResult<Node<K>> overflow= new ConditionalHandler(isFull()) {
-									protected IResult onFalse() throws Exception {
-										setEntry(index, keyForChildNode, childId);
-										insertEntry(index+1, keyForSiblingNode, newSiblingId);
-										return TaskUtils.NULL;
-									}
-									protected IResult onTrue() throws Exception {
-										// page is full, we must divide the page
-										return new ResultHandler<Node<K>>(split()) {
-											protected IResult onSuccess(Node<K> overflow) throws Exception {
-												if (index < _size) { 
-													setEntry(index, keyForChildNode, childId);
-													insertEntry(index+1, keyForSiblingNode, newSiblingId);
-												}
-												else {
-													overflow.setEntry(index-_size, keyForChildNode, childId);
-													overflow.insertEntry(index-_size+1, keyForSiblingNode, newSiblingId);
-												}
-												getStorage().store(overflow);
-												return asResult(overflow);
-											}
-										};
-									}
-								};
-								return overflow;
-							}
-							protected IResult lastly() throws Exception {
-								return update();
-							}
-						};
-						
-					}
-				};
+		Node<K> child = getChildNode(index);
+		Node<K> newSibling= child.insert(key, value);
+		if (newSibling == null)  // no overflow means we're done with insertion
+			return null;
+
+		// there was an overflow, we need to insert the overflow page
+		Node<K> overflow = null;
+		Identifier newSiblingId = newSibling.getId();
+		K keyForChildNode= child.getLookupKey();
+		K keyForSiblingNode= newSibling.getLookupKey();
+		Identifier childId = child.getId();
+		if (!isFull()) {
+			setEntry(index, keyForChildNode, childId);
+			insertEntry(index+1, keyForSiblingNode, newSiblingId);
+		}
+		else {
+			// page is full, we must divide the page
+			overflow = split();
+			if (index < _size) { 
+				setEntry(index, keyForChildNode, childId);
+				insertEntry(index+1, keyForSiblingNode, newSiblingId);
 			}
-		};
+			else {
+				overflow.setEntry(index-_size, keyForChildNode, childId);
+				overflow.insertEntry(index-_size+1, keyForSiblingNode, newSiblingId);
+			}
+			getStorage().store(overflow);
+		}
+		update();
+		return overflow;
 	}
 	
-	@Override IResult<Boolean> remove(final K key) {
+	@Override boolean remove(K key) throws IOException {
 
-		final int index = indexOf(key);
-		return new ResultHandler<Node<K>>(getChildNode(index)) {
-			protected IResult onSuccess(final Node<K> child) throws Exception {
-				return new ResultHandler<Boolean>(child.remove(key)) {
-					@Override
-					protected IResult onSuccess(Boolean underflow) throws Exception {
-						if (!underflow)
-							return TaskUtils.FALSE;
-						
-						IResult doRemove= TaskUtils.DONE;
-						if (index < _size - 1) {
-							doRemove= new ResultHandler<Node<K>>(getChildNode(index + 1)) {
-								protected IResult onSuccess(Node<K> rightSibling) throws Exception {
-									if (rightSibling._size+child._size <= _index._pageSize) {
-										return new Handler(child.merge(rightSibling)) {
-											protected IResult onSuccess() throws Exception {
-												removeEntry(index);
-												_values[index]= child.getId();
-												return update();
-											}
-										};
-									}
-									return TaskUtils.DONE;
-								}
-							};
-						}
-						if (0 < index) {
-							doRemove= new ResultHandler<Node<K>>(getChildNode(index - 1)) {
-								protected IResult onSuccess(final Node<K> leftSibling) throws Exception {
-									if (leftSibling._size+child._size <= _index._pageSize) {
-										return new Handler(leftSibling.merge(child)) {
-											protected IResult onSuccess() throws Exception {
-												removeEntry(index-1);
-												_values[index-1]= leftSibling.getId();
-												return update();
-											}
-										};
-									}
-									return TaskUtils.DONE;
-								}
-							};
-						}
-						if (index == 0 && child.isEmpty()) {
-							removeEntry(0);
-							doRemove= update();
-						}
-						
-						return new Handler(doRemove) {
-							protected IResult onSuccess() throws Exception {
-								return asResult(_size < _index._pageSize / 2);
-							}
-						};
-					}
-				};
+		int index = indexOf(key);
+		
+		Node<K> child = getChildNode(index);
+		boolean underflow= child.remove(key);
+		if (!underflow)
+			return false;
+
+		if (index < _size - 1) {
+			Node<K> rightSibling = getChildNode(index + 1);
+			if (rightSibling._size+child._size <= _index._pageSize) {
+				child.merge(rightSibling);
+				removeEntry(index);
+				_values[index]= child.getId();
+				update();
 			}
-		};
+		}
+		if (0 < index) {
+			Node<K> leftSibling = getChildNode(index - 1);
+			if (leftSibling._size+child._size <= _index._pageSize) {
+				leftSibling.merge(child);
+				removeEntry(index-1);
+				_values[index-1]= leftSibling.getId();
+				update();
+			}
+		}
+		if (index == 0 && child.isEmpty()) {
+			removeEntry(0);
+			update();
+		}
+
+		return _size < _index._pageSize / 2;
 	}
 	
 	
 	/**
 	 * Deletes this node and all children
 	 */
-	public IResult<Void> delete() {
-		ArrayList<IResult> tasks= new ArrayList<IResult>();
+	public void delete() throws IOException {
 		for (int i= _size; 0 < i--;) {
-			final IResult fetch = getStorage().fetch((Identifier)_values[i]);
-			tasks.add(new Handler(fetch) {
-				protected IResult onSuccess() throws Exception {
-					Node<?> childBPage = (Node<?>) fetch.getResult();
-					return childBPage.delete();
-				}
-			});
+			Node<?> childBPage = StorageUtils.syncFetch(getStorage(), (Identifier)_values[i]);
+			childBPage.delete();
 		}
-		return new Handler(TaskUtils.combineResults(tasks)) {
-			protected IResult onSuccess() throws Exception {
-				return InnerNode.super.delete();
-			}
-		};
+		super.delete();
 	}
 
 	/**
@@ -210,7 +144,7 @@ extends Node<K>
 	void dump(PrintStream out, int depth) throws IOException {
 		super.dump(out, depth);
 		for (int i = 0; i < _size; i++) {
-			Node<K> child = getChildNode(i).get();
+			Node<K> child = getChildNode(i);
 			child.dump(out, depth+1);
 		}
 	}
@@ -218,7 +152,7 @@ extends Node<K>
 	
 
 	public static final Serializer<InnerNode> SERIALIZER= new Serializer<InnerNode>() {
-		private final int typeCode= InnerNode.class.getName().hashCode();
+		private final String typeCode= InnerNode.class.getName();
 		public InnerNode readExternal(java.io.DataInput in) 
 		throws IOException {
 			InnerNode journal= new InnerNode();
@@ -233,7 +167,7 @@ extends Node<K>
 		throws IOException {
 			Node.SERIALIZER.readExternal(in, journal);
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

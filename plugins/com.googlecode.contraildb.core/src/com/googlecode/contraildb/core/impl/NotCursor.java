@@ -16,11 +16,11 @@ import com.googlecode.contraildb.core.impl.btree.IForwardCursor;
  * 
  */
 @SuppressWarnings("unchecked")
-public class ConjunctiveCursor<T extends Comparable<T>> implements IForwardCursor<T> {
+public class NotCursor<T extends Comparable<T>> implements IForwardCursor<T> {
 	
 	final IForwardCursor<T>[] _cursors;
 	
-	public ConjunctiveCursor(List<IForwardCursor<T>> filterCursors) {
+	public NotCursor(List<IForwardCursor<T>> filterCursors) {
 		_cursors= new IForwardCursor[filterCursors.size()];
 		filterCursors.toArray(_cursors);
 	}

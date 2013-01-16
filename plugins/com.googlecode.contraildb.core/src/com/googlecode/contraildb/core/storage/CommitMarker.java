@@ -27,7 +27,7 @@ public class CommitMarker extends Entity {
 	protected CommitMarker() { }
 
 	public static final Serializer<CommitMarker> SERIALIZER= new Serializer<CommitMarker>() {
-		private final int typeCode= CommitMarker.class.getName().hashCode();
+		private final String typeCode= CommitMarker.class.getName();
 		public CommitMarker readExternal(java.io.DataInput in) 
 		throws IOException {
 			CommitMarker journal= new CommitMarker();
@@ -44,7 +44,7 @@ public class CommitMarker extends Entity {
 			Entity.SERIALIZER.readExternal(in, journal);
 			journal.finalCommitNumber= in.readLong();
 		}
-		public int typeCode() {
+		public String typeCode() {
 			return typeCode;
 		}
 	};

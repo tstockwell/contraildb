@@ -1,16 +1,10 @@
-package com.googlecode.contraildb.core.storage.provider;
-
-import java.io.IOException;
-import java.util.Collection;
-
-import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.utils.IResult;
-
+package com.googlecode.contraildb.core.storage.provider
+import scala.actors.Future
 
 /**
  * Contrail works with on any storage system that can implement the very basic 
  * file system described by this interface.
- * IStorageProvider provides access to a hierarchy of nested objects.
+ * StorageProvider provides access to a hierarchy of nested objects.
  * Each object has a name.
  * An object may have children.
  * Each object can be retrieved by its location in the hierarchy.
@@ -27,21 +21,16 @@ import com.googlecode.contraildb.core.utils.IResult;
  * since Contrail will cache objects it reads from the raw storage system.
  * 
  */
-public interface IStorageProvider {
-	
-	/**
-	 * Start a storage session. 
-	 */
-	com.googlecode.contraildb.core.storage.provider.IStorageProvider.Session connect() throws IOException;
+trait StorageProvider {
 	
 	
-	static public interface Session {
+	trait Session {
 		
 		/**
 		 * MUST be called when the session is no longer needed.
 		 * Any pending changed are flushed before closing.
 		 */
-		public void close() throws IOException; 
+		def close():Future[Unit]; 
 		
 		/**
 		 * Returns the complete paths to all the children of the given path.
@@ -87,4 +76,9 @@ public interface IStorageProvider {
 
 	}
 	
+	/**
+	 * Start a storage session. 
+	 */
+	def connect():Session;
+
 }

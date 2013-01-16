@@ -1,8 +1,9 @@
 package com.googlecode.contraildb.core.storage.remote;
 
+import java.io.IOException;
 import java.rmi.Remote;
+import java.rmi.RemoteException;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 
 
@@ -14,6 +15,6 @@ import com.googlecode.contraildb.core.storage.provider.IStorageProvider;
 public interface IRemoteSimpleStorage extends Remote, IStorageProvider {
 	
 	@Override
-	IResult<Session> connect();
+	Session connect() throws IOException, RemoteException;
 
 }

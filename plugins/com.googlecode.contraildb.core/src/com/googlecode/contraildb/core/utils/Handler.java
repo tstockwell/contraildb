@@ -1,16 +1,11 @@
-package com.googlecode.contraildb.core.async;
+package com.googlecode.contraildb.core.utils;
 
 
 import java.util.ArrayList;
 import java.util.Collection;
 
-import kilim.Pausable;
-
-import com.googlecode.contraildb.core.utils.Logging;
-
 /**
  * Handles one and only one result.
- * Subclasses should override the onComplete() method.
  * @author ted.stockwell
  */
 @SuppressWarnings({"rawtypes","unchecked"})
@@ -18,31 +13,23 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 
 	IResult<I> _incoming;
 	Result<O> _outgoing= new Result() {
-		public Object getResult() {
+		public synchronized Object getResult() {
 			checkForHandler();
 			return super.getResult();
 		};
-		public Object get() throws Pausable {
+		public synchronized Object get() {
 			checkForHandler();
 			return super.get();
 		};
-		public Object getb() {
-			checkForHandler();
-			return super.getb();
-		};
-		public void join() throws Pausable {
+		public synchronized void join() {
 			checkForHandler();
 			super.join();
 		};
-		public void joinb() {
-			checkForHandler();
-			super.joinb();
-		};
-		public Throwable getError() {
+		public synchronized Throwable getError() {
 			checkForHandler();
 			return super.getError();
 		}
-		public boolean isSuccess() {
+		public synchronized boolean isSuccess() {
 			checkForHandler();
 			return super.isSuccess();
 		}
@@ -80,7 +67,7 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	/**
 	 * Set result to handle.
 	 */
-	synchronized public void handleResult(IResult result) {
+	public void handleResult(IResult result) {
 		if (_incoming != null)
 			throw new IllegalStateException("This handler is already associated with a result");
 		_incoming= result;
@@ -196,7 +183,7 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
 	 * somewhat cryptic.
 	 * 
 	 */
-	synchronized protected void checkForHandler() {
+	protected void checkForHandler() {
 		if (_incoming == null && !_outgoing.isDone() && !_outgoing.hasHandlers())
 			handleResult(TaskUtils.DONE);
 	}
@@ -220,17 +207,11 @@ public class Handler<I,O> implements IResultHandler<I>, IResult<O> {
     public O getResult() {
     	return _outgoing.getResult();
     }
-    public O get() throws Pausable {
+    public O get() {
     	return _outgoing.get();
     }
-    public O getb()  {
-    	return _outgoing.getb();
-    }
-    public void join() throws Pausable {
+    public void join() {
     	_outgoing.join();
-    }
-    public void joinb() {
-    	_outgoing.joinb();
     }
 	public void addHandler(IResultHandler<O> handler) {
 		_outgoing.addHandler(handler);

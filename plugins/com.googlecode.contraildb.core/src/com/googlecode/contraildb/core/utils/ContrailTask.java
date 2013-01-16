@@ -8,15 +8,28 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.googlecode.contraildb.core.IResult;
 import com.googlecode.contraildb.core.Identifier;
-import com.googlecode.contraildb.core.async.Handler;
-import com.googlecode.contraildb.core.async.Result;
 
 
 /**
  * A base task class for Contrail related tasks.
+ * 
+ * All concurrency in the Contrail database is implemented via the ContrailTask facility.
+ * In order for the ContrailTask scheduler to appropriately schedule the execute of tasks 
+ * it is required that ContrailTasks expose the relationships between the tasks, essentially 
+ * denoting the parallelism in the application.  This approach is similar to that of the 
+ * <a href="http://en.wikipedia.org/wiki/Cilk">Cilk language</a> except that ContrailTasks 
+ * denote more information about parallel relationships (an identifier and an operation) 
+ * and can therefore achieve greater parallelism. 
+ * Contrails approach to controlling concurrency is based on the concept of 
+ * <a href="http://en.wikipedia.org/wiki/Serializability">Serializability</a>.
+ * An set of operation s executed concurrently is serializable if the result of executing 
+ * those operations is the same as executing the operation sequentially.
+ * Contrail allows as much concurrency as possible while preserving the serializability 
+ * of operations. 
+ *  
  * In Contrail a task is considered to be some operation on a resource.
+ * A resources have a unique identifier.
  * The operations are considered to be one of:
  * 	 	Operation.READ,
  * 		Operation.WRITE,
@@ -25,16 +38,32 @@ import com.googlecode.contraildb.core.async.Result;
  * 		Operation.CREATE
  * 
  * Subclasses need to implement the run method.
+ *
+ * All tasks are associated with a 'domain' that controls the execution of tasks in that domain.
+ * To execute a task a ContrailTask must be submitted to a TaskDomain for execution.
+ * The ContrailTask.submit may be used to execute a ContrailTask without specifying a TaskDomain.
+ * In this case the task will be associated with the domain associated with the current thread.
+ * If the current thread is not executing a ContrailTask (thus there is no associated domain) then 
+ * an error will occur.
+ * 
+ * Contrail's concurrency facility employs a tactic known as 'work-stealing'.
+ * That is, when a task needs to wait for some other task to complete the thread 
+ * running the waiting task will execute some other tasks while waiting.  
+ * Work-stealing ensures that the system will not become deadlocked because all 
+ * available threads need to wait, thus making it impossible to execute any other 
+ * tasks and make progress towards a computational goal.  
  * 
  * This class uses a fixed pool of threads to run tasks.
  *
  * @param <T> The result type returned by the <tt>getResult</tt> method
  * 
  * @author Ted Stockwell
- * @see ContrailTaskTracker
+ * @see TaskDomain
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 abstract public class ContrailTask<T> {
+	
+	public static final String CONTRAIL_THREAD_COUNT= "contrail.thread.count";
 
 
 
@@ -44,7 +73,6 @@ abstract public class ContrailTask<T> {
 	private static HashedLinkedList<ContrailTask> __tasks= new ConcurrentHashedLinkedList<ContrailTask>();
 	private static Object __done= new Object(); // used to wait/notify when tasks are completed
 	private static Object __arrive= new Object(); // used to wait/notify when new tasks arrive
-	private static ArrayList<ContrailTask> __deferred= new ArrayList<ContrailTask>();
 	private static ArrayList<Thread> __yielded= new ArrayList<Thread>();
 	private static int __THREAD_COUNT= 0;
 	
@@ -80,7 +108,24 @@ abstract public class ContrailTask<T> {
 	}
 	
 	static {
-		for (int count= Runtime.getRuntime().availableProcessors() * 2; 0 < count--;) { 
+		// fire up threads for running tasks
+		int count= Runtime.getRuntime().availableProcessors() * 2;  
+		String value= System.getProperty(CONTRAIL_THREAD_COUNT);
+		if (value != null) {
+			try {
+				int i= Integer.parseInt(value);
+				if (0 < i) {
+					count= i;
+				}
+				else {
+					Logging.warning("Invalid value for "+CONTRAIL_THREAD_COUNT+":"+value);
+				}
+			}
+			catch (Throwable t) {
+				Logging.warning("Invalid value for "+CONTRAIL_THREAD_COUNT+":"+value, t);
+			}
+		}
+		for (; 0 < count--;) { 
 			new ContrailThread().start();
 		}
 	}
@@ -135,11 +180,11 @@ abstract public class ContrailTask<T> {
 	 * Returns true if the current thread is running a ContrailTask that has yielded.  
 	 */
 	public static final boolean isTaskYielded() {
-//		Thread thread= Thread.currentThread();
-//		synchronized (__yielded) {
-//			if (__yielded.contains(thread))
-//				return true;
-//		}
+		Thread thread= Thread.currentThread();
+		synchronized (__yielded) {
+			if (__yielded.contains(thread))
+				return true;
+		}
 		return false;
 	}
 	
@@ -222,20 +267,6 @@ abstract public class ContrailTask<T> {
 						try { stop(); } catch (Throwable t) { Logging.warning("Error while trying to stop a task", t); } 
 					}
 					_done= true;
-					
-					// check for deferred tasks that can be run now
-					for (int i= __deferred.size(); 0 < i--;) {
-						ContrailTask deferredTask= __deferred.get(i);
-						for (int p= deferredTask._pendingTasks.size(); 0 < p--;) { 
-							ContrailTask pending= (ContrailTask) deferredTask._pendingTasks.get(p);
-							if (pending._done) 
-								deferredTask._pendingTasks.remove(p);
-						}
-						if (deferredTask._pendingTasks.isEmpty()) 
-							if (__deferred.remove(deferredTask)) 
-								deferredTask.submit();
-					}
-					
 					__done.notifyAll();
 				}
 			}
@@ -246,19 +277,21 @@ abstract public class ContrailTask<T> {
 		return _result;
 	}
 	
-	private synchronized void runTask() {
+	private synchronized boolean runTask() {
 if (__logger.isLoggable(Level.FINER))
 	__logger.finer("run task "+hashCode()+", id "+_id+", op "+_operation+", thread "+Thread.currentThread().getName() );		
-		if (!_done) { 
-			try {
-				T result= run();
-				if (!_result.isCancelled())
-					success(result); 
-			}
-			catch (Throwable x) {
-				error(x);
-			}
+		if (_done) { 
+			return false;
 		}
+		try {
+			T result= run();
+			if (!_result.isCancelled())
+				success(result); 
+		}
+		catch (Throwable x) {
+			error(x);
+		}
+		return true;
 	}
 	
 	synchronized public IResult<T> submit() {
@@ -280,51 +313,31 @@ if (__logger.isLoggable(Level.FINER))
 		return _done;
 	}
 	
-	/**
-	 * Submit this task for execution but don't run the task until the given tasks have completed
-	 */
-	public IResult<T> submit(List<ContrailTask<?>> dependentTasks) {
-		if (dependentTasks != null)  {
-			dependentTasks= new ArrayList<ContrailTask<?>>(dependentTasks); 
-			synchronized (__done) {
-				for (int i= dependentTasks.size(); 0 < i--;) {
-					ContrailTask task= dependentTasks.get(i);
-					if (task._done) 
-						dependentTasks.remove(i);
-				}
-				if (!dependentTasks.isEmpty()) {
-					_pendingTasks= dependentTasks;
-					__deferred.add(this);
-				}
-				else
-					dependentTasks= null;
-			}
-		}
-		if (dependentTasks == null) 
-			submit();
-		return _result;
-	}
-	
 	public T get() {
 		return _result.get();
 	}
 	
 	/**
 	 * Run other tasks in this thread while waiting for other things to happen
+	 * 
+	 * @param result A result that the caller is waiting on 
 	 * @return true if another task was run 
 	 */
-	protected boolean yield() {
-		return yield(0);
+	protected boolean yield(IResult result) {
+		return yield(result, 0);
 	}
 	/**
 	 * Yields to some other task.
 	 * If there are no other tasks to run then wait the given number of milliseconds.
+	 * 
+	 * @param result A result that the caller is waiting on
+	 * @param waitMillis the # of milliseconds to wait  
 	 */
-	protected boolean yield(long waitMillis) {
+	protected boolean yield(IResult result, long waitMillis) {
 		boolean taskWasRun= false;
 		
-		if (!isTaskYielded()) { // no nested yields for now
-			if (!yieldToDependent()) {
+		//if (!isTaskYielded()) { // no nested yields for now
+			if (!taskWasRun && !yieldToDependent()) {
 				/*
 				 * If this task has no dependencies then choose a random task to run.  
 				 * DONT mess with a task that has any dependencies, choose something nice and simple.
@@ -334,9 +347,15 @@ if (__logger.isLoggable(Level.FINER))
 				for (Iterator<ContrailTask> i= __tasks.iterator(); i.hasNext();) {
 					ContrailTask t= i.next();
 					if (t._pendingTasks == null || t._pendingTasks.isEmpty()) {
-						if (__tasks.remove(t)) {
-							nextTask= t;
-							break;
+						// MUST guarantee that task is not done when choosing a task to yield to 
+						synchronized (__done) { 
+							if (_done) 
+								break;
+							
+							if (__tasks.remove(t)) {
+								nextTask= t;
+								break;
+							}
 						}
 					}
 				}
@@ -344,7 +363,7 @@ if (__logger.isLoggable(Level.FINER))
 				if (nextTask != null) 
 					taskWasRun= yieldToTask(nextTask);
 			}
-		}
+		//}
 		
 		if (!taskWasRun && 0 < waitMillis) {
 			synchronized (this) {
@@ -364,8 +383,8 @@ if (__logger.isLoggable(Level.FINER))
 	 * @return true if a task was run
 	 */
 	protected boolean yieldToDependent() {
-		if (isTaskYielded())
-			return false; // no nested yields for now
+//		if (isTaskYielded())
+//			return false; // no nested yields for now
 		
 		ContrailTask nextTask= null;
 		synchronized (__done) {
@@ -439,14 +458,13 @@ if (__logger.isLoggable(Level.FINER))
 	protected boolean yieldToTask(ContrailTask task) {
 		Thread thread= Thread.currentThread();
 		synchronized (__yielded) {
-			if (isTaskYielded())
-				return false; // no nested yields for now
+//			if (isTaskYielded())
+//				return false; // no nested yields for now
 			
 			__yielded.add(thread);
 		}
 		try {
-			task.runTask();
-			return true;
+			return task.runTask();
 		}
 		finally {
 			synchronized (__yielded) {
@@ -455,4 +473,3 @@ if (__logger.isLoggable(Level.FINER))
 		}
 	}
 }
-
