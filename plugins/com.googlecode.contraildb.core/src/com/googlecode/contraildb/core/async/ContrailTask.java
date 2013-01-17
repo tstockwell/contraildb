@@ -3,11 +3,6 @@ package com.googlecode.contraildb.core.async;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import kilim.Mailbox;
-import kilim.Pausable;
-import kilim.Task;
-import kilim.WorkerThread;
-
 import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.Logging;
 
@@ -15,7 +10,7 @@ import com.googlecode.contraildb.core.utils.Logging;
 /**
  * A base task class for Contrail related tasks.
  * 
- * All concurrency in the Contrail database is implemented via the ContrailTask facility.
+ * All concurrency in the Contrail database is implemented via the Task facility.
  * In order for the ContrailTask scheduler to appropriately schedule the execution of tasks 
  * it is required that ContrailTasks expose the relationships between the tasks, essentially 
  * denoting the parallelism in the application.  This approach is similar to that of the 
@@ -53,9 +48,8 @@ import com.googlecode.contraildb.core.utils.Logging;
  * @param <T> The result type returned by the <tt>getResult</tt> method
  * 
  * @author Ted Stockwell
- * @see TaskDomain
+ * @see SerializableScheduler
  */
-@SuppressWarnings({"unchecked", "rawtypes"})
 abstract public class ContrailTask<T> {
 	
 	private static Logger __logger= Logging.getLogger();
@@ -65,7 +59,7 @@ abstract public class ContrailTask<T> {
 	 * Kilim Tasks that has this type can be recognized as being associated 
 	 * with a ContrailTask.  
 	 */
-	private static class InternalTask extends Task {
+	private static class InternalTask extends ContrailTask {
 		ContrailTask _contrailTask;
 		public InternalTask(ContrailTask contrailTask) {
 			_contrailTask= contrailTask;
@@ -81,7 +75,7 @@ abstract public class ContrailTask<T> {
 		if (!(currentThread instanceof WorkerThread))
 			return false;
 		WorkerThread workerThread= (WorkerThread)currentThread;
-		Task currentTask= workerThread.getCurrentTask();
+		ContrailTask currentTask= workerThread.getCurrentTask();
 		if (currentTask instanceof InternalTask)
 			return true;
 		return false;
@@ -94,7 +88,7 @@ abstract public class ContrailTask<T> {
 		if (!(currentThread instanceof WorkerThread))
 			return null;
 		WorkerThread workerThread= (WorkerThread)currentThread;
-		Task currentTask= workerThread.getCurrentTask();
+		ContrailTask currentTask= workerThread.getCurrentTask();
 		if (currentTask instanceof InternalTask)
 			return ((InternalTask)currentTask)._contrailTask;
 		return null;
@@ -273,7 +267,7 @@ if (__logger.isLoggable(Level.FINER))
 	synchronized public IResult<T> submit() {
 		if (!_submitted) {
 			_submitted= true;
-			new Task() {
+			new ContrailTask() {
 				public void execute() throws Pausable, Exception {
 					runTask();
 				}
@@ -290,6 +284,6 @@ if (__logger.isLoggable(Level.FINER))
 		return _done;
 	}
 	public static void sleep(long waitMillis_) throws Pausable {
-		Task.sleep(waitMillis_);
+		ContrailTask.sleep(waitMillis_);
 	}
 }

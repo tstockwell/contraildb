@@ -11,7 +11,10 @@ import com.googlecode.contraildb.core.Identifier;
 import com.googlecode.contraildb.core.utils.IdentifierIndexedStorage;
 import com.sun.org.apache.xalan.internal.xsltc.compiler.sym;
 
-
+object Operation extends Enumeration {
+    type Operation = Value
+    val READ, WRITE, DELETE, LIST, CREATE, FLUSH = Value
+}
 /**
  * A task scheduler for Contrail that coordinates tasks according 
  * to an associated Identifier and operation type (READ, WRITE, DELETE, LIST, 
@@ -57,8 +60,7 @@ import com.sun.org.apache.xalan.internal.xsltc.compiler.sym;
  * 
  * @author Ted Stockwell
  */
-@SuppressWarnings({"unchecked", "rawtypes"})
-public class TaskDomain {
+class SerializableScheduler extends TaskScheduler {
 	
 	IdentifierIndexedStorage<Set<ContrailTask>> _tasks= 
 		new IdentifierIndexedStorage<Set<ContrailTask>>();

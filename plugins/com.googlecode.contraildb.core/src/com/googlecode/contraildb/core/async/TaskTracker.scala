@@ -2,14 +2,12 @@ package com.googlecode.contraildb.core.async;
 
 import java.util.ArrayList;
 
-import kilim.Pausable;
 
 /** 
  * A simple utility for running tasks and waiting until they're all done.
  * @author ted.stockwell
  */
-@SuppressWarnings("rawtypes")
-public class TaskTracker {
+class TaskTracker extends TaskScheduler {
 	private ArrayList<IResult> _tasks= new ArrayList<IResult>();
 	
 	public TaskTracker() {
