@@ -1,4 +1,6 @@
 package com.googlecode.contraildb.core.async;
+import scala.collection.mutable.ArrayBuffer
+import com.googlecode.contraildb.core.utils.Logging
 
 
 
@@ -7,7 +9,7 @@ package com.googlecode.contraildb.core.async;
  * 
  * @param [V] The result type returned by this result's <tt>get</tt> method
  */
-trait Result[V] {
+trait Result[V] extends Player {
 	type Handler = (Result[V]) => Unit;
 	
 	protected var _done= false;
@@ -15,7 +17,7 @@ trait Result[V] {
 	protected var _success= false;
 	protected var _cancelled= false;
 	protected var _error:Throwable= _;
-	protected var _completedHandlers:List[Handler] = _;
+	protected var _completedHandlers:ArrayBuffer[(Result[V])=>Any]= null;
 	
     /**
      * Returns <tt>true</tt> if this task completed.
@@ -26,73 +28,158 @@ trait Result[V] {
      *
      * @return <tt>true</tt> if this task completed
      */
-    def done():Boolean= _done;
+    def done:Boolean= _done;
 	
     /**
      * Returns <tt>true</tt> if this task completed successfully.
      */
-    def success():Boolean= _success;
+    def success:Boolean= _success;
 	
     /**
      * Returns <tt>true</tt> if this task was cancelled.
      */
-    def cancelled():Boolean= _cancelled;
+    def cancelled:Boolean= _cancelled;
 	
     /**
      * If this task failed then get the error.
      */
-    def error():Throwable= _error;
+    def error:Throwable= _error;
 	
     /**
-     * If this task completed successfully then get the result.
-     * @throws IllegalStateException if the associated task is not complete.
+     * Add a callback to be invoked when the associated task is completed, regardless of 
+     * whether the task completed successfully, was canceled, or threw an error.
      */
-    def result():V;
-    
-    /**
-     * Add a callback to be invoked when the result is available.
-     */
-	def onDone(handler:Handler);
+	def onDone (todo:(Result[V])=> Any) {
+	  addHandler(todo);
+	}
+	def onDone (todo: => Any)
 
-    /**
-     * Waits if necessary for the computation to complete, and then
-     * retrieves its result.
-     * 
-     * @return the computed result
-     * @throws An unchecked exception if an error occurred while producing the result
-     */
-    def get():V;
-    
-    /**
-     * Waits if necessary for the computation to complete, and then
-     * retrieves its result.
-     * Note, this call potentially blocks the current thread, unlike #get() that 
-     * pauses the current fiber but doesn't block the thread.
-     * Use this method in situations where Pausable cannot be thrown, like 
-     * a JUnit test method.
-     * 
-     * @return the computed result
-     * @throws An unchecked exception if an error occurred while producing the result
-     */
-    def getb():V;
-    
+	def |(handler: => Any) {
+	  sync {
+	    if (done) {
+	        handler;
+	    }
+	    else {
+	      addHandler((result)=> { handler; })
+	    }
+	  }
+	}
 
+	/**
+	 * Immediately returns the value associated with the result, if any.
+	 */
+	def value:V= _result;
+	
     /**
-     * Waits if necessary for the computation to complete.
-     * 
-     * Does NOT throw an exception if an error occurred in the associated task.
-     * 
+     * Add a callback to be invoked when the associated task completes successfully.
      */
-    def join();
-    
+	def onSuccess(handler: => Any) {
+	  sync {
+	    if (done) {
+	      if (success) {
+	        handler;
+	      }
+	    }
+	    else {
+	      addHandler((result)=> { if (success) { handler; } })
+	    }
+	  }
+	}
+	
     /**
-     * Waits if necessary for the computation to complete.
-     * Calling this method can block the current thread therefore it's
-     * use should generally be avoided.
-     * 
-     * Does NOT throw an exception if an error occurred in the associated task.
-     * 
+     * Add a callback to be invoked when the associated task is cancelled.
      */
-    def joinb();
-    
+	def onCancel(handler: => Any) {
+	  sync {
+	    if (done) {
+	      if (cancelled) {
+	        handler;
+	      }
+	    }
+	    else {
+	      addHandler((result)=> { if (cancelled) { handler; } })
+	    }
+	  }
+	}
+    /**
+     * Add a callback to be invoked when the associated task throws an error.
+     */
+	def onError(handler: => Any) {
+	  sync {
+	    if (done) {
+	      val t:Throwable= error;
+	      if (t != null) {
+	        handler;
+	      }
+	    }
+	    else {
+	      addHandler((result)=> {
+		    	val t:Throwable= error;
+		    	if (t != null) {
+		    		handler;
+		    	}
+	      })
+	    }
+	  }
+	}
+
+	def addHandler(handler:(Result[V])=>Any) {
+	  sync {
+		if (_done) {
+			try {
+				handler(this);
+			}
+			catch {
+				case t: Throwable => Logging.warning("Error in result handler", t);
+			}
+			return;
+		}
+		if (_completedHandlers == null)
+			_completedHandlers= new ArrayBuffer[(Result[V])=>Any]();
+		_completedHandlers.append(handler);
+	  }
+	}
+
+}
+
+
+object Result {
+	def asResult[X](bs:X):Result[X]= {
+		return new Result[X]() {
+			_done= true;
+			_success= true;
+			_result= bs;
+		}; 
+	}
+	val DONE= new Result[Boolean]() {
+		_done= true;
+		_success= true;
+		_result= true;
+	}; 
+	val SUCCESS= new Result[Boolean]() {
+		_done= true;
+		_success= true;
+		_result= true;
+	}; 
+	val FAIL= new Result[Boolean]() {
+		_done= true;
+		_success= false;
+		_result= false;
+	}; 
+	val TRUE= new Result[Boolean]() {
+		_done= true;
+		_success= true;
+		_result= true;
+	}; 
+	val FALSE= new Result[Boolean]() {
+		_done= true;
+		_success= true;
+		_result= false;
+	}; 
+	val NULL= new Result[Unit]() {
+		_done= true;
+		_success= true;
+		_result= null;
+	}; 
+  
 }

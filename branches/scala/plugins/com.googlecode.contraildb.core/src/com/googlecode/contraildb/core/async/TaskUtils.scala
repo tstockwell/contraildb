@@ -4,27 +4,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
-import kilim.Pausable;
 
 import com.googlecode.contraildb.core.utils.Logging;
 
-@SuppressWarnings({"unchecked","rawtypes"})
-public class TaskUtils {
-	
-	
-	public static final IResult<Void> DONE= asResult(null); 
-	public static final IResult<Boolean> SUCCESS= asResult(true); 
-	public static final IResult<Boolean> FAIL= asResult(false); 
-	public static final IResult<Boolean> TRUE= asResult(true); 
-	public static final IResult<Boolean> FALSE= asResult(false); 
-	public static final IResult NULL= asResult(null); 
-	public static final <T> IResult<T> NULL() { return NULL; }
-	
-	public static final <T> IResult<T> run(Handler<?,T> handler) {
-		handler.handleResult(DONE);
-		return handler.outgoing();
-	}
-	
+object TaskUtils {
 	
 	
 	/**
@@ -172,49 +155,4 @@ public class TaskUtils {
 	}
 
 	
-	
-	/**
-	 * Convert a static value to a Result
-	 */
-	public static <X, Y extends X> IResult<X> asResult( final Y bs) {
-		return new IResult<X>() {
-			public X get() throws Pausable {
-				return bs;
-			}
-			public X getb() {
-				return bs;
-			}
-			public void join() throws Pausable {
-				// do nothing
-			}
-			public void joinb() {
-				// do nothing
-			}
-			public boolean isDone() {
-				return true;
-			}
-			@Override public boolean isSuccess() {
-				return true;
-			}
-			@Override public Throwable getError() {
-				return null;
-			}
-			@Override public X getResult() {
-				return bs;
-			}
-			@Override
-			public boolean isCancelled() {
-				return false;
-			}
-			@Override
-			public void addHandler(IResultHandler<X> handler) {
-				try {
-					handler.onComplete(this);
-				}
-				catch (Throwable t) {
-					Logging.warning("Error while handling completion", t);
-				}
-			}
-		};
-	}
 }
