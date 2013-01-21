@@ -17,7 +17,7 @@ object Task {
  * @author Ted Stockwell
  * @see TaskScheduler
  */
-trait Task[+V] extends Result[V] with Player with Runnable {
+trait Task[+V] extends Result[V] with Actor with Runnable {
 	private var _name:String= _;
 	
 	def name()= _name;

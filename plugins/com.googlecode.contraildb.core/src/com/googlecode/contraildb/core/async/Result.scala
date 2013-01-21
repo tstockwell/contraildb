@@ -9,7 +9,7 @@ import com.googlecode.contraildb.core.utils.Logging
  * 
  * @param [V] The result type returned by this result's <tt>get</tt> method
  */
-trait Result[V] extends Player {
+trait Result[V] extends Actor {
 	type Handler = (Result[V]) => Unit;
 	
 	protected var _done= false;
