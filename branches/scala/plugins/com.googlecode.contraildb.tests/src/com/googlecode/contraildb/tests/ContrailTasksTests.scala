@@ -32,6 +32,7 @@ import Assert._
 class ContrailTasksTests {
 
 	@Test def testBasicTask() {
+	  
 		runTest(new Task() {
 			final String expected= "boogity";
 			public void execute() throws Pausable, Exception {

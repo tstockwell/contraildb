@@ -23,8 +23,8 @@ class Promise[V] extends Result[V] {
 	/**
 	 * This method is called when the associated computation has successfully completed.
 	 */
-	def success(result:Result[V]) {
-		complete(true, false, result.value, null);
+	def success(value:V) {
+		complete(true, false, value, null);
 	}
 	
 	/**
