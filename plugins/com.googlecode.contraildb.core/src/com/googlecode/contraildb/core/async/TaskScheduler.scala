@@ -30,13 +30,15 @@ class TaskScheduler {
 	private var _tasks:HashMap[Integer, Task[Any]]= new HashMap();
 	private var _taskOrder:ArrayList[Integer]= new ArrayList();
   
-	def submit[T](task:Task[T]) {
-	  
-	  this.synchronized {
+	def submit[T](task:Task[T]):Result[V] {
+	  val thisScheduler= this;
+	  thisScheduler.synchronized {
 		  val hashCode= task.hashCode;
 		  task.onDone {
+		    thisScheduler.synchronized {
 			  if (_tasks.remove(hashCode) != null)
 				  _taskOrder.remove(0);
+		    }
 		  }
 		  if (_tasks.isEmpty()) {
 			  _taskOrder.add(hashCode);
@@ -54,6 +56,13 @@ class TaskScheduler {
 	  }
 	}
 	
+	def submit[V](taskMethod: => V):Result[V]= {
+	  this.synchronized {
+		  val task:Task[V]= Task.toTask(taskMethod);
+		  submit(task);
+		  return task;
+	  }
+	}
 	
 	/**
 	 * Internal method for executing a task.

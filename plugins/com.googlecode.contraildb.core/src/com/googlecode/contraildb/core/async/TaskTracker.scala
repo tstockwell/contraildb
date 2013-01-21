@@ -1,57 +1,42 @@
 package com.googlecode.contraildb.core.async;
 
 import java.util.ArrayList;
+import scala.collection.mutable.ArrayBuffer
 
 
 /** 
  * A simple utility for running tasks and waiting until they're all done.
+ * This task scheduler executes all received tasks in parallel
+ * 
  * @author ted.stockwell
  */
 class TaskTracker extends TaskScheduler {
-	private ArrayList<IResult> _tasks= new ArrayList<IResult>();
+	val _tasks= new ArrayBuffer[Result[_ <: Any]]();
 	
-	public TaskTracker() {
+	def submit[V](taskMethod: => V):Result[V]= {
+	  this.synchronized {
+		  val task:Task[V]= Task.toTask(taskMethod);
+		  submit(task);
+		  return task;
+	  }
 	}
-	public TaskTracker(IResult... results) {
-		trackAll(results);
+	
+	def track[T](result:Result[T]):Result[T]= {
+	  this.synchronized {
+		_tasks+= result;
+		return result;
+	  }
 	}
 
-	public <T> IResult<T> submit(ContrailTask<T> task) {
-		IResult<T> result= task.submit();
-		_tasks.add(result);
-		return result;
-	}
-	
-	public <T> IResult<T> track(IResult<T> result) {
-		_tasks.add(result);
-		return result;
-	}
-	public void trackAll(IResult... results) {
-		for (IResult result:results) {
-			_tasks.add(result);
-		}
-	}
-	
 	/**
-	 * Does not return until all tasks are complete.
-	 * @throws a runtime exception if an error occurs in any of the tasks.
+	 * Executes a function when all the tasks currently being tracked have completed.
 	 */
-	public void await() throws Pausable {
-		TaskUtils.combineResults(_tasks).get();
+	def onDone (todo: => Any)= {
+	  this.synchronized {
+	    TaskUtils.combineResults(_tasks) | todo;
+	  }
 	}
 	
-	/**
-	 * Does not return until all tasks are complete.
-	 * @throws an exception of type t or a RuntimeException if an error occurs in any of the tasks.
-	 */
-	public <T extends Throwable> void await(Class<T> t) throws T, Pausable {
-		TaskUtils.combineResults(_tasks).get();
-	}
+	def |(handler: => Any) { onDone(handler) }
 	
-	/**
-	 * Blocking version of get
-	 */
-	public void awaitb() {
-		TaskUtils.combineResults(_tasks).getb();
-	}
 }
